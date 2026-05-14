@@ -1,0 +1,8 @@
+[
+  {
+    "question": "Where are installation steps described?",
+    "expected_terms": ["installation", "steps"],
+    "preferred_mode": "navigation"
+  }
+]
+
