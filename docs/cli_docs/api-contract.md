@@ -50,7 +50,7 @@ Retrieval request body:
 
 | Command | Backend | Role | Status |
 | --- | --- | --- | --- |
-| `ragcli lightrag graphs show --label LABEL` | `GET /graphs?label=LABEL` | authenticated | supported |
+| `ragcli lightrag graphs show --label LABEL --max-depth N --max-nodes N` | `GET /graphs?label=LABEL&max_depth=N&max_nodes=N` | authenticated | supported |
 | `ragcli lightrag labels list` | `GET /graph/label/list` | authenticated | supported |
 | `ragcli lightrag labels popular --limit N` | `GET /graph/label/popular?limit=N` | authenticated | supported |
 | `ragcli lightrag labels search --query TEXT --limit N` | `GET /graph/label/search?q=TEXT&limit=N` | authenticated | supported |

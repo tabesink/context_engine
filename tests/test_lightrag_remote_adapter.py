@@ -86,6 +86,29 @@ def test_remote_adapter_normalizes_query_data_chunks_to_evidence() -> None:
     assert evidence[0].metadata["source_path"] == "manual.pdf"
 
 
+def test_remote_adapter_includes_domain_when_provided() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/query/data"
+        body = request.read().decode()
+        assert '"domain":"manuals"' in body
+        return httpx.Response(200, json={"data": {"chunks": [], "references": []}})
+
+    adapter = LightRAGRemoteAdapter(
+        base_url="http://lightrag.local",
+        client=httpx.Client(transport=httpx.MockTransport(handler), base_url="http://lightrag.local"),
+    )
+
+    evidence = adapter.retrieve(
+        query="remote",
+        mode=RetrievalMode.SEMANTIC,
+        top_k=3,
+        document_ids=None,
+        domain="manuals",
+    )
+
+    assert evidence == []
+
+
 def test_remote_adapter_normalizes_upload_response(tmp_path: Path) -> None:
     upload = tmp_path / "manual.txt"
     upload.write_text("manual body")

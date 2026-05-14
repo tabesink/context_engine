@@ -95,7 +95,7 @@ class DocumentService:
 
     def get_ready_or_404(self, document_id: str) -> DocumentRow:
         document = self.documents.get(document_id)
-        if not document or document.status == "deleted":
+        if not document or document.status != DocumentStatus.READY.value:
             raise not_found("Document not found")
         return document
 

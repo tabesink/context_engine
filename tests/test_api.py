@@ -10,12 +10,13 @@ import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.core.config import get_settings  # noqa: E402
-from app.domain.models import UserRole  # noqa: E402
+from app.domain.models import DocumentStatus, UserRole  # noqa: E402
 from app.integrations.lightrag_remote_adapter import LightRAGRemoteAdapter  # noqa: E402
 from app.main import app  # noqa: E402
 from app.services.job_service import JobService  # noqa: E402
 from app.storage.db import SessionLocal  # noqa: E402
 from app.storage.repositories.jobs import JobRepository  # noqa: E402
+from app.storage.repositories.documents import DocumentRepository  # noqa: E402
 from app.storage.repositories.users import UserRepository  # noqa: E402
 from app.workers.tasks import run_index_job  # noqa: E402
 
@@ -97,6 +98,43 @@ def test_lightrag_settings_keep_remote_disabled_by_default() -> None:
     assert settings.lightrag_base_url
 
 
+def test_user_document_reads_hide_non_ready_documents() -> None:
+    with SessionLocal() as session:
+        document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="draft.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/draft.txt",
+            metadata={},
+            status=DocumentStatus.INDEXING,
+        )
+        DocumentRepository(session).save_navigation_index(
+            document_id=document.id,
+            tree=[{"title": "Draft"}],
+            version=1,
+        )
+        DocumentRepository(session).save_parsed(
+            document_id=document.id,
+            title="Draft",
+            pages=[{"number": 1, "text": "draft", "metadata": {}}],
+            full_text="draft",
+            metadata={},
+        )
+        document_id = document.id
+
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+
+        detail = client.get(f"/documents/{document_id}", headers=user_headers)
+        structure = client.get(f"/documents/{document_id}/structure", headers=user_headers)
+        page = client.get(f"/documents/{document_id}/pages/1", headers=user_headers)
+
+    assert detail.status_code == 404
+    assert structure.status_code == 404
+    assert page.status_code == 404
+
+
 def test_query_retrieve_uses_remote_lightrag_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LIGHTRAG_ENABLED", "true")
     get_settings.cache_clear()
@@ -112,7 +150,8 @@ def test_query_retrieve_uses_remote_lightrag_when_enabled(monkeypatch: pytest.Mo
         document_ids: list[str] | None,
         domain: str | None = None,
     ):
-        del self, mode, top_k, document_ids, domain
+        del self, mode, top_k, document_ids
+        assert domain == "default"
         from uuid import UUID
 
         from app.domain.models import Evidence, PageRef

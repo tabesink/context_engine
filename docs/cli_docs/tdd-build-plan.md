@@ -32,6 +32,7 @@ Behavior covered:
 - `query` calls `POST /query`.
 - Query payloads include `query`, `mode`, `top_k`, `include_debug`, `allow_general_fallback`, and optional `document_ids`.
 - Repeated `--document-id` values become a JSON array.
+- Query payload construction is concentrated in `cli/query_payload.py` and validated through the backend `QueryRequest` schema so CLI field drift is caught close to the command layer.
 
 Acceptance:
 

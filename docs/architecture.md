@@ -13,7 +13,7 @@ HTTP client or ragcli
   -> response schema
 ```
 
-Retrieval has two runtime paths:
+Retrieval has two runtime paths. The mode/feature-flag decision is owned by `app/retrieval/routing_policy.py` so code and docs have one routing matrix:
 
 ```text
 LIGHTRAG_ENABLED=false
@@ -138,7 +138,7 @@ Every retrieval engine returns:
 - optional section reference
 - metadata
 
-The answer composer cites evidence IDs, not raw database rows.
+The internal domain model names the evidence identifier `id`. Public query responses expose the same value as `evidence_id` so clients do not confuse evidence IDs with document IDs. The answer composer consumes domain `Evidence` directly and cites evidence IDs, not raw database rows.
 
 ## Hybrid Merge Rules
 
@@ -159,5 +159,5 @@ When LightRAG handles `hybrid`, upstream retrieval and ranking are owned by Ligh
 - LightRAG timeout/connect failures become service-unavailable responses.
 - LightRAG auth/upstream/invalid-response failures become bad-gateway style responses.
 - Query failure returns a structured API error.
-- Weak evidence produces a refusal unless the request explicitly allows fallback.
+- Weak evidence produces a refusal unless the request explicitly allows fallback. In the deterministic composer, evidence is weak only when every evidence item has a numeric score below `0.2`; unscored evidence is not treated as weak.
 

@@ -12,7 +12,7 @@ This file records what the current codebase implements. For the intended build s
 - Text, Markdown, and PDF parsing into normalized parsed-document data.
 - Navigation index builder and PageIndex-style navigation adapter.
 - Local semantic chunking/indexing with deterministic hashed embeddings for tests and local development.
-- Retrieval router with `semantic`, `navigation`, `hybrid`, and `auto` modes.
+- Retrieval router with `semantic`, `navigation`, `hybrid`, and `auto` modes, plus a routing policy Module that decides local versus remote execution.
 - Evidence-only retrieval via `POST /query/retrieve`.
 - Answer composition via `POST /query/answer` and `POST /query`.
 - Admin-only debug details when `include_debug=true`.
@@ -20,7 +20,7 @@ This file records what the current codebase implements. For the intended build s
 - Audit/query log repositories and admin log endpoints.
 - Seed admin, backup, and retrieval evaluation scripts.
 - Typer `ragcli` with auth/session, documents, query, admin documents, logs, jobs, LightRAG graph commands, and explicit unsupported planned command groups.
-- Remote LightRAG integration behind `LIGHTRAG_ENABLED`, including HTTP adapter, domain manifest resolution, retrieval, upload forwarding, and graph proxy routes.
+- Remote LightRAG integration behind `LIGHTRAG_ENABLED`, including HTTP adapter, domain manifest resolution, retrieval strategy, upload forwarding, and graph proxy routes.
 - Contract files under `external/lightrag/contract/`.
 - Behavior tests for API, CLI, LightRAG adapter, auth guardrails, upload, retrieval, answer flow, queued jobs, and worker failure handling.
 

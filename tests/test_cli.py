@@ -45,7 +45,9 @@ class FakeApiClient:
             return {"id": "job-1", "kind": "index_document", "status": "queued"}
         if path == "/graph/label/list":
             return ["manual", "installation"]
-        if path == "/graphs?label=manual":
+        if path == "/graphs?label=manual&max_depth=3&max_nodes=1000":
+            return {"label": "manual", "nodes": [], "edges": []}
+        if path == "/graphs?label=manual&max_depth=2&max_nodes=100":
             return {"label": "manual", "nodes": [], "edges": []}
         if path == "/graph/label/popular?limit=2":
             return [{"label": "manual", "count": 4}, {"label": "installation", "count": 2}]
@@ -360,7 +362,60 @@ def test_lightrag_graph_show_uses_current_backend_route(monkeypatch, tmp_path: P
 
     assert result.exit_code == 0, result.output
     assert json.loads(result.output) == {"graph": {"label": "manual", "nodes": [], "edges": []}}
-    assert ("GET", "/graphs?label=manual", None, "secret-token") in FakeApiClient.calls
+    assert ("GET", "/graphs?label=manual&max_depth=3&max_nodes=1000", None, "secret-token") in FakeApiClient.calls
+
+
+def test_lightrag_graph_show_can_set_depth_and_node_limit(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("cli.main.ApiClient", FakeApiClient)
+    FakeApiClient.reset()
+    login(tmp_path)
+
+    result = runner.invoke(
+        app,
+        base_args(tmp_path)
+        + [
+            "lightrag",
+            "graphs",
+            "show",
+            "--label",
+            "manual",
+            "--max-depth",
+            "2",
+            "--max-nodes",
+            "100",
+            "--output",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert ("GET", "/graphs?label=manual&max_depth=2&max_nodes=100", None, "secret-token") in FakeApiClient.calls
+
+
+def test_query_commands_accept_include_debug_alias(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("cli.main.ApiClient", FakeApiClient)
+    FakeApiClient.reset()
+    login(tmp_path)
+
+    result = runner.invoke(
+        app,
+        base_args(tmp_path)
+        + ["documents", "retrieve", "--query", "install steps", "--include-debug", "--output", "json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert (
+        "POST",
+        "/query/retrieve",
+        {
+            "query": "install steps",
+            "mode": "auto",
+            "top_k": 8,
+            "include_debug": True,
+            "allow_general_fallback": False,
+        },
+        "secret-token",
+    ) in FakeApiClient.calls
 
 
 def test_lightrag_labels_popular_uses_current_backend_route(monkeypatch, tmp_path: Path) -> None:

@@ -133,7 +133,7 @@ Current acceptance:
 - `mode=auto` selects the local route deterministically when LightRAG is disabled.
 - Response evidence identifies `source_engine`.
 - Non-admin users do not receive internal debug details.
-- Answers cite evidence IDs and refuse weak evidence unless `allow_general_fallback=true`.
+- Answers cite evidence IDs and refuse weak evidence unless `allow_general_fallback=true`. The current deterministic composer treats evidence as weak only when every evidence item has a numeric score below `0.2`; unscored evidence is allowed.
 
 ## Remote LightRAG Integration
 

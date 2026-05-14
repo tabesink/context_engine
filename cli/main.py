@@ -13,6 +13,7 @@ from rich.table import Table
 
 from cli.api_client import ApiClient, ApiClientError
 from cli.credentials import CredentialStore, StoredCredentials
+from cli.query_payload import build_query_payload
 
 OutputMode = Literal["human", "json"]
 RetrievalMode = Literal["auto", "semantic", "navigation", "hybrid"]
@@ -149,16 +150,14 @@ def _query_payload(
     allow_general_fallback: bool,
     document_ids: list[str] | None = None,
 ) -> dict[str, Any]:
-    payload: dict[str, Any] = {
-        "query": query,
-        "mode": mode,
-        "top_k": top_k,
-        "include_debug": include_debug,
-        "allow_general_fallback": allow_general_fallback,
-    }
-    if document_ids:
-        payload["document_ids"] = document_ids
-    return payload
+    return build_query_payload(
+        query=query,
+        mode=mode,
+        top_k=top_k,
+        include_debug=include_debug,
+        allow_general_fallback=allow_general_fallback,
+        document_ids=document_ids,
+    )
 
 
 def _print_table(title: str, rows: list[dict[str, Any]], columns: list[str]) -> None:
@@ -306,7 +305,7 @@ def documents_retrieve(
     query: str = typer.Option(..., "--query"),
     mode: RetrievalMode = typer.Option("auto", "--mode"),
     top_k: int = typer.Option(8, "--top-k"),
-    include_debug: bool = typer.Option(False, "--debug"),
+    include_debug: bool = typer.Option(False, "--debug", "--include-debug"),
     allow_general_fallback: bool = typer.Option(False, "--allow-general-fallback"),
     document_ids: list[str] | None = typer.Option(None, "--document-id"),
     output: OutputMode = typer.Option("human", "--output"),
@@ -329,7 +328,7 @@ def documents_answer(
     query: str = typer.Option(..., "--query"),
     mode: RetrievalMode = typer.Option("auto", "--mode"),
     top_k: int = typer.Option(8, "--top-k"),
-    include_debug: bool = typer.Option(False, "--debug"),
+    include_debug: bool = typer.Option(False, "--debug", "--include-debug"),
     allow_general_fallback: bool = typer.Option(False, "--allow-general-fallback"),
     document_ids: list[str] | None = typer.Option(None, "--document-id"),
     output: OutputMode = typer.Option("human", "--output"),
@@ -352,7 +351,7 @@ def query_command(
     query: str = typer.Option(..., "--query"),
     mode: RetrievalMode = typer.Option("auto", "--mode"),
     top_k: int = typer.Option(8, "--top-k"),
-    include_debug: bool = typer.Option(False, "--debug"),
+    include_debug: bool = typer.Option(False, "--debug", "--include-debug"),
     allow_general_fallback: bool = typer.Option(False, "--allow-general-fallback"),
     document_ids: list[str] | None = typer.Option(None, "--document-id"),
     output: OutputMode = typer.Option("human", "--output"),
@@ -595,11 +594,15 @@ def lightrag_labels_search(
 def lightrag_graphs_show(
     ctx: typer.Context,
     label: str = typer.Option(..., "--label"),
+    max_depth: int = typer.Option(3, "--max-depth"),
+    max_nodes: int = typer.Option(1000, "--max-nodes"),
     output: OutputMode = typer.Option("human", "--output"),
 ) -> None:
     client = _client_from_credentials(ctx, output)
     try:
-        graph = client.get(f"/graphs?{urlencode({'label': label})}")
+        graph = client.get(
+            f"/graphs?{urlencode({'label': label, 'max_depth': max_depth, 'max_nodes': max_nodes})}"
+        )
     except ApiClientError as exc:
         _handle_api_error(exc, output)
         return
