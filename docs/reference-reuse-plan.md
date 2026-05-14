@@ -1,31 +1,43 @@
 # Reference Reuse Plan
 
-The `.references/` directory is source material. V1 adapts capabilities behind local interfaces instead of copying whole repositories.
+Reference repositories and vendored external code are source material. `context_engine` adapts useful behavior behind local interfaces instead of copying whole repositories or exposing external internals through the API.
 
 ## LightRAG
 
-Reference location: `.references/lightrag/`
+Reference locations:
+
+- `.references/lightrag/`
+- `external/lightrag/`
 
 Reuse ideas:
 
-- Query API shape and FastAPI organization from `.references/lightrag/api/`.
-- JWT/auth examples from `.references/lightrag/api/auth.py` and password helpers from `.references/lightrag/api/passwords.py`.
-- Semantic retrieval concepts from `.references/lightrag/lightrag.py`, `base.py`, `operate.py`, and `rerank.py`.
-- Storage backend patterns from `.references/lightrag/kg/`.
+- Query and graph API concepts from LightRAG.
+- Semantic retrieval concepts from LightRAG core modules.
+- Document ingestion/status concepts from LightRAG's HTTP server.
+- Storage and graph vocabulary as inspiration, not as direct app models.
 
-Adaptation:
+Current adaptation:
 
-- Wrap semantic behavior in `app/integrations/lightrag_adapter.py`.
-- Convert raw semantic matches into the local `Evidence` model.
-- Use PostgreSQL + pgvector as the V1 vector persistence path.
-- Keep graph expansion optional in the adapter; do not expose LightRAG internals to API routes or services.
+- Keep retrieval and graph communication HTTP-only in `app/integrations/lightrag_remote_adapter.py`.
+- Resolve optional domain-specific base URLs/API keys in `app/integrations/lightrag_domains.py`.
+- Convert remote chunks/references into the local `Evidence` model.
+- Forward admin uploads to `/documents/upload` when `LIGHTRAG_ENABLED=true`.
+- Proxy read-only graph routes through `/graphs` and `/graph/label/...`.
+- Keep local semantic/navigation retrieval available when LightRAG is disabled.
 
 Do not copy:
 
-- The full server bootstrap.
-- All storage backends.
+- The full LightRAG server bootstrap.
+- LightRAG storage backends into `app/storage`.
 - UI or visualizer tooling.
 - Repository-wide configuration that does not match this app.
+- Retrieval internals that would bypass the remote adapter boundary.
+
+## Local Semantic Retrieval
+
+The local fallback path uses the app's own parser, chunking, and deterministic hashed embeddings. This keeps development and tests credential-free.
+
+The Compose database image supports pgvector, but real pgvector column/type usage is a future hardening item. Documentation should not imply pgvector is required for every local run.
 
 ## PageIndex
 
@@ -41,7 +53,7 @@ Adaptation:
 
 - Wrap navigation behavior in `app/integrations/pageindex_adapter.py`.
 - Build indexes from `ParsedDocument`, not directly from raw files.
-- Store navigation trees in PostgreSQL JSON fields for V1.
+- Store navigation trees in application database JSON fields.
 - Return local `Evidence` with page and section references.
 
 Do not copy:
@@ -51,7 +63,7 @@ Do not copy:
 
 ## Local Interfaces
 
-The app owns these interfaces:
+The app owns these interfaces and models:
 
 - `RetrievalEngine`
 - `Evidence`
@@ -59,6 +71,7 @@ The app owns these interfaces:
 - `NavigationIndexBuilder`
 - `SemanticIndexBuilder`
 - `AnswerComposer`
+- `LightRAGRemoteAdapter`
 
-Adapters may change internally as reference code changes. The rest of the app should not.
+Adapters may change internally as reference code changes. Routes, services, and CLI commands should continue depending on the local API and schema contracts.
 

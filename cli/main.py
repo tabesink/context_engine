@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlencode
 
 import typer
 from rich.console import Console
@@ -12,6 +13,7 @@ from rich.table import Table
 
 from cli.api_client import ApiClient, ApiClientError
 from cli.credentials import CredentialStore, StoredCredentials
+from cli.query_payload import build_query_payload
 
 OutputMode = Literal["human", "json"]
 RetrievalMode = Literal["auto", "semantic", "navigation", "hybrid"]
@@ -24,7 +26,12 @@ documents_app = typer.Typer(help="Document and retrieval commands.")
 admin_app = typer.Typer(help="Admin commands.")
 admin_documents_app = typer.Typer(help="Admin document commands.")
 admin_corpus_app = typer.Typer(help="Admin corpus commands.")
+admin_audit_logs_app = typer.Typer(help="Admin audit log commands.")
+admin_query_logs_app = typer.Typer(help="Admin query log commands.")
 jobs_app = typer.Typer(help="Indexing job commands.")
+lightrag_app = typer.Typer(help="LightRAG graph commands.")
+lightrag_graphs_app = typer.Typer(help="LightRAG graph commands.")
+lightrag_labels_app = typer.Typer(help="LightRAG label commands.")
 
 users_app = typer.Typer(help="Planned user commands.")
 agents_app = typer.Typer(help="Planned agent commands.")
@@ -39,7 +46,12 @@ app.add_typer(documents_app, name="documents")
 app.add_typer(admin_app, name="admin")
 admin_app.add_typer(admin_documents_app, name="documents")
 admin_app.add_typer(admin_corpus_app, name="corpus")
+admin_app.add_typer(admin_audit_logs_app, name="audit-logs")
+admin_app.add_typer(admin_query_logs_app, name="query-logs")
 app.add_typer(jobs_app, name="jobs")
+app.add_typer(lightrag_app, name="lightrag")
+lightrag_app.add_typer(lightrag_graphs_app, name="graphs")
+lightrag_app.add_typer(lightrag_labels_app, name="labels")
 
 app.add_typer(users_app, name="users")
 app.add_typer(agents_app, name="agents")
@@ -136,14 +148,16 @@ def _query_payload(
     top_k: int,
     include_debug: bool,
     allow_general_fallback: bool,
+    document_ids: list[str] | None = None,
 ) -> dict[str, Any]:
-    return {
-        "query": query,
-        "mode": mode,
-        "top_k": top_k,
-        "include_debug": include_debug,
-        "allow_general_fallback": allow_general_fallback,
-    }
+    return build_query_payload(
+        query=query,
+        mode=mode,
+        top_k=top_k,
+        include_debug=include_debug,
+        allow_general_fallback=allow_general_fallback,
+        document_ids=document_ids,
+    )
 
 
 def _print_table(title: str, rows: list[dict[str, Any]], columns: list[str]) -> None:
@@ -291,15 +305,16 @@ def documents_retrieve(
     query: str = typer.Option(..., "--query"),
     mode: RetrievalMode = typer.Option("auto", "--mode"),
     top_k: int = typer.Option(8, "--top-k"),
-    include_debug: bool = typer.Option(False, "--debug"),
+    include_debug: bool = typer.Option(False, "--debug", "--include-debug"),
     allow_general_fallback: bool = typer.Option(False, "--allow-general-fallback"),
+    document_ids: list[str] | None = typer.Option(None, "--document-id"),
     output: OutputMode = typer.Option("human", "--output"),
 ) -> None:
     client = _client_from_credentials(ctx, output)
     try:
         payload = client.post(
             "/query/retrieve",
-            _query_payload(query, mode, top_k, include_debug, allow_general_fallback),
+            _query_payload(query, mode, top_k, include_debug, allow_general_fallback, document_ids),
         )
     except ApiClientError as exc:
         _handle_api_error(exc, output)
@@ -313,15 +328,16 @@ def documents_answer(
     query: str = typer.Option(..., "--query"),
     mode: RetrievalMode = typer.Option("auto", "--mode"),
     top_k: int = typer.Option(8, "--top-k"),
-    include_debug: bool = typer.Option(False, "--debug"),
+    include_debug: bool = typer.Option(False, "--debug", "--include-debug"),
     allow_general_fallback: bool = typer.Option(False, "--allow-general-fallback"),
+    document_ids: list[str] | None = typer.Option(None, "--document-id"),
     output: OutputMode = typer.Option("human", "--output"),
 ) -> None:
     client = _client_from_credentials(ctx, output)
     try:
         payload = client.post(
             "/query/answer",
-            _query_payload(query, mode, top_k, include_debug, allow_general_fallback),
+            _query_payload(query, mode, top_k, include_debug, allow_general_fallback, document_ids),
         )
     except ApiClientError as exc:
         _handle_api_error(exc, output)
@@ -335,15 +351,16 @@ def query_command(
     query: str = typer.Option(..., "--query"),
     mode: RetrievalMode = typer.Option("auto", "--mode"),
     top_k: int = typer.Option(8, "--top-k"),
-    include_debug: bool = typer.Option(False, "--debug"),
+    include_debug: bool = typer.Option(False, "--debug", "--include-debug"),
     allow_general_fallback: bool = typer.Option(False, "--allow-general-fallback"),
+    document_ids: list[str] | None = typer.Option(None, "--document-id"),
     output: OutputMode = typer.Option("human", "--output"),
 ) -> None:
     client = _client_from_credentials(ctx, output)
     try:
         payload = client.post(
             "/query",
-            _query_payload(query, mode, top_k, include_debug, allow_general_fallback),
+            _query_payload(query, mode, top_k, include_debug, allow_general_fallback, document_ids),
         )
     except ApiClientError as exc:
         _handle_api_error(exc, output)
@@ -436,6 +453,40 @@ def admin_documents_list(
         _print_table("Admin Documents", documents, ["id", "filename", "status"])
 
 
+@admin_audit_logs_app.command("list")
+def admin_audit_logs_list(
+    ctx: typer.Context,
+    output: OutputMode = typer.Option("human", "--output"),
+) -> None:
+    client = _client_from_credentials(ctx, output)
+    try:
+        audit_logs = client.get("/admin/audit-logs")
+    except ApiClientError as exc:
+        _handle_api_error(exc, output)
+        return
+    if output == "json":
+        _json({"audit_logs": audit_logs})
+    else:
+        _print_table("Audit Logs", audit_logs, ["id", "event", "target_id", "created_at"])
+
+
+@admin_query_logs_app.command("list")
+def admin_query_logs_list(
+    ctx: typer.Context,
+    output: OutputMode = typer.Option("human", "--output"),
+) -> None:
+    client = _client_from_credentials(ctx, output)
+    try:
+        query_logs = client.get("/admin/query-logs")
+    except ApiClientError as exc:
+        _handle_api_error(exc, output)
+        return
+    if output == "json":
+        _json({"query_logs": query_logs})
+    else:
+        _print_table("Query Logs", query_logs, ["id", "query", "mode", "latency_ms", "created_at"])
+
+
 @jobs_app.command("list")
 def jobs_list(
     ctx: typer.Context,
@@ -481,6 +532,81 @@ def jobs_retry(
         _handle_api_error(exc, output)
         return
     _print_payload(payload, output, wrapper="job")
+
+
+@lightrag_labels_app.command("list")
+def lightrag_labels_list(
+    ctx: typer.Context,
+    output: OutputMode = typer.Option("human", "--output"),
+) -> None:
+    client = _client_from_credentials(ctx, output)
+    try:
+        labels = client.get("/graph/label/list")
+    except ApiClientError as exc:
+        _handle_api_error(exc, output)
+        return
+    if output == "json":
+        _json({"labels": labels})
+    else:
+        for label in labels:
+            console.print(str(label))
+
+
+@lightrag_labels_app.command("popular")
+def lightrag_labels_popular(
+    ctx: typer.Context,
+    limit: int = typer.Option(20, "--limit"),
+    output: OutputMode = typer.Option("human", "--output"),
+) -> None:
+    client = _client_from_credentials(ctx, output)
+    try:
+        labels = client.get(f"/graph/label/popular?{urlencode({'limit': limit})}")
+    except ApiClientError as exc:
+        _handle_api_error(exc, output)
+        return
+    if output == "json":
+        _json({"labels": labels})
+    else:
+        _print_table("Popular Labels", labels, ["label", "count"])
+
+
+@lightrag_labels_app.command("search")
+def lightrag_labels_search(
+    ctx: typer.Context,
+    query: str = typer.Option(..., "--query"),
+    limit: int = typer.Option(20, "--limit"),
+    output: OutputMode = typer.Option("human", "--output"),
+) -> None:
+    client = _client_from_credentials(ctx, output)
+    try:
+        labels = client.get(f"/graph/label/search?{urlencode({'q': query, 'limit': limit})}")
+    except ApiClientError as exc:
+        _handle_api_error(exc, output)
+        return
+    if output == "json":
+        _json({"labels": labels})
+    else:
+        for label in labels:
+            console.print(str(label))
+
+
+@lightrag_graphs_app.command("show")
+def lightrag_graphs_show(
+    ctx: typer.Context,
+    label: str = typer.Option(..., "--label"),
+    max_depth: int = typer.Option(3, "--max-depth"),
+    max_nodes: int = typer.Option(1000, "--max-nodes"),
+    output: OutputMode = typer.Option("human", "--output"),
+) -> None:
+    client = _client_from_credentials(ctx, output)
+    try:
+        graph = client.get(
+            f"/graphs?{urlencode({'label': label, 'max_depth': max_depth, 'max_nodes': max_nodes})}"
+        )
+    except ApiClientError as exc:
+        _handle_api_error(exc, output)
+        return
+    _print_payload(graph, output, wrapper="graph")
 
 
 @admin_corpus_app.command("publish")

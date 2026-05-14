@@ -17,6 +17,12 @@ class Settings(BaseSettings):
     allowed_origins: list[str] = Field(default_factory=lambda: ["*"])
     seed_admin_email: str = "admin@example.com"
     seed_admin_password: str = "admin-password"
+    lightrag_enabled: bool = False
+    lightrag_base_url: str = "http://localhost:9621"
+    lightrag_api_key: str | None = None
+    lightrag_domain: str = "default"
+    lightrag_domain_manifest: Path | None = None
+    lightrag_timeout_seconds: float = 10.0
 
     model_config = SettingsConfigDict(
         env_file=".env",

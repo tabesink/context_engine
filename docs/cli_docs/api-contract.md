@@ -1,6 +1,8 @@
 # CLI API Contract
 
-This contract maps the desired `ragcli` surface to the backend that exists today. Commands marked `supported` can be implemented directly. Commands marked `backend gap` need backend behavior before they should become real commands.
+This contract maps the implemented `ragcli` surface to the backend that exists today. Commands marked `supported` call real backend routes. Commands marked `backend gap` intentionally return `not_supported_by_backend` until backend behavior exists.
+
+For future API-first LightRAG deployment/domain administration, see `docs/cli_docs/api_first_cli/`.
 
 ## Auth
 
@@ -10,7 +12,7 @@ This contract maps the desired `ragcli` surface to the backend that exists today
 | `ragcli logout` | local credential clear | local | supported |
 | `ragcli auth me` | `GET /auth/me` | authenticated | supported |
 
-`/auth/login` returns `{access_token, token_type}`. The CLI stores only the API base URL and access token.
+`/auth/login` returns `{access_token, token_type}`. The CLI stores only the API base URL and access token. Protected commands use the saved base URL and warn if the current root `--api-base-url` differs.
 
 ## Documents And Retrieval
 
@@ -23,6 +25,9 @@ This contract maps the desired `ragcli` surface to the backend that exists today
 | `ragcli documents retrieve --query TEXT` | `POST /query/retrieve` | authenticated | supported |
 | `ragcli documents answer --query TEXT` | `POST /query/answer` | authenticated | supported |
 | `ragcli query --query TEXT` | `POST /query` | authenticated | supported |
+| `ragcli documents retrieve --query TEXT --document-id ID` | `POST /query/retrieve` with `document_ids` | authenticated | supported |
+| `ragcli documents answer --query TEXT --document-id ID` | `POST /query/answer` with `document_ids` | authenticated | supported |
+| `ragcli query --query TEXT --document-id ID` | `POST /query` with `document_ids` | authenticated | supported |
 | `ragcli documents content --pages 1-3` | no range endpoint | authenticated | backend gap |
 | `ragcli documents search --query TEXT` | no separate search endpoint | authenticated | backend gap |
 
@@ -33,9 +38,24 @@ Retrieval request body:
   "query": "where are installation steps",
   "mode": "auto",
   "top_k": 5,
-  "allow_general_fallback": false
+  "include_debug": false,
+  "allow_general_fallback": false,
+  "document_ids": ["doc_123"]
 }
 ```
+
+`document_ids` is omitted when no `--document-id` filters are supplied. `include_debug` is accepted for retrieve/answer/query requests, but the backend only returns debug details to admin users.
+
+## LightRAG Graphs
+
+| Command | Backend | Role | Status |
+| --- | --- | --- | --- |
+| `ragcli lightrag graphs show --label LABEL --max-depth N --max-nodes N` | `GET /graphs?label=LABEL&max_depth=N&max_nodes=N` | authenticated | supported |
+| `ragcli lightrag labels list` | `GET /graph/label/list` | authenticated | supported |
+| `ragcli lightrag labels popular --limit N` | `GET /graph/label/popular?limit=N` | authenticated | supported |
+| `ragcli lightrag labels search --query TEXT --limit N` | `GET /graph/label/search?q=TEXT&limit=N` | authenticated | supported |
+
+These commands require the backend to have `LIGHTRAG_ENABLED=true` and a reachable remote LightRAG service. When disabled, the backend returns `LightRAG is disabled`; the CLI renders that API error.
 
 ## Admin Documents
 
@@ -49,6 +69,13 @@ Retrieval request body:
 | `ragcli admin corpus publish` | no corpus version endpoint | admin | backend gap |
 | `ragcli admin corpus rollback` | no corpus version endpoint | admin | backend gap |
 | `ragcli admin corpus cleanup` | no corpus cleanup endpoint | admin | backend gap |
+
+## Admin Observability
+
+| Command | Backend | Role | Status |
+| --- | --- | --- | --- |
+| `ragcli admin audit-logs list` | `GET /admin/audit-logs` | admin | supported |
+| `ragcli admin query-logs list` | `GET /admin/query-logs` | admin | supported |
 
 ## Jobs
 

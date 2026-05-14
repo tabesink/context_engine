@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.core.errors import not_found
 from app.schemas.documents import DocumentResponse, PageResponse, StructureResponse
+from app.services.document_service import DocumentService
 from app.storage.db import get_session
 from app.storage.repositories.documents import DocumentRepository
 from app.storage.tables import UserRow
@@ -40,9 +41,7 @@ def get_document(
     session: Session = Depends(get_session),
 ) -> DocumentResponse:
     del user
-    document = DocumentRepository(session).get(document_id)
-    if not document or document.status == "deleted":
-        raise not_found("Document not found")
+    document = DocumentService(session).get_ready_or_404(document_id)
     return document_response(document)
 
 
@@ -53,6 +52,7 @@ def get_structure(
     session: Session = Depends(get_session),
 ) -> StructureResponse:
     del user
+    DocumentService(session).get_ready_or_404(document_id)
     navigation = DocumentRepository(session).get_navigation_index(document_id)
     if not navigation:
         raise not_found("Document structure not found")
@@ -67,6 +67,7 @@ def get_page(
     session: Session = Depends(get_session),
 ) -> PageResponse:
     del user
+    DocumentService(session).get_ready_or_404(document_id)
     parsed = DocumentRepository(session).get_parsed(document_id)
     if not parsed:
         raise not_found("Parsed document not found")

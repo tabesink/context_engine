@@ -35,10 +35,24 @@ class FakeApiClient:
             return {"document_id": "doc-1", "page_number": 1, "text": "hello"}
         if path == "/admin/documents":
             return [{"id": "doc-1", "filename": "manual.txt", "status": "ready"}]
+        if path == "/admin/audit-logs":
+            return [{"id": "audit-1", "event": "document.uploaded", "target_id": "doc-1"}]
+        if path == "/admin/query-logs":
+            return [{"id": "query-1", "query": "install steps", "mode": "auto", "latency_ms": 12}]
         if path == "/jobs":
             return [{"id": "job-1", "kind": "index_document", "status": "queued"}]
         if path == "/jobs/job-1":
             return {"id": "job-1", "kind": "index_document", "status": "queued"}
+        if path == "/graph/label/list":
+            return ["manual", "installation"]
+        if path == "/graphs?label=manual&max_depth=3&max_nodes=1000":
+            return {"label": "manual", "nodes": [], "edges": []}
+        if path == "/graphs?label=manual&max_depth=2&max_nodes=100":
+            return {"label": "manual", "nodes": [], "edges": []}
+        if path == "/graph/label/popular?limit=2":
+            return [{"label": "manual", "count": 4}, {"label": "installation", "count": 2}]
+        if path == "/graph/label/search?q=install&limit=3":
+            return ["installation", "install steps"]
         raise AssertionError(f"unexpected GET {path}")
 
     def post(self, path: str, payload: dict[str, Any] | None = None) -> Any:
@@ -149,6 +163,115 @@ def test_documents_and_query_commands_use_current_backend_routes(monkeypatch, tm
     assert ("POST", "/query/retrieve", {"query": "install steps", "mode": "hybrid", "top_k": 3, "include_debug": False, "allow_general_fallback": False}, "secret-token") in FakeApiClient.calls
 
 
+def test_documents_retrieve_can_filter_by_document_ids(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("cli.main.ApiClient", FakeApiClient)
+    FakeApiClient.reset()
+    login(tmp_path)
+
+    result = runner.invoke(
+        app,
+        base_args(tmp_path)
+        + [
+            "documents",
+            "retrieve",
+            "--query",
+            "install steps",
+            "--document-id",
+            "doc-1",
+            "--document-id",
+            "doc-2",
+            "--output",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert (
+        "POST",
+        "/query/retrieve",
+        {
+            "query": "install steps",
+            "mode": "auto",
+            "top_k": 8,
+            "include_debug": False,
+            "allow_general_fallback": False,
+            "document_ids": ["doc-1", "doc-2"],
+        },
+        "secret-token",
+    ) in FakeApiClient.calls
+
+
+def test_documents_answer_can_filter_by_document_ids(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("cli.main.ApiClient", FakeApiClient)
+    FakeApiClient.reset()
+    login(tmp_path)
+
+    result = runner.invoke(
+        app,
+        base_args(tmp_path)
+        + [
+            "documents",
+            "answer",
+            "--query",
+            "install steps",
+            "--document-id",
+            "doc-1",
+            "--output",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert (
+        "POST",
+        "/query/answer",
+        {
+            "query": "install steps",
+            "mode": "auto",
+            "top_k": 8,
+            "include_debug": False,
+            "allow_general_fallback": False,
+            "document_ids": ["doc-1"],
+        },
+        "secret-token",
+    ) in FakeApiClient.calls
+
+
+def test_query_command_can_filter_by_document_ids(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("cli.main.ApiClient", FakeApiClient)
+    FakeApiClient.reset()
+    login(tmp_path)
+
+    result = runner.invoke(
+        app,
+        base_args(tmp_path)
+        + [
+            "query",
+            "--query",
+            "install steps",
+            "--document-id",
+            "doc-1",
+            "--output",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert (
+        "POST",
+        "/query",
+        {
+            "query": "install steps",
+            "mode": "auto",
+            "top_k": 8,
+            "include_debug": False,
+            "allow_general_fallback": False,
+            "document_ids": ["doc-1"],
+        },
+        "secret-token",
+    ) in FakeApiClient.calls
+
+
 def test_admin_documents_and_jobs_use_current_backend_routes(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr("cli.main.ApiClient", FakeApiClient)
     FakeApiClient.reset()
@@ -176,6 +299,156 @@ def test_admin_documents_and_jobs_use_current_backend_routes(monkeypatch, tmp_pa
     assert ("POST", "/admin/documents/doc-1/reindex", None, "secret-token") in FakeApiClient.calls
     assert ("DELETE", "/admin/documents/doc-1", None, "secret-token") in FakeApiClient.calls
     assert ("GET", "/jobs/job-1", None, "secret-token") in FakeApiClient.calls
+
+
+def test_admin_audit_logs_list_uses_current_backend_route(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("cli.main.ApiClient", FakeApiClient)
+    FakeApiClient.reset()
+    login(tmp_path)
+
+    result = runner.invoke(
+        app,
+        base_args(tmp_path) + ["admin", "audit-logs", "list", "--output", "json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output) == {
+        "audit_logs": [{"id": "audit-1", "event": "document.uploaded", "target_id": "doc-1"}]
+    }
+    assert ("GET", "/admin/audit-logs", None, "secret-token") in FakeApiClient.calls
+
+
+def test_admin_query_logs_list_uses_current_backend_route(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("cli.main.ApiClient", FakeApiClient)
+    FakeApiClient.reset()
+    login(tmp_path)
+
+    result = runner.invoke(
+        app,
+        base_args(tmp_path) + ["admin", "query-logs", "list", "--output", "json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output) == {
+        "query_logs": [{"id": "query-1", "query": "install steps", "mode": "auto", "latency_ms": 12}]
+    }
+    assert ("GET", "/admin/query-logs", None, "secret-token") in FakeApiClient.calls
+
+
+def test_lightrag_labels_list_uses_current_backend_route(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("cli.main.ApiClient", FakeApiClient)
+    FakeApiClient.reset()
+    login(tmp_path)
+
+    result = runner.invoke(
+        app,
+        base_args(tmp_path) + ["lightrag", "labels", "list", "--output", "json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output) == {"labels": ["manual", "installation"]}
+    assert ("GET", "/graph/label/list", None, "secret-token") in FakeApiClient.calls
+
+
+def test_lightrag_graph_show_uses_current_backend_route(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("cli.main.ApiClient", FakeApiClient)
+    FakeApiClient.reset()
+    login(tmp_path)
+
+    result = runner.invoke(
+        app,
+        base_args(tmp_path) + ["lightrag", "graphs", "show", "--label", "manual", "--output", "json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output) == {"graph": {"label": "manual", "nodes": [], "edges": []}}
+    assert ("GET", "/graphs?label=manual&max_depth=3&max_nodes=1000", None, "secret-token") in FakeApiClient.calls
+
+
+def test_lightrag_graph_show_can_set_depth_and_node_limit(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("cli.main.ApiClient", FakeApiClient)
+    FakeApiClient.reset()
+    login(tmp_path)
+
+    result = runner.invoke(
+        app,
+        base_args(tmp_path)
+        + [
+            "lightrag",
+            "graphs",
+            "show",
+            "--label",
+            "manual",
+            "--max-depth",
+            "2",
+            "--max-nodes",
+            "100",
+            "--output",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert ("GET", "/graphs?label=manual&max_depth=2&max_nodes=100", None, "secret-token") in FakeApiClient.calls
+
+
+def test_query_commands_accept_include_debug_alias(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("cli.main.ApiClient", FakeApiClient)
+    FakeApiClient.reset()
+    login(tmp_path)
+
+    result = runner.invoke(
+        app,
+        base_args(tmp_path)
+        + ["documents", "retrieve", "--query", "install steps", "--include-debug", "--output", "json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert (
+        "POST",
+        "/query/retrieve",
+        {
+            "query": "install steps",
+            "mode": "auto",
+            "top_k": 8,
+            "include_debug": True,
+            "allow_general_fallback": False,
+        },
+        "secret-token",
+    ) in FakeApiClient.calls
+
+
+def test_lightrag_labels_popular_uses_current_backend_route(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("cli.main.ApiClient", FakeApiClient)
+    FakeApiClient.reset()
+    login(tmp_path)
+
+    result = runner.invoke(
+        app,
+        base_args(tmp_path) + ["lightrag", "labels", "popular", "--limit", "2", "--output", "json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output) == {
+        "labels": [{"label": "manual", "count": 4}, {"label": "installation", "count": 2}]
+    }
+    assert ("GET", "/graph/label/popular?limit=2", None, "secret-token") in FakeApiClient.calls
+
+
+def test_lightrag_labels_search_uses_current_backend_route(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("cli.main.ApiClient", FakeApiClient)
+    FakeApiClient.reset()
+    login(tmp_path)
+
+    result = runner.invoke(
+        app,
+        base_args(tmp_path)
+        + ["lightrag", "labels", "search", "--query", "install", "--limit", "3", "--output", "json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output) == {"labels": ["installation", "install steps"]}
+    assert ("GET", "/graph/label/search?q=install&limit=3", None, "secret-token") in FakeApiClient.calls
 
 
 def test_planned_command_returns_structured_backend_gap(tmp_path: Path) -> None:

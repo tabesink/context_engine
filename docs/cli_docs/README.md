@@ -1,8 +1,8 @@
 # ragcli Documentation
 
-`ragcli` is the command-line client for the context-engine backend. It is intentionally thin: it authenticates, stores a backend session token, calls the FastAPI API, and renders either human-readable output or stable JSON.
+`ragcli` is the command-line client for the Context Engine backend. It is intentionally thin: it authenticates, stores a backend session token, calls FastAPI routes, and renders either human-oriented output or stable JSON.
 
-The CLI targets the current backend route contract. Routes are unversioned in this codebase, so examples use paths such as `/auth/login`, `/documents`, `/query/retrieve`, `/admin/documents/upload`, and `/jobs/{job_id}`.
+The CLI targets the current unversioned backend route contract. Examples use paths such as `/auth/login`, `/documents`, `/query/retrieve`, `/admin/documents/upload`, `/jobs/{job_id}`, `/graphs`, and `/graph/label/...`.
 
 ## Install For Local Development
 
@@ -13,7 +13,7 @@ python -m pip install -e ".[dev]"
 Run the backend separately:
 
 ```bash
-python -m uvicorn app.main:app --reload
+python -m uvicorn app.main:create_app --factory --reload
 ```
 
 Then use the CLI:
@@ -26,6 +26,8 @@ ragcli admin documents upload --file ./manual.pdf
 ragcli jobs status --job-id JOB_ID
 ```
 
+After login, protected commands use the saved base URL from the session. If a later command passes a different `--api-base-url`, `ragcli` warns and continues using the saved session URL until you log in again.
+
 ## Output Modes
 
 Every command supports:
@@ -35,15 +37,20 @@ Every command supports:
 --output json
 ```
 
-Human output is for operators. JSON output is the stable automation contract and should be used by scripts, tests, and future UI wrappers.
+JSON output is the stable automation contract. Human output is for operators; many commands currently render pretty-printed JSON or simple Rich tables rather than prose.
 
 ## Command Groups
 
-- `login`, `logout`: local session lifecycle.
-- `documents`: document list/detail/structure/page retrieval and retrieval queries.
+- `login`, `logout`, `auth me`: session lifecycle and current user inspection.
+- `documents`: document list/detail/structure/page retrieval, retrieval queries, and answers.
+- `query`: top-level answer shortcut.
 - `admin documents`: admin-only document upload, index, reindex, delete, and full document listing.
+- `admin audit-logs`, `admin query-logs`: admin-only observability logs.
 - `jobs`: admin-only indexing job list/detail/retry.
-- `users`, `agents`, `retrievers`, `conversations`, `messages`, `chat`, `runs`, `approvals`, and corpus version commands: documented as planned surface until matching backend routes exist.
+- `lightrag`: LightRAG graph and label reads through backend API routes. These require backend LightRAG configuration; the CLI never connects to LightRAG directly.
+- `users`, `agents`, `retrievers`, `conversations`, `messages`, `chat`, `runs`, `approvals`, and corpus version commands: reserved planned surface that returns `not_supported_by_backend` until matching FastAPI routes exist.
+
+API-first LightRAG deployment/domain administration remains future backend work, documented under `docs/cli_docs/api_first_cli/`.
 
 ## Current Flow
 
@@ -58,6 +65,7 @@ flowchart TD
     backend --> query[QueryRoutes]
     backend --> admin[AdminRoutes]
     backend --> jobs[JobRoutes]
+    backend --> lightrag[LightRAGRoutes]
 ```
 
 ## Design Constraints
@@ -66,4 +74,5 @@ flowchart TD
 - Do not print access tokens.
 - Prefer OS keyring for tokens and warn when falling back to a local file.
 - Keep backend business rules in the backend.
-- Add behavior one vertical TDD slice at a time.
+- Every real command should mirror a backend route.
+- Planned commands should fail explicitly instead of inventing local behavior.

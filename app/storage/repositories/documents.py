@@ -23,16 +23,24 @@ class DocumentRepository:
         content_type: str,
         storage_path: str,
         metadata: dict,
+        status: DocumentStatus = DocumentStatus.UPLOADED,
     ) -> DocumentRow:
         document = DocumentRow(
             owner_id=owner_id,
             filename=filename,
             content_type=content_type,
             storage_path=storage_path,
-            status=DocumentStatus.UPLOADED.value,
+            status=status.value,
             meta=metadata,
         )
         self.session.add(document)
+        self.session.commit()
+        self.session.refresh(document)
+        return document
+
+    def update_metadata(self, document: DocumentRow, metadata: dict) -> DocumentRow:
+        document.meta = metadata
+        document.updated_at = utc_now()
         self.session.commit()
         self.session.refresh(document)
         return document
