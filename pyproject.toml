@@ -1,0 +1,45 @@
+[project]
+name = "context-engine"
+version = "0.1.0"
+description = "Multi-user hybrid RAG backend combining semantic retrieval with document navigation."
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "sqlalchemy>=2.0.0",
+    "psycopg[binary]>=3.2.0",
+    "pydantic-settings>=2.5.0",
+    "httpx>=0.27.0",
+    "email-validator>=2.2.0",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib>=1.7.4",
+    "python-multipart>=0.0.9",
+    "redis>=5.0.0",
+    "rq>=1.16.0",
+    "pypdf>=5.0.0",
+    "typer>=0.12.0",
+    "rich>=13.0.0",
+    "keyring>=25.0.0",
+]
+
+[project.scripts]
+ragcli = "cli.main:app"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "ruff>=0.6.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.setuptools.packages.find]
+include = ["app*", "cli*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = [".references", ".cursor", ".prompts"]
+
