@@ -60,9 +60,28 @@ class FakeApiClient:
         if path == "/auth/login":
             return {"access_token": "secret-token", "token_type": "bearer"}
         if path == "/query/retrieve":
-            return {"query": payload["query"], "mode": payload["mode"], "evidence": []}
+            return {
+                "query": payload["query"],
+                "mode": payload["mode"],
+                "evidence": [
+                    {
+                        "document_id": "doc-1",
+                        "source_engine": payload["mode"],
+                        "score": 0.8,
+                        "page_start": 1,
+                        "page_end": 1,
+                        "text": "install steps evidence",
+                    }
+                ],
+                "debug": {"selected_engine": payload["mode"]},
+            }
         if path == "/query/answer" or path == "/query":
-            return {"query": payload["query"], "mode": payload["mode"], "evidence": [], "answer": "ok"}
+            return {
+                "query": payload["query"],
+                "mode": payload["mode"],
+                "evidence": [{"document_id": "doc-1", "text": "install steps evidence"}],
+                "answer": "ok",
+            }
         if path == "/admin/documents/doc-1/index":
             return {"job_id": "job-1"}
         if path == "/admin/documents/doc-1/reindex":
@@ -458,4 +477,146 @@ def test_planned_command_returns_structured_backend_gap(tmp_path: Path) -> None:
     payload = json.loads(result.output)
     assert payload["error"]["code"] == "not_supported_by_backend"
     assert "docs/cli_docs/api-contract.md" in payload["error"]["message"]
+
+
+def test_documents_list_human_output_is_screen_like_ascii_table(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("cli.main.ApiClient", FakeApiClient)
+    FakeApiClient.reset()
+    login(tmp_path)
+
+    result = runner.invoke(app, base_args(tmp_path) + ["documents", "list"])
+
+    assert result.exit_code == 0, result.output
+    assert "DOCUMENTS" in result.output
+    assert "doc-1" in result.output
+    assert "manual.txt" in result.output
+    assert "+" in result.output
+    assert "|" in result.output
+    assert "secret-token" not in result.output
+    assert "┌" not in result.output
+    assert "│" not in result.output
+
+
+def test_documents_retrieve_human_output_shows_evidence_and_debug(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("cli.main.ApiClient", FakeApiClient)
+    FakeApiClient.reset()
+    login(tmp_path)
+
+    result = runner.invoke(
+        app,
+        base_args(tmp_path)
+        + ["documents", "retrieve", "--query", "install steps", "--include-debug"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "install steps" in result.output
+    assert "install steps evidence" in result.output
+    assert "doc-1" in result.output
+    assert "Debug" in result.output
+
+
+def test_query_human_output_shows_answer_and_sources(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("cli.main.ApiClient", FakeApiClient)
+    FakeApiClient.reset()
+    login(tmp_path)
+
+    result = runner.invoke(app, base_args(tmp_path) + ["query", "--query", "install steps"])
+
+    assert result.exit_code == 0, result.output
+    assert "ANSWER" in result.output
+    assert "ok" in result.output
+    assert "doc-1" in result.output
+
+
+def test_lightrag_graph_show_human_output_summarizes_nodes_edges(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("cli.main.ApiClient", FakeApiClient)
+    FakeApiClient.reset()
+    login(tmp_path)
+
+    result = runner.invoke(
+        app,
+        base_args(tmp_path) + ["lightrag", "graphs", "show", "--label", "manual"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "GRAPH" in result.output
+    assert "manual" in result.output
+    assert "nodes" in result.output
+    assert "--output json" in result.output
+
+
+def test_ui_command_is_registered() -> None:
+    result = runner.invoke(app, ["ui", "--help"])
+
+    assert result.exit_code == 0, result.output
+    assert "interactive" in result.output.lower() or "tui" in result.output.lower()
+
+
+def test_retrieval_compare_calls_all_supported_modes(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("cli.main.ApiClient", FakeApiClient)
+    FakeApiClient.reset()
+    login(tmp_path)
+
+    result = runner.invoke(
+        app,
+        base_args(tmp_path) + ["retrieval", "compare", "--query", "install steps", "--top-k", "5"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "RETRIEVAL MODE COMPARISON" in result.output
+    assert "auto" in result.output
+    assert "semantic" in result.output
+    assert "navigation" in result.output
+    assert "hybrid" in result.output
+    called_modes = [
+        call[2]["mode"]
+        for call in FakeApiClient.calls
+        if call[0] == "POST" and call[1] == "/query/retrieve"
+    ]
+    assert called_modes == ["auto", "semantic", "navigation", "hybrid"]
+
+
+def test_admin_upload_flow_success_with_job_suggests_job_status(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("cli.main.ApiClient", FakeApiClient)
+    FakeApiClient.reset()
+    login(tmp_path)
+    upload_file = tmp_path / "manual.txt"
+    upload_file.write_text("manual", encoding="utf-8")
+
+    result = runner.invoke(
+        app,
+        base_args(tmp_path) + ["admin", "documents", "upload-flow", "--file", str(upload_file)],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "ADMIN DOCUMENT UPLOAD" in result.output
+    assert "job-1" in result.output
+    assert "ragcli jobs status --job-id job-1" in result.output
+    assert ("GET", "/jobs/job-1", None, "secret-token") in FakeApiClient.calls
+
+
+def test_admin_dashboard_calls_documents_jobs_and_query_logs(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("cli.main.ApiClient", FakeApiClient)
+    FakeApiClient.reset()
+    login(tmp_path)
+
+    result = runner.invoke(app, base_args(tmp_path) + ["admin", "dashboard"])
+
+    assert result.exit_code == 0, result.output
+    assert "ADMIN DASHBOARD" in result.output
+    assert ("GET", "/admin/documents", None, "secret-token") in FakeApiClient.calls
+    assert ("GET", "/jobs", None, "secret-token") in FakeApiClient.calls
+    assert ("GET", "/admin/query-logs", None, "secret-token") in FakeApiClient.calls
+
+
+def test_screen_documents_renders_document_library(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("cli.main.ApiClient", FakeApiClient)
+    FakeApiClient.reset()
+    login(tmp_path)
+
+    result = runner.invoke(app, base_args(tmp_path) + ["screen", "documents"])
+
+    assert result.exit_code == 0, result.output
+    assert "DOCUMENTS" in result.output
+    assert "doc-1" in result.output
 

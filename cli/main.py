@@ -9,16 +9,38 @@ from urllib.parse import urlencode
 
 import typer
 from rich.console import Console
-from rich.table import Table
 
 from cli.api_client import ApiClient, ApiClientError
 from cli.credentials import CredentialStore, StoredCredentials
+from cli.flows.admin_dashboard import build_admin_dashboard_screen, load_admin_dashboard
+from cli.flows.retrieval_compare import build_retrieval_compare_screen, compare_retrieval_modes
+from cli.flows.upload_document import upload_document_flow
 from cli.query_payload import build_query_payload
+from cli.renderers.base import render_screen_result
+from cli.renderers.tables import render_ascii_table
+from cli.screens.admin_documents import (
+    build_admin_document_action_screen,
+    build_admin_documents_screen,
+    build_upload_result_screen,
+)
+from cli.screens.documents import (
+    build_document_detail_screen,
+    build_document_library_screen,
+    build_document_page_screen,
+    build_document_structure_screen,
+)
+from cli.screens.jobs import build_jobs_screen, build_job_retry_screen, build_job_status_screen
+from cli.screens.lightrag import build_graph_screen, build_labels_screen
+from cli.screens.observability import build_audit_logs_screen, build_query_logs_screen
+from cli.screens.planned import backend_gap_message, build_backend_gap_screen, build_backend_gaps_screen
+from cli.screens.retrieval import build_answer_screen, build_retrieval_screen
+from cli.screens.session import build_login_screen, build_logout_screen, build_session_screen
+from cli.tui.app import run_tui
 
 OutputMode = Literal["human", "json"]
 RetrievalMode = Literal["auto", "semantic", "navigation", "hybrid"]
 
-console = Console()
+console = Console(width=120)
 
 app = typer.Typer(name="ragcli", help="CLI for the context-engine backend.", no_args_is_help=True)
 auth_app = typer.Typer(help="Authentication commands.")
@@ -29,6 +51,8 @@ admin_corpus_app = typer.Typer(help="Admin corpus commands.")
 admin_audit_logs_app = typer.Typer(help="Admin audit log commands.")
 admin_query_logs_app = typer.Typer(help="Admin query log commands.")
 jobs_app = typer.Typer(help="Indexing job commands.")
+retrieval_app = typer.Typer(help="Retrieval workflow commands.")
+screen_app = typer.Typer(help="Frontend-like screen aliases.")
 lightrag_app = typer.Typer(help="LightRAG graph commands.")
 lightrag_graphs_app = typer.Typer(help="LightRAG graph commands.")
 lightrag_labels_app = typer.Typer(help="LightRAG label commands.")
@@ -49,6 +73,8 @@ admin_app.add_typer(admin_corpus_app, name="corpus")
 admin_app.add_typer(admin_audit_logs_app, name="audit-logs")
 admin_app.add_typer(admin_query_logs_app, name="query-logs")
 app.add_typer(jobs_app, name="jobs")
+app.add_typer(retrieval_app, name="retrieval")
+app.add_typer(screen_app, name="screen")
 app.add_typer(lightrag_app, name="lightrag")
 lightrag_app.add_typer(lightrag_graphs_app, name="graphs")
 lightrag_app.add_typer(lightrag_labels_app, name="labels")
@@ -60,6 +86,23 @@ app.add_typer(conversations_app, name="conversations")
 app.add_typer(messages_app, name="messages")
 app.add_typer(runs_app, name="runs")
 runs_app.add_typer(runs_approvals_app, name="approvals")
+
+
+@admin_app.command("dashboard")
+def admin_dashboard(
+    ctx: typer.Context,
+    output: OutputMode = typer.Option("human", "--output"),
+) -> None:
+    client = _client_from_credentials(ctx, output)
+    try:
+        dashboard = load_admin_dashboard(client)
+    except ApiClientError as exc:
+        _handle_api_error(exc, output)
+        return
+    if output == "json":
+        _json(dashboard)
+    else:
+        render_screen_result(build_admin_dashboard_screen(dashboard), console=console)
 
 
 def default_config_dir() -> Path:
@@ -118,14 +161,14 @@ def _exit_error(code: str, message: str, output: OutputMode, *, status: int = 1)
     if output == "json":
         _json(_error_payload(code, message, status))
     else:
-        console.print(f"[red]{code}[/red]: {message}")
+        _render_error(code, message, status=status)
     raise typer.Exit(1)
 
 
 def _handle_api_error(exc: ApiClientError, output: OutputMode) -> None:
     message = exc.message
     if exc.code == "connection_failed":
-        message = f"{message}. Start the backend or pass --api-base-url."
+        message = f"Could not connect to backend at {console_safe_backend(message)}."
     _exit_error(exc.code, message, output, status=exc.status_code)
 
 
@@ -161,23 +204,65 @@ def _query_payload(
 
 
 def _print_table(title: str, rows: list[dict[str, Any]], columns: list[str]) -> None:
-    table = Table(title=title)
-    for column in columns:
-        table.add_column(column)
-    for row in rows:
-        table.add_row(*(str(row.get(column, "")) for column in columns))
-    console.print(table)
+    render_ascii_table(title, rows, columns, console=console)
 
 
 def _unsupported(command: str, output: OutputMode) -> None:
-    _exit_error(
-        "not_supported_by_backend",
-        (
-            f"`{command}` needs a backend route first. "
-            "See docs/cli_docs/api-contract.md."
-        ),
-        output,
-    )
+    if output == "json":
+        _exit_error(
+            "not_supported_by_backend",
+            f"{backend_gap_message(command)} See docs/cli_docs/api-contract.md.",
+            output,
+        )
+    render_screen_result(build_backend_gap_screen(command), console=console)
+    raise typer.Exit(1)
+
+
+def console_safe_backend(message: str) -> str:
+    if " at " in message:
+        return message.rsplit(" at ", 1)[-1].strip(".")
+    return str(message).strip(".")
+
+
+def _render_error(code: str, message: str, *, status: int) -> None:
+    titles = {
+        "auth_required": "AUTH REQUIRED",
+        "connection_failed": "CONNECTION FAILED",
+        "connection_error": "CONNECTION FAILED",
+        "forbidden": "FORBIDDEN",
+        "auth_failed": "LOGIN FAILED",
+    }
+    title = titles.get(code, "API ERROR")
+    console.print(title)
+    console.print("")
+    console.print(f"{code}: {message}")
+    if code in {"connection_failed", "connection_error"}:
+        console.print("")
+        console.print("Next:")
+        console.print("  Start the backend:")
+        console.print("    python -m uvicorn app.main:create_app --factory --reload")
+        console.print("")
+        console.print("  Or pass a different backend:")
+        console.print("    ragcli --api-base-url http://localhost:8000 auth me")
+        return
+    if code == "forbidden":
+        console.print("")
+        console.print("Reason:")
+        console.print("  The backend rejected this request.")
+        console.print("")
+        console.print("Next:")
+        console.print("  ragcli auth me")
+        return
+    if status:
+        console.print("")
+        console.print("Status:")
+        console.print(f"  {status}")
+    console.print("")
+    console.print("Next:")
+    if code in {"auth_required", "auth_failed"}:
+        console.print("  ragcli login --email admin@example.com")
+    else:
+        console.print("  ragcli documents list")
 
 
 @app.command("login")
@@ -204,7 +289,10 @@ def login(
     if output == "json":
         _json(payload)
     else:
-        console.print(payload["message"])
+        render_screen_result(
+            build_login_screen(email=email, base_url=ctx.obj["api_base_url"]),
+            console=console,
+        )
     if warning and output != "json":
         typer.echo(warning, err=True)
 
@@ -219,7 +307,7 @@ def logout(
     if output == "json":
         _json(payload)
     else:
-        console.print(payload["message"])
+        render_screen_result(build_logout_screen(), console=console)
 
 
 @auth_app.command("me")
@@ -233,7 +321,13 @@ def auth_me(
     except ApiClientError as exc:
         _handle_api_error(exc, output)
         return
-    _print_payload(payload, output, wrapper="user")
+    if output == "json":
+        _json({"user": payload})
+    else:
+        render_screen_result(
+            build_session_screen(payload, base_url=ctx.obj["api_base_url"]),
+            console=console,
+        )
 
 
 @documents_app.command("list")
@@ -250,7 +344,10 @@ def documents_list(
     if output == "json":
         _json({"documents": documents})
     else:
-        _print_table("Documents", documents, ["id", "filename", "status"])
+        render_screen_result(
+            build_document_library_screen(documents, base_url=ctx.obj["api_base_url"]),
+            console=console,
+        )
 
 
 @documents_app.command("show")
@@ -265,7 +362,10 @@ def documents_show(
     except ApiClientError as exc:
         _handle_api_error(exc, output)
         return
-    _print_payload(payload, output, wrapper="document")
+    if output == "json":
+        _json({"document": payload})
+    else:
+        render_screen_result(build_document_detail_screen(payload), console=console)
 
 
 @documents_app.command("structure")
@@ -280,7 +380,10 @@ def documents_structure(
     except ApiClientError as exc:
         _handle_api_error(exc, output)
         return
-    _print_payload(payload, output)
+    if output == "json":
+        _json(payload)
+    else:
+        render_screen_result(build_document_structure_screen(payload), console=console)
 
 
 @documents_app.command("page")
@@ -296,7 +399,27 @@ def documents_page(
     except ApiClientError as exc:
         _handle_api_error(exc, output)
         return
-    _print_payload(payload, output, wrapper="page")
+    if output == "json":
+        _json({"page": payload})
+    else:
+        render_screen_result(build_document_page_screen(payload), console=console)
+
+
+@documents_app.command("content")
+def documents_content(
+    document_id: str = typer.Option(..., "--document-id"),
+    pages: str = typer.Option(..., "--pages"),
+    output: OutputMode = typer.Option("human", "--output"),
+) -> None:
+    _unsupported(f"ragcli documents content --pages {pages}", output)
+
+
+@documents_app.command("search")
+def documents_search(
+    query: str = typer.Option(..., "--query"),
+    output: OutputMode = typer.Option("human", "--output"),
+) -> None:
+    _unsupported("ragcli documents search", output)
 
 
 @documents_app.command("retrieve")
@@ -319,7 +442,16 @@ def documents_retrieve(
     except ApiClientError as exc:
         _handle_api_error(exc, output)
         return
-    _print_payload(payload, output)
+    if output == "json":
+        _json(payload)
+    else:
+        payload = {
+            **payload,
+            "top_k": top_k,
+            "document_filter": ", ".join(document_ids or []) or "none",
+            "allow_general_fallback": allow_general_fallback,
+        }
+        render_screen_result(build_retrieval_screen(payload), console=console)
 
 
 @documents_app.command("answer")
@@ -342,7 +474,10 @@ def documents_answer(
     except ApiClientError as exc:
         _handle_api_error(exc, output)
         return
-    _print_payload(payload, output)
+    if output == "json":
+        _json(payload)
+    else:
+        render_screen_result(build_answer_screen(payload), console=console)
 
 
 @app.command("query")
@@ -365,7 +500,122 @@ def query_command(
     except ApiClientError as exc:
         _handle_api_error(exc, output)
         return
-    _print_payload(payload, output)
+    if output == "json":
+        _json(payload)
+    else:
+        render_screen_result(build_answer_screen(payload, title="Query Answer"), console=console)
+
+
+@app.command("ui")
+def ui_command(
+    ctx: typer.Context,
+) -> None:
+    """Open a lightweight interactive TUI."""
+    run_tui(
+        api_base_url=ctx.obj["api_base_url"],
+        credential_store=_store(ctx),
+        client_factory=ApiClient,
+        console=console,
+    )
+
+
+@retrieval_app.command("compare")
+def retrieval_compare(
+    ctx: typer.Context,
+    query: str = typer.Option(..., "--query"),
+    top_k: int = typer.Option(5, "--top-k"),
+    output: OutputMode = typer.Option("human", "--output"),
+) -> None:
+    client = _client_from_credentials(ctx, output)
+    comparison = compare_retrieval_modes(client, query=query, top_k=top_k)
+    if output == "json":
+        _json(comparison)
+    else:
+        render_screen_result(build_retrieval_compare_screen(comparison), console=console)
+
+
+@screen_app.command("documents")
+def screen_documents(
+    ctx: typer.Context,
+    output: OutputMode = typer.Option("human", "--output"),
+) -> None:
+    client = _client_from_credentials(ctx, output)
+    try:
+        documents = client.get("/documents")
+    except ApiClientError as exc:
+        _handle_api_error(exc, output)
+        return
+    if output == "json":
+        _exit_error("json_not_supported", "`ragcli screen documents` is a human screen alias.", output)
+    else:
+        render_screen_result(
+            build_document_library_screen(documents, base_url=ctx.obj["api_base_url"]),
+            console=console,
+        )
+
+
+@screen_app.command("retrieval")
+def screen_retrieval(
+    ctx: typer.Context,
+    query: str = typer.Option(..., "--query"),
+    output: OutputMode = typer.Option("human", "--output"),
+) -> None:
+    client = _client_from_credentials(ctx, output)
+    try:
+        payload = client.post(
+            "/query/retrieve",
+            _query_payload(query, "auto", 8, False, False, None),
+        )
+    except ApiClientError as exc:
+        _handle_api_error(exc, output)
+        return
+    if output == "json":
+        _exit_error("json_not_supported", "`ragcli screen retrieval` is a human screen alias.", output)
+    else:
+        render_screen_result(build_retrieval_screen(payload), console=console)
+
+
+@screen_app.command("graph")
+def screen_graph(
+    ctx: typer.Context,
+    label: str = typer.Option("manual", "--label"),
+    output: OutputMode = typer.Option("human", "--output"),
+) -> None:
+    client = _client_from_credentials(ctx, output)
+    try:
+        graph = client.get(f"/graphs?{urlencode({'label': label, 'max_depth': 2, 'max_nodes': 100})}")
+    except ApiClientError as exc:
+        _handle_api_error(exc, output)
+        return
+    if output == "json":
+        _exit_error("json_not_supported", "`ragcli screen graph` is a human screen alias.", output)
+    else:
+        render_screen_result(build_graph_screen(graph), console=console)
+
+
+@screen_app.command("admin")
+def screen_admin(
+    ctx: typer.Context,
+    output: OutputMode = typer.Option("human", "--output"),
+) -> None:
+    client = _client_from_credentials(ctx, output)
+    try:
+        dashboard = load_admin_dashboard(client)
+    except ApiClientError as exc:
+        _handle_api_error(exc, output)
+        return
+    if output == "json":
+        _exit_error("json_not_supported", "`ragcli screen admin` is a human screen alias.", output)
+    else:
+        render_screen_result(build_admin_dashboard_screen(dashboard), console=console)
+
+
+@screen_app.command("gaps")
+def screen_gaps(output: OutputMode = typer.Option("human", "--output")) -> None:
+    if output == "json":
+        _json({"gaps": build_backend_gaps_screen().raw})
+    else:
+        render_screen_result(build_backend_gaps_screen(), console=console)
 
 
 @admin_documents_app.command("upload")
@@ -388,7 +638,34 @@ def admin_documents_upload(
     except ApiClientError as exc:
         _handle_api_error(exc, output)
         return
-    _print_payload(payload, output)
+    if output == "json":
+        _json(payload)
+    else:
+        render_screen_result(build_upload_result_screen(payload, filename=file_path.name), console=console)
+
+
+@admin_documents_app.command("upload-flow")
+def admin_documents_upload_flow(
+    ctx: typer.Context,
+    file_path: Path = typer.Option(..., "--file", exists=True, dir_okay=False),
+    output: OutputMode = typer.Option("human", "--output"),
+) -> None:
+    client = _client_from_credentials(ctx, output)
+    try:
+        payload = upload_document_flow(client, file_path)
+    except OSError as exc:
+        _exit_error("file_read_failed", str(exc), output)
+        return
+    except ApiClientError as exc:
+        _handle_api_error(exc, output)
+        return
+    if output == "json":
+        _json(payload)
+    else:
+        screen = build_upload_result_screen(payload["upload"], filename=payload["file"])
+        render_screen_result(screen, console=console)
+        if payload.get("job"):
+            render_screen_result(build_job_status_screen(payload["job"]), console=console)
 
 
 @admin_documents_app.command("index")
@@ -403,7 +680,10 @@ def admin_documents_index(
     except ApiClientError as exc:
         _handle_api_error(exc, output)
         return
-    _print_payload(payload, output)
+    if output == "json":
+        _json(payload)
+    else:
+        render_screen_result(build_admin_document_action_screen(payload, title="Index Document"), console=console)
 
 
 @admin_documents_app.command("reindex")
@@ -418,7 +698,10 @@ def admin_documents_reindex(
     except ApiClientError as exc:
         _handle_api_error(exc, output)
         return
-    _print_payload(payload, output)
+    if output == "json":
+        _json(payload)
+    else:
+        render_screen_result(build_admin_document_action_screen(payload, title="Reindex Document"), console=console)
 
 
 @admin_documents_app.command("delete")
@@ -433,7 +716,10 @@ def admin_documents_delete(
     except ApiClientError as exc:
         _handle_api_error(exc, output)
         return
-    _print_payload(payload, output, wrapper="document")
+    if output == "json":
+        _json({"document": payload})
+    else:
+        render_screen_result(build_admin_document_action_screen(payload, title="Delete Document"), console=console)
 
 
 @admin_documents_app.command("list")
@@ -450,7 +736,7 @@ def admin_documents_list(
     if output == "json":
         _json({"documents": documents})
     else:
-        _print_table("Admin Documents", documents, ["id", "filename", "status"])
+        render_screen_result(build_admin_documents_screen(documents), console=console)
 
 
 @admin_audit_logs_app.command("list")
@@ -467,7 +753,7 @@ def admin_audit_logs_list(
     if output == "json":
         _json({"audit_logs": audit_logs})
     else:
-        _print_table("Audit Logs", audit_logs, ["id", "event", "target_id", "created_at"])
+        render_screen_result(build_audit_logs_screen(audit_logs), console=console)
 
 
 @admin_query_logs_app.command("list")
@@ -484,7 +770,7 @@ def admin_query_logs_list(
     if output == "json":
         _json({"query_logs": query_logs})
     else:
-        _print_table("Query Logs", query_logs, ["id", "query", "mode", "latency_ms", "created_at"])
+        render_screen_result(build_query_logs_screen(query_logs), console=console)
 
 
 @jobs_app.command("list")
@@ -501,7 +787,7 @@ def jobs_list(
     if output == "json":
         _json({"jobs": jobs})
     else:
-        _print_table("Jobs", jobs, ["id", "kind", "status", "document_id"])
+        render_screen_result(build_jobs_screen(jobs), console=console)
 
 
 @jobs_app.command("status")
@@ -516,7 +802,10 @@ def jobs_status(
     except ApiClientError as exc:
         _handle_api_error(exc, output)
         return
-    _print_payload(payload, output, wrapper="job")
+    if output == "json":
+        _json({"job": payload})
+    else:
+        render_screen_result(build_job_status_screen(payload), console=console)
 
 
 @jobs_app.command("retry")
@@ -531,7 +820,10 @@ def jobs_retry(
     except ApiClientError as exc:
         _handle_api_error(exc, output)
         return
-    _print_payload(payload, output, wrapper="job")
+    if output == "json":
+        _json({"job": payload})
+    else:
+        render_screen_result(build_job_retry_screen(job_id, payload), console=console)
 
 
 @lightrag_labels_app.command("list")
@@ -548,8 +840,7 @@ def lightrag_labels_list(
     if output == "json":
         _json({"labels": labels})
     else:
-        for label in labels:
-            console.print(str(label))
+        render_screen_result(build_labels_screen(labels, title="LightRAG Labels"), console=console)
 
 
 @lightrag_labels_app.command("popular")
@@ -567,7 +858,7 @@ def lightrag_labels_popular(
     if output == "json":
         _json({"labels": labels})
     else:
-        _print_table("Popular Labels", labels, ["label", "count"])
+        render_screen_result(build_labels_screen(labels, title="Popular LightRAG Labels"), console=console)
 
 
 @lightrag_labels_app.command("search")
@@ -586,8 +877,7 @@ def lightrag_labels_search(
     if output == "json":
         _json({"labels": labels})
     else:
-        for label in labels:
-            console.print(str(label))
+        render_screen_result(build_labels_screen(labels, title="LightRAG Label Search"), console=console)
 
 
 @lightrag_graphs_app.command("show")
@@ -606,23 +896,32 @@ def lightrag_graphs_show(
     except ApiClientError as exc:
         _handle_api_error(exc, output)
         return
-    _print_payload(graph, output, wrapper="graph")
+    if output == "json":
+        _json({"graph": graph})
+    else:
+        render_screen_result(build_graph_screen(graph), console=console)
 
 
 @admin_corpus_app.command("publish")
 def admin_corpus_publish(
-    corpus_version_id: str = typer.Option(..., "--corpus-version-id"),
+    corpus_version_id: str | None = typer.Option(None, "--corpus-version-id"),
     output: OutputMode = typer.Option("human", "--output"),
 ) -> None:
-    _unsupported(f"ragcli admin corpus publish --corpus-version-id {corpus_version_id}", output)
+    command = "ragcli admin corpus publish"
+    if corpus_version_id:
+        command = f"{command} --corpus-version-id {corpus_version_id}"
+    _unsupported(command, output)
 
 
 @admin_corpus_app.command("rollback")
 def admin_corpus_rollback(
-    corpus_version_id: str = typer.Option(..., "--corpus-version-id"),
+    corpus_version_id: str | None = typer.Option(None, "--corpus-version-id"),
     output: OutputMode = typer.Option("human", "--output"),
 ) -> None:
-    _unsupported(f"ragcli admin corpus rollback --corpus-version-id {corpus_version_id}", output)
+    command = "ragcli admin corpus rollback"
+    if corpus_version_id:
+        command = f"{command} --corpus-version-id {corpus_version_id}"
+    _unsupported(command, output)
 
 
 @admin_corpus_app.command("cleanup")
@@ -631,7 +930,10 @@ def admin_corpus_cleanup(output: OutputMode = typer.Option("human", "--output"))
 
 
 @users_app.command("create")
-def users_create(output: OutputMode = typer.Option("human", "--output")) -> None:
+def users_create(
+    email: str | None = typer.Option(None, "--email"),
+    output: OutputMode = typer.Option("human", "--output"),
+) -> None:
     _unsupported("ragcli users create", output)
 
 
@@ -661,7 +963,10 @@ def conversations_list(output: OutputMode = typer.Option("human", "--output")) -
 
 
 @conversations_app.command("show")
-def conversations_show(output: OutputMode = typer.Option("human", "--output")) -> None:
+def conversations_show(
+    conversation_id: str | None = typer.Option(None, "--conversation-id"),
+    output: OutputMode = typer.Option("human", "--output"),
+) -> None:
     _unsupported("ragcli conversations show", output)
 
 
@@ -671,22 +976,35 @@ def chat(output: OutputMode = typer.Option("human", "--output")) -> None:
 
 
 @messages_app.command("send")
-def messages_send(output: OutputMode = typer.Option("human", "--output")) -> None:
+def messages_send(
+    conversation_id: str | None = typer.Option(None, "--conversation-id"),
+    content: str | None = typer.Option(None, "--content"),
+    output: OutputMode = typer.Option("human", "--output"),
+) -> None:
     _unsupported("ragcli messages send", output)
 
 
 @messages_app.command("list")
-def messages_list(output: OutputMode = typer.Option("human", "--output")) -> None:
+def messages_list(
+    conversation_id: str | None = typer.Option(None, "--conversation-id"),
+    output: OutputMode = typer.Option("human", "--output"),
+) -> None:
     _unsupported("ragcli messages list", output)
 
 
 @runs_app.command("status")
-def runs_status(output: OutputMode = typer.Option("human", "--output")) -> None:
+def runs_status(
+    run_id: str | None = typer.Option(None, "--run-id"),
+    output: OutputMode = typer.Option("human", "--output"),
+) -> None:
     _unsupported("ragcli runs status", output)
 
 
 @runs_app.command("cancel")
-def runs_cancel(output: OutputMode = typer.Option("human", "--output")) -> None:
+def runs_cancel(
+    run_id: str | None = typer.Option(None, "--run-id"),
+    output: OutputMode = typer.Option("human", "--output"),
+) -> None:
     _unsupported("ragcli runs cancel", output)
 
 
@@ -696,12 +1014,18 @@ def runs_approvals_list(output: OutputMode = typer.Option("human", "--output")) 
 
 
 @runs_approvals_app.command("approve")
-def runs_approvals_approve(output: OutputMode = typer.Option("human", "--output")) -> None:
+def runs_approvals_approve(
+    approval_id: str | None = typer.Option(None, "--approval-id"),
+    output: OutputMode = typer.Option("human", "--output"),
+) -> None:
     _unsupported("ragcli runs approvals approve", output)
 
 
 @runs_approvals_app.command("reject")
-def runs_approvals_reject(output: OutputMode = typer.Option("human", "--output")) -> None:
+def runs_approvals_reject(
+    approval_id: str | None = typer.Option(None, "--approval-id"),
+    output: OutputMode = typer.Option("human", "--output"),
+) -> None:
     _unsupported("ragcli runs approvals reject", output)
 
 

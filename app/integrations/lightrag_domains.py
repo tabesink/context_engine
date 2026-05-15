@@ -23,7 +23,7 @@ def resolve_lightrag_domain(
     requested = domain or settings.lightrag_domain
     path = manifest_path if manifest_path is not None else settings.lightrag_domain_manifest
 
-    if path and path.exists():
+    if path and path.is_file():
         manifest = json.loads(path.read_text(encoding="utf-8"))
         entry = _domain_entry(manifest, requested)
         if entry:

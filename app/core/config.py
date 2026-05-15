@@ -1,8 +1,10 @@
 from functools import lru_cache
+import json
 from pathlib import Path
+from typing import Annotated
 
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -14,7 +16,7 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     index_jobs_inline: bool = False
     storage_root: Path = Path(".data/uploads")
-    allowed_origins: list[str] = Field(default_factory=lambda: ["*"])
+    allowed_origins: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["*"])
     seed_admin_email: str = "admin@example.com"
     seed_admin_password: str = "admin-password"
     lightrag_enabled: bool = False
@@ -29,6 +31,27 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @field_validator("allowed_origins", mode="before")
+    @classmethod
+    def parse_allowed_origins(cls, value: object) -> object:
+        if isinstance(value, list):
+            return value
+        if not isinstance(value, str):
+            return value
+
+        raw = value.strip()
+        if not raw:
+            return ["*"]
+        if raw == "*":
+            return ["*"]
+
+        if raw.startswith("["):
+            parsed = json.loads(raw)
+            if isinstance(parsed, list):
+                return [str(item).strip() for item in parsed if str(item).strip()]
+
+        return [item.strip() for item in raw.split(",") if item.strip()]
 
 
 @lru_cache
