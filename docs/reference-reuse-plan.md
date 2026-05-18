@@ -24,6 +24,7 @@ Current adaptation:
 - Forward admin uploads to `/documents/upload` when `LIGHTRAG_ENABLED=true`.
 - Proxy read-only graph routes through `/graphs` and `/graph/label/...`.
 - Keep local semantic/navigation retrieval available when LightRAG is disabled.
+- Manage optional domain deployment through local Context Engine code under `app/lightrag_deploy/`, using generated `.data/lightrag` manifest/env/compose files rather than importing LightRAG internals.
 
 Do not copy:
 
@@ -32,6 +33,7 @@ Do not copy:
 - UI or visualizer tooling.
 - Repository-wide configuration that does not match this app.
 - Retrieval internals that would bypass the remote adapter boundary.
+- Docker/deployment code into TUI screens or CLI service wrappers.
 
 ## Local Semantic Retrieval
 
@@ -61,6 +63,15 @@ Do not copy:
 - Direct filesystem/PDF assumptions into retrieval engines.
 - Any API client shape that bypasses the local service layer.
 
+## Terminal Client
+
+The maintained operator interface is under `cli/`: launcher, credential store, and `ApiClient`, with HTTP helpers in `cli/services/`. The Rich TUI (`cli/tui/`) composes reusable ASCII layout modules from `cli/screens/` and `cli/renderers/` and optional multi-step flows under `cli/flows/`. Older Typer/`ragcli`-style notebooks under `.references/cli/` and `docs/cli_docs/` describe historical command shapes; they are not wired as entry points in `pyproject.toml` (only `cli.launcher:main`).
+
+Do not:
+
+- Bypass `ApiClient` with ad-hoc `httpx`/`urllib` calls scattered across unrelated packages.
+- Reintroduce a parallel Typer CLI that duplicates flows without behavioral tests.
+
 ## Local Interfaces
 
 The app owns these interfaces and models:
@@ -72,6 +83,7 @@ The app owns these interfaces and models:
 - `SemanticIndexBuilder`
 - `AnswerComposer`
 - `LightRAGRemoteAdapter`
+- `LightRAGDomainService`
 
-Adapters may change internally as reference code changes. Routes, services, and CLI commands should continue depending on the local API and schema contracts.
+Adapters may change internally as reference code changes. Routes, services, and the terminal client should continue depending on the local API and schema contracts.
 

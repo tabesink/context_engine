@@ -19,10 +19,10 @@ def build_admin_documents_screen(documents: list[dict[str, Any]]) -> ScreenResul
             )
         ],
         actions=[
-            ScreenAction("Upload", "ragcli admin documents upload --file <path>"),
-            ScreenAction("Index", "ragcli admin documents index --document-id <id>"),
-            ScreenAction("Reindex", "ragcli admin documents reindex --document-id <id>"),
-            ScreenAction("Delete", "ragcli admin documents delete --document-id <id>"),
+            ScreenAction("Upload", "context-engine admin documents upload --file <path>"),
+            ScreenAction("Index", "context-engine admin documents index --document-id <id>"),
+            ScreenAction("Reindex", "context-engine admin documents reindex --document-id <id>"),
+            ScreenAction("Delete", "context-engine admin documents delete --document-id <id>"),
         ],
         raw=documents,
     )
@@ -31,9 +31,9 @@ def build_admin_documents_screen(documents: list[dict[str, Any]]) -> ScreenResul
 def build_upload_result_screen(result: dict[str, Any], *, filename: str | None = None) -> ScreenResult:
     document = result.get("document") if isinstance(result.get("document"), dict) else result
     job_id = result.get("job_id")
-    actions = [ScreenAction("Show document", f"ragcli documents show --document-id {document.get('id', '<id>')}")]
+    actions = [ScreenAction("Show document", f"context-engine documents show --document-id {document.get('id', '<id>')}")]
     if job_id:
-        actions.append(ScreenAction("Check job", f"ragcli jobs status --job-id {job_id}"))
+        actions.append(ScreenAction("Check job", f"context-engine jobs status --job-id {job_id}"))
     return ScreenResult(
         title="Admin Document Upload",
         api_group="admin",
@@ -75,7 +75,7 @@ def build_admin_document_action_screen(result: dict[str, Any], *, title: str) ->
                 columns=["field", "value"],
             )
         ]
-        actions = [ScreenAction("List documents", "ragcli admin documents list")]
+        actions = [ScreenAction("List documents", "context-engine admin documents list")]
     else:
         sections = [
             ScreenSection(
@@ -95,7 +95,7 @@ def build_admin_document_action_screen(result: dict[str, Any], *, title: str) ->
                 columns=["field", "value"],
             ),
         ]
-        actions = [ScreenAction("Check job", f"ragcli jobs status --job-id {job_id}")]
+        actions = [ScreenAction("Check job", f"context-engine jobs status --job-id {job_id}")]
     return ScreenResult(
         title=f"Admin Document {action}".strip(),
         api_group="admin",

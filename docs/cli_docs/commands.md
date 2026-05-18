@@ -1,119 +1,150 @@
-# Command Reference
+# Operator capability map (`context-engine` TUI ↔ REST)
 
-Root options are accepted before the command group:
+The launcher **`context-engine`** / **`context-tui`** exposes **only** the interactive terminal UI (`cli.launcher:main`). The tables below tie **capabilities** operators reach through menus to canonical **HTTP verbs and paths**.
 
-```bash
-ragcli --api-base-url http://127.0.0.1:8000 --config-dir ~/.context-engine/ragcli COMMAND
-```
+For request/response field detail, reuse `docs/cli_docs/api-contract.md`.
 
-Most commands accept `--output human|json`. JSON is the stable scripting contract.
+## Launcher options
 
-## Session Commands
+Parsed in **`cli/config.py`**:
 
 ```bash
-ragcli login --email admin@example.com
-ragcli logout
-ragcli auth me
+context-engine --api-base-url http://127.0.0.1:8010 --config-dir ~/.context-engine/cli
+context-engine --no-keyring
 ```
 
-`login` prompts for `--password` if it is not provided. The password is sent to `/auth/login` and is never stored. The saved session includes the backend base URL and access token; protected commands use that saved base URL.
+| Option / env | Role |
+| --- | --- |
+| **`--api-base-url`**, or **`CONTEXT_ENGINE_API_BASE_URL`** | Backend root URL (`http`/`https`; trailing slash tolerated) |
+| **`--config-dir`** | Directory for persisted session files when not using defaults |
+| **`--keyring` / `--no-keyring`** | Toggle OS credential keyring backing vs file-only fallback |
 
-## Document Commands
+Scripts should call **REST endpoints** directly—not launch the TUI with fake “subcommands”.
 
-```bash
-ragcli documents list
-ragcli documents show --document-id DOC_ID
-ragcli documents structure --document-id DOC_ID
-ragcli documents page --document-id DOC_ID --page-number 1
-ragcli documents retrieve --query "payment terms"
-ragcli documents retrieve --query "reset procedure" --mode hybrid --top-k 3
-ragcli documents retrieve --query "reset procedure" --document-id DOC_ID
-ragcli documents retrieve --query "reset procedure" --document-id DOC1 --document-id DOC2
-ragcli documents answer --query "what does the manual say about reset?"
-ragcli documents answer --query "what does the manual say about reset?" --document-id DOC_ID
-ragcli query --query "what does the manual say about reset?"
-ragcli query --query "what does the manual say about reset?" --document-id DOC_ID
+## Session and identity
+
+| UI intent | Approximate REST |
+| --- | --- |
+| Sign-in | **`POST /auth/login`** `{ email, password }` |
+| Sign-out locally | Credential clear (**local only**) |
+| Current user/session summary | **`GET /auth/me`** |
+
+`/auth/login` returns `{access_token, token_type}`. The client stores **`api_base_url` + bearer token**. Password material is requested only transiently during login.
+
+## Documents and retrieval
+
+| UI intent | REST |
+| --- | --- |
+| List corpora ready documents | **`GET /documents`** |
+| Document detail | **`GET /documents/{document_id}`** |
+| Document structure/outline | **`GET /documents/{document_id}/structure`** |
+| Parsed page body | **`GET /documents/{document_id}/pages/{page_number}`** |
+| Retrieval-only answers | **`POST /query/retrieve`** |
+| Composed citation answer | **`POST /query/answer`** or **`POST /query`** shortcut |
+
+Representative **`POST /query/retrieve`** body:
+
+```json
+{
+  "query": "where are installation steps",
+  "mode": "auto",
+  "top_k": 5,
+  "include_debug": false,
+  "allow_general_fallback": false,
+  "document_ids": ["doc_123"],
+  "lightrag_domain_id": "fatigue"
+}
 ```
 
-Supported retrieval modes are `auto`, `semantic`, `navigation`, and `hybrid`. Repeat `--document-id` to send a `document_ids` array. Query commands include `include_debug` and `allow_general_fallback` in the request body; the backend only returns debug details to admins.
+`document_ids` and `lightrag_domain_id` are omitted unless filters/domain selection apply. **`include_debug`** is honored only for admins on the backend. Supported modes: **`auto`**, **`semantic`**, **`navigation`**, **`hybrid`** (routing policy respects **`LIGHTRAG_ENABLED`** as documented elsewhere).
 
-## LightRAG Commands
+Known **backend gaps** (examples only—currently no matching routes):
 
-```bash
-ragcli lightrag graphs show --label LABEL
-ragcli lightrag graphs show --label LABEL --max-depth 2 --max-nodes 100
-ragcli lightrag labels list
-ragcli lightrag labels popular --limit 20
-ragcli lightrag labels search --query "install" --limit 20
+- Multi-page **`documents content`** slicing as a standalone command  
+- Dedicated document **text search** endpoint separate from retrieval
+
+## LightRAG graph reads
+
+| UI intent | REST |
+| --- | --- |
+| Graph summary (`label`, depth knobs) | **`GET /graphs`** with query params per backend schema |
+| Label catalog/list | **`GET /graph/label/list`** |
+| Popular labels | **`GET /graph/label/popular`** |
+| Label search | **`GET /graph/label/search?q=…`** |
+
+The UI never connects to LightRAG directly; backend proxy handles **`LIGHTRAG_ENABLED`** and outbound HTTP.
+
+In the TUI root menu this area is labeled **`Graphs`**.
+
+## LightRAG domain lifecycle
+
+| UI intent | REST |
+| --- | --- |
+| List user-selectable retrieval domains | **`GET /lightrag/domains`** |
+| List configured domains | **`GET /admin/lightrag/domains`** |
+| Create domain | **`POST /admin/lightrag/domains`** |
+| Show domain detail | **`GET /admin/lightrag/domains/{domain_id}`** |
+| Start domain | **`POST /admin/lightrag/domains/{domain_id}/up`** |
+| Stop domain | **`POST /admin/lightrag/domains/{domain_id}/down`** |
+| Recreate domain | **`POST /admin/lightrag/domains/{domain_id}/recreate`** |
+| Regenerate domain files | **`POST /admin/lightrag/domains/{domain_id}/regenerate`** |
+| Archive remove | **`DELETE /admin/lightrag/domains/{domain_id}`** |
+| Permanent delete | **`DELETE /admin/lightrag/domains/{domain_id}?permanent=true`** |
+
+Create body:
+
+```json
+{
+  "domain_id": "fatigue",
+  "display_name": "Fatigue Manuals",
+  "host_port": 9622,
+  "make_default": true
+}
 ```
 
-LightRAG commands call backend graph proxy routes:
+Domain deploy screens are admin-only through backend authorization. **`LIGHTRAG_DEPLOY_ENABLED=true`** must be set for deployment operations. Permanent delete additionally requires backend support via **`LIGHTRAG_ALLOW_PERMANENT_DELETE=true`**; otherwise the TUI shows the backend error.
 
-- `GET /graphs`
-- `GET /graph/label/list`
-- `GET /graph/label/popular`
-- `GET /graph/label/search`
+## Admin document operations
 
-The CLI does not connect to LightRAG directly. If the backend has `LIGHTRAG_ENABLED=false`, these commands render the backend's disabled-service error.
+| UI intent | REST |
+| --- | --- |
+| Upload | **`POST /admin/documents/upload`** (`multipart/form-data`; field **`file`**) |
+| List all docs (admin lens) | **`GET /admin/documents`** |
+| Index · reindex · delete | **`POST /admin/documents/{id}/index`** · **`/reindex`** · **`DELETE /admin/documents/{id}`** |
+| Planned corpus lifecycle knobs | Backend routes **missing** (`publish`, `rollback`, …) |
 
-## Admin Document Commands
+Indexing jobs enqueue when **`INDEX_JOBS_INLINE=false`**; LightRAG-forwarded uploads may surface **`job_id: null`** with **`lightrag.*`** metadata.
 
-```bash
-ragcli admin documents upload --file ./manual.pdf
-ragcli admin documents list
-ragcli admin documents index --document-id DOC_ID
-ragcli admin documents reindex --document-id DOC_ID
-ragcli admin documents delete --document-id DOC_ID
-ragcli admin audit-logs list
-ragcli admin query-logs list
-```
+In the TUI, these operations are nested under **`Documents -> Admin Actions`** (not a separate root menu item).
 
-Admin commands require a token for an admin user. Normal users receive the backend `403` response rendered through the same error path as other API failures.
+## Observability (admin)
 
-When `LIGHTRAG_ENABLED=false`, upload responses include a local indexing `job_id`. When LightRAG is enabled, upload forwards to the remote service and may return `job_id: null` with `lightrag.*` metadata.
+| UI intent | REST |
+| --- | --- |
+| Audit trail | **`GET /admin/audit-logs`** |
+| Query / retrieval history | **`GET /admin/query-logs`** |
 
-## Job Commands
+## Jobs (admin)
 
-```bash
-ragcli jobs list
-ragcli jobs status --job-id JOB_ID
-ragcli jobs retry --job-id JOB_ID
-```
+| UI intent | REST |
+| --- | --- |
+| List jobs | **`GET /jobs`** |
+| Job detail | **`GET /jobs/{job_id}`** |
+| Retry failed job | **`POST /jobs/{job_id}/retry`** |
 
-Jobs describe local indexing work. Use `jobs status` to inspect upload/index/reindex jobs created by the local path.
+Jobs track local worker-owned indexing pipelines.
 
-## Planned Commands
+## Planned-only backend surface
 
-The CLI reserves this surface but the current backend has no matching routes:
+Future FastAPI endpoints would back chat, richer user administration, conversational agents/runs approvals, corpus lifecycle tooling, etc. Until those handlers exist:
 
-```bash
-ragcli users create
-ragcli users list
-ragcli retrievers list
-ragcli agents list
-ragcli conversations create
-ragcli conversations list
-ragcli conversations show
-ragcli chat
-ragcli messages send
-ragcli messages list
-ragcli runs status
-ragcli runs cancel
-ragcli runs approvals list
-ragcli runs approvals approve
-ragcli runs approvals reject
-ragcli admin corpus publish
-ragcli admin corpus rollback
-ragcli admin corpus cleanup
-```
+- Screens under **Backend Gaps** or equivalent should surface deterministic **`not_supported_by_backend`**-style explanations—matching what earlier Typer stubs returned.
 
-These commands return `not_supported_by_backend` until corresponding FastAPI routes and behavior tests exist.
+See **`docs/cli_docs/api-contract.md`** § *Planned surface*.
 
-## JSON Examples
+## Automation JSON snippets
 
-```bash
-ragcli documents list --output json
-```
+Representative payloads mirror backend responses—for example **`GET /documents`**:
 
 ```json
 {
@@ -127,9 +158,7 @@ ragcli documents list --output json
 }
 ```
 
-```bash
-ragcli documents retrieve --query "installation steps" --include-debug --output json
-```
+For retrieval with **`include_debug=true`** (admin-only echoes):
 
 ```json
 {
@@ -155,4 +184,4 @@ ragcli documents retrieve --query "installation steps" --include-debug --output 
 }
 ```
 
-For non-admin users, `debug` is omitted even when `--include-debug` is sent.
+Normal users omit **`debug`** even when callers request **`include_debug`**.

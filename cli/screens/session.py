@@ -24,8 +24,8 @@ def build_login_screen(*, email: str, base_url: str) -> ScreenResult:
             )
         ],
         actions=[
-            ScreenAction("Current session", "ragcli auth me"),
-            ScreenAction("Documents", "ragcli documents list"),
+            ScreenAction("Current session", "context-engine auth me"),
+            ScreenAction("Documents", "context-engine documents list"),
         ],
         raw={"email": email, "base_url": base_url},
     )
@@ -47,7 +47,7 @@ def build_logout_screen() -> ScreenResult:
                 columns=["item", "state"],
             )
         ],
-        actions=[ScreenAction("Login", "ragcli login --email admin@example.com")],
+        actions=[ScreenAction("Login", "context-engine login --email admin@example.com")],
     )
 
 
@@ -74,8 +74,8 @@ def build_session_screen(user: dict[str, Any] | None, *, base_url: str) -> Scree
             )
         ],
         actions=[
-            ScreenAction("Documents", "ragcli documents list"),
-            ScreenAction("Admin documents", "ragcli admin documents list"),
+            ScreenAction("Documents", "context-engine documents list"),
+            ScreenAction("Admin documents", "context-engine admin documents list"),
         ],
         raw=user,
     )

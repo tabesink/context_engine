@@ -9,13 +9,13 @@ Guided flows should be useful, not decorative.
 ## Candidate commands
 
 ```bash
-ragcli retrieval compare --query "reset procedure"
-ragcli admin documents upload-flow --file ./manual.pdf
-ragcli admin dashboard
-ragcli screen documents
-ragcli screen retrieval
-ragcli screen graph
-ragcli screen admin
+context-engine retrieval compare --query "reset procedure"
+context-engine admin documents upload-flow --file ./manual.pdf
+context-engine admin dashboard
+context-engine screen documents
+context-engine screen retrieval
+context-engine screen graph
+context-engine screen admin
 ```
 
 ## Rule
@@ -46,7 +46,7 @@ As a developer/admin, I want to compare retrieval modes for the same query so I 
 ### Command
 
 ```bash
-ragcli retrieval compare --query "reset procedure" --top-k 5
+context-engine retrieval compare --query "reset procedure" --top-k 5
 ```
 
 ### Backend calls
@@ -104,7 +104,7 @@ As an admin, I want one upload workflow that uploads a file and tells me the nex
 ### Command
 
 ```bash
-ragcli admin documents upload-flow --file ./manual.pdf
+context-engine admin documents upload-flow --file ./manual.pdf
 ```
 
 ### Backend calls
@@ -134,7 +134,7 @@ Indexing job:
   job_456 pending
 
 Next:
-  ragcli jobs status --job-id job_456
+  context-engine jobs status --job-id job_456
 ```
 
 ### TDD slices
@@ -166,7 +166,7 @@ As an admin, I want a single summary of corpus, jobs, and query logs.
 ### Command
 
 ```bash
-ragcli admin dashboard
+context-engine admin dashboard
 ```
 
 ### Backend calls
@@ -226,10 +226,10 @@ As a developer, I want quick frontend-like screen aliases.
 ### Commands
 
 ```bash
-ragcli screen documents
-ragcli screen retrieval
-ragcli screen graph
-ragcli screen admin
+context-engine screen documents
+context-engine screen retrieval
+context-engine screen graph
+context-engine screen admin
 ```
 
 ### TDD slices

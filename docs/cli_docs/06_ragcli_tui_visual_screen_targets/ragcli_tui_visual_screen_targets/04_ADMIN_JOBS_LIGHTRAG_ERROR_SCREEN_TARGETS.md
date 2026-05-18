@@ -116,11 +116,11 @@ These capabilities are planned but do not have backend routes yet.
 +----------------+-------------------------------+--------------------------+
 | Capability     | CLI Command                   | Status                   |
 +----------------+-------------------------------+--------------------------+
-| Chat           | ragcli chat                   | not_supported_by_backend |
-| Users          | ragcli users list             | not_supported_by_backend |
-| Conversations  | ragcli conversations list     | not_supported_by_backend |
-| Runs           | ragcli runs status            | not_supported_by_backend |
-| Approvals      | ragcli runs approvals list    | not_supported_by_backend |
+| Chat           | context-engine chat                   | not_supported_by_backend |
+| Users          | context-engine users list             | not_supported_by_backend |
+| Conversations  | context-engine conversations list     | not_supported_by_backend |
+| Runs           | context-engine runs status            | not_supported_by_backend |
+| Approvals      | context-engine runs approvals list    | not_supported_by_backend |
 +----------------+-------------------------------+--------------------------+
 
 > View command details

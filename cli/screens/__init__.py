@@ -1,1 +1,1 @@
-"""Screen builders shared by ragcli commands and the lightweight TUI."""
+"""Screen builders shared by context-engine terminal screens."""

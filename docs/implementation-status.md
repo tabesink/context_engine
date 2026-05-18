@@ -12,17 +12,18 @@ This file records what the current codebase implements. For the intended build s
 - Text, Markdown, and PDF parsing into normalized parsed-document data.
 - Navigation index builder and PageIndex-style navigation adapter.
 - Local semantic chunking/indexing with deterministic hashed embeddings for tests and local development.
-- Retrieval router with `semantic`, `navigation`, `hybrid`, and `auto` modes, plus a routing policy Module that decides local versus remote execution.
+- Retrieval router with `semantic`, `navigation`, `hybrid`, and `auto` modes; `RetrievalRoutingPolicy` selects local versus remote backend; `LocalRetrievalStrategy` and `LightRAGRetrievalStrategy` in `app/retrieval/strategies.py` dispatch to the router or `LightRAGRemoteRetrievalEngine`.
 - Evidence-only retrieval via `POST /query/retrieve`.
 - Answer composition via `POST /query/answer` and `POST /query`.
 - Admin-only debug details when `include_debug=true`.
 - Job table, job status endpoints, Redis `rq` enqueue path, and worker-owned job lifecycle.
 - Audit/query log repositories and admin log endpoints.
 - Seed admin, backup, and retrieval evaluation scripts.
-- Typer `ragcli` with auth/session, documents, query, admin documents, logs, jobs, LightRAG graph commands, and explicit unsupported planned command groups.
+- Interactive terminal UI: console scripts `context-engine` / `context-tui` (`cli.launcher`) driving `cli/tui/app.py` plus `cli/tui/` navigation, screens, and helpers; `cli/screens/` + `cli/renderers/` supply composable layouts; `cli/flows/` holds multi-step UX; all HTTP via `ApiClient` and `cli/services/`.
 - Remote LightRAG integration behind `LIGHTRAG_ENABLED`, including HTTP adapter, domain manifest resolution, retrieval strategy, upload forwarding, and graph proxy routes.
+- LightRAG domain deployment control behind `LIGHTRAG_DEPLOY_ENABLED`, including managed domain manifest, generated domain env files, generated compose file, fakeable Docker Compose runner, admin APIs in `app/api/routes/lightrag_admin.py`, user-safe `GET /lightrag/domains`, domain-aware upload/query selection, and matching TUI/admin service wrappers.
 - Contract files under `external/lightrag/contract/`.
-- Behavior tests for API, CLI, LightRAG adapter, auth guardrails, upload, retrieval, answer flow, queued jobs, and worker failure handling.
+- Behavior tests for API, terminal client (launcher, settings, TUI, services, API client, screen renderers, query payload), routing policy, LightRAG adapter, LightRAG deploy stack, auth guardrails, upload, retrieval, answer flow, queued jobs, and worker failure handling.
 
 ## LightRAG Runtime Behavior
 
@@ -34,7 +35,7 @@ When `LIGHTRAG_ENABLED=true`:
 - `navigation` retrieval remains local.
 - Admin upload stores a local mirror record/file and forwards the file to LightRAG.
 - Upload responses may have `job_id: null` because remote ingestion is tracked by LightRAG metadata, not a local indexing job.
-- `GET /graphs` and `GET /graph/label/...` proxy to the remote LightRAG service.
+- `GET /graphs` and `GET /graph/label/...` proxy to the remote LightRAG service; when LightRAG integration is off, these routes return HTTP `400` (`LightRAG is disabled`).
 - LightRAG timeouts/connect failures become `503`; auth/upstream/invalid-response failures become `502`.
 
 ## Intentional Simplifications
@@ -45,6 +46,7 @@ When `LIGHTRAG_ENABLED=true`:
 - The answer composer is deterministic and citation-focused. A real LLM provider can be added behind the same composer/provider boundary.
 - Document ACLs are deferred; authenticated users can read ready documents.
 - LightRAG deployment is not managed by this repo's Compose stack; it is configured as an external service.
+- LightRAG domain deployment control is opt-in and generates a separate `.data/lightrag/docker-compose.lightrag-domains.yml`; it does not mutate the root Compose stack.
 
 ## Next Hardening Items
 
@@ -52,5 +54,5 @@ When `LIGHTRAG_ENABLED=true`:
 - Add production-grade embedding provider and real pgvector column/type usage for semantic chunks.
 - Add rate limiting middleware and stronger request-size controls.
 - Expand evaluation datasets and retrieval metrics.
-- Add richer LightRAG status polling or domain administration only after stable backend admin routes are designed.
+- Add richer LightRAG status polling and fuller TUI forms for domain create/start/stop/remove operations.
 

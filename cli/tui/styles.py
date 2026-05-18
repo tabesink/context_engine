@@ -50,6 +50,31 @@ def render_key_footer(console: Console, items: Iterable[str]) -> None:
     console.print(" | ".join(entries))
 
 
+def api_footer_items(*, include_debug: bool = False) -> list[str]:
+    items = ["I Inspect API", "J Raw JSON", "F Toggle full IDs", "R Refresh"]
+    if include_debug:
+        items.append("D Debug details")
+    items.extend(["B Back", "Q Quit"])
+    return items
+
+
+def render_api_footer(
+    console: Console,
+    *,
+    method: str | None = None,
+    route: str | None = None,
+    status_code: int | None = None,
+    elapsed_ms: int | None = None,
+    include_debug: bool = False,
+) -> None:
+    if method and route:
+        status = str(status_code) if status_code is not None else "unknown"
+        time = f"{elapsed_ms} ms" if elapsed_ms is not None else "unknown"
+        console.print("")
+        console.print(f"Route: {method} {route}    Status: {status}    Time: {time}")
+    render_key_footer(console, api_footer_items(include_debug=include_debug))
+
+
 def truncate_id(value: str, *, prefix: int = 8, suffix: int = 12) -> str:
     text = str(value or "")
     if len(text) <= prefix + suffix + 3:

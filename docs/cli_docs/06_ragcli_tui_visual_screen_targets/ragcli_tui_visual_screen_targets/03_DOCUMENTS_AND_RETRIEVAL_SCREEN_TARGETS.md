@@ -43,7 +43,7 @@ Do not show command hints like:
 
 ```text
 Next:
-  ragcli admin documents upload --file ./manual.pdf
+  context-engine admin documents upload --file ./manual.pdf
 ```
 
 Inside the TUI, the user should receive actions, not instructions to leave the TUI.

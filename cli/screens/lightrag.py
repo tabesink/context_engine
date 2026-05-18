@@ -20,7 +20,7 @@ def build_labels_screen(labels: list[Any], *, title: str = "Labels") -> ScreenRe
         title=title,
         api_group="lightrag",
         sections=[ScreenSection(title="", rows=rows, columns=columns)],
-        actions=[ScreenAction("Show graph", "ragcli lightrag graphs show --label <label>")],
+        actions=[ScreenAction("Show graph", "context-engine lightrag graphs show --label <label>")],
         raw=labels,
     )
 
@@ -70,6 +70,6 @@ def build_graph_screen(graph: dict[str, Any]) -> ScreenResult:
         api_group="lightrag",
         summary={"label": graph.get("label", "")},
         sections=sections,
-        actions=[ScreenAction("Export graph JSON", "ragcli lightrag graphs show --label <label> --output json")],
+        actions=[ScreenAction("Export graph JSON", "context-engine lightrag graphs show --label <label> --output json")],
         raw=graph,
     )

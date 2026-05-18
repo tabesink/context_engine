@@ -18,7 +18,7 @@ Users must be able to navigate the TUI with arrows, select options with Enter, m
 
 ## Required behavior
 
-- Starting `ragcli ui` shows login or main menu depending on session state.
+- Starting `context-engine` shows login or main menu depending on session state.
 - Arrow keys move the selected item.
 - Enter opens the selected screen/action.
 - The selected screen replaces the previous screen.

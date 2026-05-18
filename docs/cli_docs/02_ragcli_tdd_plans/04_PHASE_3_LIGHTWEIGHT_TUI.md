@@ -5,7 +5,7 @@
 Add optional TUI mode:
 
 ```bash
-ragcli ui
+context-engine
 ```
 
 The TUI should be a lightweight frontend rehearsal layer over the same API-backed screen builders used by direct commands.
@@ -110,11 +110,11 @@ Session: admin@example.com
 
 ## TDD vertical slices
 
-### Slice 1 — `ragcli ui` command exists
+### Slice 1 — `context-engine` command exists
 
 Behavior:
 
-> User can run `ragcli ui --help`.
+> User can run `context-engine --help`.
 
 RED test:
 
@@ -359,7 +359,7 @@ Assert visible:
 
 ## Acceptance criteria
 
-- `ragcli ui` starts and exits cleanly.
+- `context-engine` starts and exits cleanly.
 - TUI is mostly black-and-white.
 - Tables are ASCII.
 - Color is centralized in `tui/styles.py`.

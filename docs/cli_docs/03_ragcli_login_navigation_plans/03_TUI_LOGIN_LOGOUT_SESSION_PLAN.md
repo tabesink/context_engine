@@ -2,7 +2,7 @@
 
 ## Goal
 
-The user must be able to complete the full session lifecycle inside `ragcli ui`:
+The user must be able to complete the full session lifecycle inside `context-engine`:
 
 ```text
 No session -> login -> main menu -> logout -> login
@@ -15,9 +15,9 @@ The TUI must reuse the existing CLI auth/session logic.
 Normal CLI command mode already supports:
 
 ```bash
-ragcli login --email admin@example.com
-ragcli logout
-ragcli auth me
+context-engine login --email admin@example.com
+context-engine logout
+context-engine auth me
 ```
 
 The TUI must reuse the same backend routes and credential storage:
@@ -31,7 +31,7 @@ The TUI must reuse the same backend routes and credential storage:
 ## Startup flow
 
 ```text
-ragcli ui
+context-engine
    ↓
 Load saved credentials
    ↓

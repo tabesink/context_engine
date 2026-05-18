@@ -21,7 +21,7 @@ def build_jobs_screen(jobs: list[dict[str, Any]]) -> ScreenResult:
         actions=[
             ScreenAction(
                 "Job status",
-                f"ragcli jobs status --job-id {jobs[0].get('id', '<id>') if jobs else '<id>'}",
+                f"context-engine jobs status --job-id {jobs[0].get('id', '<id>') if jobs else '<id>'}",
             )
         ],
         raw=jobs,
@@ -31,17 +31,17 @@ def build_jobs_screen(jobs: list[dict[str, Any]]) -> ScreenResult:
 def build_job_status_screen(job: dict[str, Any]) -> ScreenResult:
     actions: list[ScreenAction] = []
     if str(job.get("status", "")).lower() in {"failed", "error"}:
-        actions.append(ScreenAction("Retry job", f"ragcli jobs retry --job-id {job.get('id', '<id>')}"))
+        actions.append(ScreenAction("Retry job", f"context-engine jobs retry --job-id {job.get('id', '<id>')}"))
         if job.get("document_id"):
             actions.append(
                 ScreenAction(
                     "Delete document",
-                    f"ragcli admin documents delete --document-id {job.get('document_id')}",
+                    f"context-engine admin documents delete --document-id {job.get('document_id')}",
                 )
             )
     elif job.get("document_id"):
         actions.append(
-            ScreenAction("Show document", f"ragcli documents show --document-id {job.get('document_id')}")
+            ScreenAction("Show document", f"context-engine documents show --document-id {job.get('document_id')}")
         )
     return ScreenResult(
         title="Job Status",
@@ -98,6 +98,6 @@ def build_job_retry_screen(previous_job_id: str, job: dict[str, Any]) -> ScreenR
                 columns=["field", "value"],
             ),
         ],
-        actions=[ScreenAction("Job status", f"ragcli jobs status --job-id {new_job_id}")],
+        actions=[ScreenAction("Job status", f"context-engine jobs status --job-id {new_job_id}")],
         raw=job,
     )

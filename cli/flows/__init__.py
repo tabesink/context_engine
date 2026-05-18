@@ -1,1 +1,1 @@
-"""Guided workflow helpers for ragcli."""
+"""Guided workflow helpers for context-engine."""

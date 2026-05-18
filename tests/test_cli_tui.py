@@ -4,10 +4,23 @@ from typing import Any, Callable
 
 from rich.console import Console
 
-from cli.api_client import ApiClientError
+from cli.api_client import ApiClientError, ApiRequestMetadata
 from cli.credentials import CredentialStore, StoredCredentials
 from cli.tui.app import run_tui
-from cli.tui.keys import KEY_BACKSPACE, KEY_DOWN, KEY_ENTER, KEY_REFRESH, KEY_UP, KEY_UPLOAD, normalize_key
+from cli.tui.keys import (
+    KEY_BACKSPACE,
+    KEY_DEBUG,
+    KEY_DOWN,
+    KEY_ENTER,
+    KEY_INSPECT,
+    KEY_QUIT,
+    KEY_RAW_JSON,
+    KEY_REFRESH,
+    KEY_TOGGLE_FULL_IDS,
+    KEY_UP,
+    KEY_UPLOAD,
+    normalize_key,
+)
 
 
 class FakeTuiClient:
@@ -17,6 +30,10 @@ class FakeTuiClient:
     fail_admin = False
     fail_upload_forbidden = False
     fail_upload_connection = False
+    fail_graphs = False
+    fail_domains = False
+    current_user_email = "admin@example.com"
+    current_user_role = "admin"
     documents: list[dict[str, Any]] = [{"id": "doc-1", "filename": "manual.txt", "status": "ready"}]
     upload_response: dict[str, Any] = {
         "document": {"id": "doc-2", "filename": "manual.pdf", "status": "uploaded"},
@@ -26,6 +43,18 @@ class FakeTuiClient:
     def __init__(self, base_url: str, token: str | None = None):
         self.base_url = base_url
         self.token = token
+        self.last_request: ApiRequestMetadata | None = None
+
+    def _record(self, method: str, path: str, payload: Any, response: Any, status_code: int = 200) -> Any:
+        self.last_request = ApiRequestMetadata(
+            method=method,
+            route=path,
+            status_code=status_code,
+            elapsed_ms=1,
+            request_summary=payload,
+            response_summary=response,
+        )
+        return response
 
     @classmethod
     def reset(cls) -> None:
@@ -35,6 +64,10 @@ class FakeTuiClient:
         cls.fail_admin = False
         cls.fail_upload_forbidden = False
         cls.fail_upload_connection = False
+        cls.fail_graphs = False
+        cls.fail_domains = False
+        cls.current_user_email = "admin@example.com"
+        cls.current_user_role = "admin"
         cls.documents = [{"id": "doc-1", "filename": "manual.txt", "status": "ready"}]
         cls.upload_response = {
             "document": {"id": "doc-2", "filename": "manual.pdf", "status": "uploaded"},
@@ -46,25 +79,60 @@ class FakeTuiClient:
         if path == "/auth/me":
             if self.fail_me:
                 raise ApiClientError("auth_expired", "session expired", 401)
-            return {"email": "admin@example.com", "role": "admin"}
+            return self._record("GET", path, None, {"email": self.current_user_email, "role": self.current_user_role})
         if path == "/documents":
-            return self.documents
+            return self._record("GET", path, None, self.documents)
         if path == "/documents/doc-1":
-            return {"id": "doc-1", "filename": "manual.txt", "status": "ready"}
+            return self._record("GET", path, None, {"id": "doc-1", "filename": "manual.txt", "status": "ready"})
         if path == "/graph/label/popular?limit=20":
-            return [{"label": "manual", "count": 4}]
+            if self.fail_graphs:
+                raise ApiClientError("service_disabled", "LightRAG graph proxy is disabled.", 503)
+            return self._record("GET", path, None, [{"label": "manual", "count": 4}])
+        if path == "/lightrag/domains":
+            return self._record("GET", path, None, {
+                "domains": [
+                    {"id": "fatigue", "display_name": "Fatigue Manuals", "is_default": True},
+                    {"id": "abaqus", "display_name": "Abaqus Manuals", "is_default": False},
+                ]
+            })
+        if path == "/admin/lightrag/domains":
+            if self.fail_domains:
+                raise ApiClientError("service_disabled", "LightRAG domain deployment is disabled.", 503)
+            return self._record("GET", path, None, {
+                "domains": [
+                    {
+                        "id": "fatigue",
+                        "display_name": "Fatigue Manuals",
+                        "host_port": 9622,
+                        "status": "configured",
+                        "is_default": True,
+                    }
+                ]
+            })
+        if path == "/admin/lightrag/domains/fatigue":
+            return self._record("GET", path, None, {
+                "id": "fatigue",
+                "display_name": "Fatigue Manuals",
+                "host_port": 9622,
+                "status": "running",
+                "is_default": True,
+            })
         if path == "/admin/documents":
             if self.fail_admin:
                 raise ApiClientError("forbidden", "admin role required", 403)
-            return [{"id": "doc-1", "filename": "manual.txt", "status": "ready"}]
+            return self._record("GET", path, None, [{"id": "doc-1", "filename": "manual.txt", "status": "ready"}])
         if path == "/jobs":
-            return [{"id": "job-1", "kind": "index_document", "status": "queued"}]
+            return self._record("GET", path, None, [{"id": "job-1", "kind": "index_document", "status": "queued"}])
         if path == "/jobs/job-456":
-            return {"id": "job-456", "kind": "index_document", "status": "queued", "document_id": "doc-2"}
+            return self._record("GET", path, None, {"id": "job-456", "kind": "index_document", "status": "queued", "document_id": "doc-2"})
         if path == "/admin/query-logs":
-            return [{"id": "query-1", "query": "install steps", "mode": "auto"}]
+            return self._record("GET", path, None, [{"id": "query-1", "query": "install steps", "mode": "auto"}])
         if path == "/admin/audit-logs":
-            return [{"id": "audit-1", "event": "document.uploaded", "target_id": "doc-1"}]
+            return self._record("GET", path, None, [{"id": "audit-1", "event": "document.uploaded", "target_id": "doc-1"}])
+        if path == "/health":
+            return self._record("GET", path, None, {"status": "ok"})
+        if path == "/health/readiness":
+            return self._record("GET", path, None, {"status": "ready"})
         raise AssertionError(f"unexpected GET {path}")
 
     def post(self, path: str, payload: dict[str, Any] | None = None) -> Any:
@@ -72,20 +140,50 @@ class FakeTuiClient:
         if path == "/auth/login":
             if self.fail_login:
                 raise ApiClientError("auth_failed", "Invalid email or password.", 401)
-            return {"access_token": "secret-token", "token_type": "bearer"}
+            return self._record("POST", path, payload, {"access_token": "secret-token", "token_type": "bearer"})
+        if path == "/admin/lightrag/domains":
+            return self._record("POST", path, payload, {
+                "id": payload["domain_id"],
+                "display_name": payload.get("display_name") or payload["domain_id"],
+                "host_port": payload.get("host_port"),
+                "status": "configured",
+                "is_default": bool(payload.get("make_default")),
+            })
+        if path.startswith("/admin/lightrag/domains/"):
+            domain_id = path.split("/")[4]
+            operation = path.rsplit("/", 1)[-1]
+            return self._record("POST", path, payload, {
+                "id": domain_id,
+                "operation": operation,
+                "status": "succeeded",
+                "service_name": f"lightrag-{domain_id}",
+                "message": None,
+            })
         if path == "/query/retrieve":
-            return {
+            return self._record("POST", path, payload, {
                 "query": payload["query"],
                 "mode": payload["mode"],
                 "evidence": [{"document_id": "doc-1", "text": "reset procedure evidence"}],
-            }
+            })
         if path == "/query/answer":
-            return {
+            return self._record("POST", path, payload, {
                 "query": payload["query"],
                 "answer": "Use the reset command from settings.",
                 "evidence": [{"document_id": "doc-1", "section": "Reset", "score": 0.93}],
-            }
+            })
         raise AssertionError(f"unexpected POST {path}")
+
+    def delete(self, path: str) -> Any:
+        self.calls.append(("DELETE", path, None, self.token))
+        if path.startswith("/admin/lightrag/domains/"):
+            domain_id = path.split("/")[4].split("?")[0]
+            return self._record("DELETE", path, None, {
+                "id": domain_id,
+                "archived": "permanent=true" not in path,
+                "archive_path": f".data/lightrag/deleted/{domain_id}",
+                "permanent": "permanent=true" in path,
+            })
+        raise AssertionError(f"unexpected DELETE {path}")
 
     def post_file(self, path: str, field_name: str, filename: str, content: bytes) -> Any:
         self.calls.append(
@@ -100,7 +198,12 @@ class FakeTuiClient:
             raise ApiClientError("forbidden", "Admin permission required.", 403)
         if self.fail_upload_connection:
             raise ApiClientError("service_unavailable", "Backend unavailable.", 503)
-        return self.upload_response
+        return self._record(
+            "POST",
+            path,
+            {"field_name": field_name, "filename": filename, "content_size": len(content)},
+            self.upload_response,
+        )
 
 
 def input_sequence(values: list[str]):
@@ -166,8 +269,14 @@ def test_tui_normalizes_real_terminal_navigation_keys() -> None:
     assert normalize_key("\r") == KEY_ENTER
     assert normalize_key("\x08") == KEY_BACKSPACE
     assert normalize_key("\x12") == KEY_REFRESH
+    assert normalize_key("r") == KEY_REFRESH
     assert normalize_key("refresh") == KEY_REFRESH
     assert normalize_key("upload") == KEY_UPLOAD
+    assert normalize_key("i") == KEY_INSPECT
+    assert normalize_key("j") == KEY_RAW_JSON
+    assert normalize_key("f") == KEY_TOGGLE_FULL_IDS
+    assert normalize_key("d") == KEY_DEBUG
+    assert normalize_key("q") == KEY_QUIT
 
 
 def test_tui_starts_at_login_when_no_session_exists(tmp_path: Path) -> None:
@@ -240,7 +349,46 @@ def test_existing_valid_session_opens_main_menu(tmp_path: Path) -> None:
 
     assert ("GET", "/auth/me", None, "secret-token") in FakeTuiClient.calls
     assert "Session: admin@example.com" in output
-    assert "Backend Gaps" in output
+    assert "Graphs" in output
+    assert output.count("LightRAG Domains") == 1
+    assert "LightRAG Graphs" not in output
+    assert "Admin Documents" not in output
+    assert "Create LightRAG Domain" not in output
+    assert "Start LightRAG Domain" not in output
+    assert "Stop LightRAG Domain" not in output
+    assert "Recreate LightRAG Domain" not in output
+    assert "Remove LightRAG Domain" not in output
+    assert "Backend Gaps" not in output
+
+
+def test_non_admin_session_hides_admin_only_root_menu_items(tmp_path: Path) -> None:
+    output = run_with_inputs(
+        tmp_path,
+        ["q"],
+        authenticated_store(tmp_path),
+        client_setup=lambda: (
+            setattr(FakeTuiClient, "current_user_email", "user@example.com"),
+            setattr(FakeTuiClient, "current_user_role", "user"),
+        ),
+    )
+
+    assert "Session: user@example.com" in output
+    assert "LightRAG Domains" not in output
+    assert "Jobs" not in output
+    assert "Observability" not in output
+    assert "Backend Gaps" not in output
+
+
+def test_documents_screen_hides_admin_actions_for_non_admin_users(tmp_path: Path) -> None:
+    output = run_with_inputs(
+        tmp_path,
+        ["enter", "q"],
+        authenticated_store(tmp_path),
+        client_setup=lambda: setattr(FakeTuiClient, "current_user_role", "user"),
+    )
+
+    assert "DOCUMENTS / LIBRARY" in output
+    assert "Admin Actions" not in output
 
 
 def test_expired_session_is_cleared_and_login_screen_is_shown(tmp_path: Path) -> None:
@@ -290,7 +438,7 @@ def test_empty_documents_screen_shows_upload_refresh_back_quit(tmp_path: Path) -
     )
 
     assert "No documents found." in output
-    assert "Upload document" in output
+    assert "Admin Actions" in output
     assert "Refresh" in output
     assert "Back" in output
     assert "Quit" in output
@@ -301,12 +449,12 @@ def test_empty_documents_screen_shows_upload_refresh_back_quit(tmp_path: Path) -
 def test_empty_documents_upload_action_opens_file_path_form(tmp_path: Path) -> None:
     output = run_with_inputs(
         tmp_path,
-        ["enter", "enter", "q"],
+        ["enter", "enter", "enter", "q"],
         authenticated_store(tmp_path),
         client_setup=lambda: setattr(FakeTuiClient, "documents", []),
     )
 
-    assert "ADMIN DOCUMENTS / UPLOAD" in output
+    assert "DOCUMENTS / ADMIN ACTIONS / UPLOAD" in output
     assert "File path:" in output
     assert "Enter Submit" in output
 
@@ -314,12 +462,12 @@ def test_empty_documents_upload_action_opens_file_path_form(tmp_path: Path) -> N
 def test_upload_form_invalid_file_path_shows_error_without_backend_call(tmp_path: Path) -> None:
     output = run_with_inputs(
         tmp_path,
-        ["enter", "enter", "./missing-file.pdf", "enter", "q"],
+        ["enter", "enter", "enter", "./missing-file.pdf", "enter", "q"],
         authenticated_store(tmp_path),
         client_setup=lambda: setattr(FakeTuiClient, "documents", []),
     )
 
-    assert "ADMIN DOCUMENTS / UPLOAD / ERROR" in output
+    assert "DOCUMENTS / ADMIN ACTIONS / UPLOAD / ERROR" in output
     assert "[ERROR] file_not_found" in output
     assert "Edit file path" in output
     upload_calls = [call for call in FakeTuiClient.calls if call[0] == "POST_FILE"]
@@ -332,7 +480,7 @@ def test_upload_form_valid_file_path_calls_admin_upload_route(tmp_path: Path) ->
 
     output = run_with_inputs(
         tmp_path,
-        ["enter", "enter", str(source_file), "enter", "q"],
+        ["enter", "enter", "enter", str(source_file), "enter", "q"],
         authenticated_store(tmp_path),
         client_setup=lambda: setattr(FakeTuiClient, "documents", []),
     )
@@ -346,7 +494,7 @@ def test_upload_form_valid_file_path_calls_admin_upload_route(tmp_path: Path) ->
     assert payload["filename"] == "manual.pdf"
     assert payload["content_size"] == len(b"test-pdf")
     assert token == "secret-token"
-    assert "ADMIN DOCUMENTS / UPLOAD" in output
+    assert "DOCUMENTS / ADMIN ACTIONS / UPLOAD" in output
     assert "[SUCCESS] Upload complete." in output
 
 
@@ -356,7 +504,7 @@ def test_upload_success_with_job_shows_view_job_status_action(tmp_path: Path) ->
 
     output = run_with_inputs(
         tmp_path,
-        ["enter", "enter", str(source_file), "enter", "q"],
+        ["enter", "enter", "enter", str(source_file), "enter", "q"],
         authenticated_store(tmp_path),
         client_setup=lambda: setattr(FakeTuiClient, "documents", []),
     )
@@ -387,7 +535,7 @@ def test_upload_success_without_job_handles_lightrag_forwarding(tmp_path: Path) 
 
     output = run_with_inputs(
         tmp_path,
-        ["enter", "enter", str(source_file), "enter", "q"],
+        ["enter", "enter", "enter", str(source_file), "enter", "q"],
         authenticated_store(tmp_path),
         client_setup=setup,
     )
@@ -410,12 +558,12 @@ def test_upload_backend_403_renders_forbidden_screen(tmp_path: Path) -> None:
 
     output = run_with_inputs(
         tmp_path,
-        ["enter", "enter", str(source_file), "enter", "q"],
+        ["enter", "enter", "enter", str(source_file), "enter", "q"],
         authenticated_store(tmp_path),
         client_setup=setup,
     )
 
-    assert "ADMIN DOCUMENTS / UPLOAD / FORBIDDEN" in output
+    assert "DOCUMENTS / ADMIN ACTIONS / UPLOAD / FORBIDDEN" in output
     assert "[ERROR]" in output
     assert "Admin permission required" in output
     upload_calls = [call for call in FakeTuiClient.calls if call[0] == "POST_FILE"]
@@ -425,20 +573,21 @@ def test_upload_backend_403_renders_forbidden_screen(tmp_path: Path) -> None:
 def test_documents_screen_with_documents_includes_upload_shortcut(tmp_path: Path) -> None:
     output = run_with_inputs(tmp_path, ["enter", "q"], authenticated_store(tmp_path))
 
-    assert "U Upload" in output
+    assert "A Admin actions" in output
     assert "Enter Open" in output
 
 
 def test_upload_flow_replaces_previous_screen_instead_of_appending_output(tmp_path: Path) -> None:
     output = run_with_inputs(
         tmp_path,
-        ["enter", "enter", "q"],
+        ["enter", "enter", "enter", "q"],
         authenticated_store(tmp_path),
         client_setup=lambda: setattr(FakeTuiClient, "documents", []),
     )
 
-    assert "ADMIN DOCUMENTS / UPLOAD" in output
-    assert "ragcli admin documents upload --file ./manual.pdf" not in output
+    assert "DOCUMENTS / ADMIN ACTIONS / UPLOAD" in output
+    legacy_name = "rag" + "cli"
+    assert legacy_name not in output
     assert output.count("No documents found.") <= 1
 
 
@@ -472,7 +621,7 @@ def test_upload_result_truncates_long_document_and_job_ids(tmp_path: Path) -> No
 
     output = run_with_inputs(
         tmp_path,
-        ["enter", "enter", str(source_file), "enter", "q"],
+        ["enter", "enter", "enter", str(source_file), "enter", "q"],
         authenticated_store(tmp_path),
         client_setup=setup,
     )
@@ -499,12 +648,12 @@ def test_upload_result_show_full_ids_opens_details_screen(tmp_path: Path) -> Non
 
     output = run_with_inputs(
         tmp_path,
-        ["enter", "enter", str(source_file), "enter", "down", "enter", "q"],
+        ["enter", "enter", "enter", str(source_file), "enter", "down", "enter", "q"],
         authenticated_store(tmp_path),
         client_setup=setup,
     )
 
-    assert "ADMIN DOCUMENTS / UPLOAD / DETAILS" in output
+    assert "DOCUMENTS / ADMIN ACTIONS / UPLOAD / DETAILS" in output
     assert long_doc in output
     assert long_job in output
 
@@ -515,7 +664,7 @@ def test_upload_success_defaults_to_view_job_status_when_job_exists(tmp_path: Pa
 
     output = run_with_inputs(
         tmp_path,
-        ["enter", "enter", str(source_file), "enter", "enter", "q"],
+        ["enter", "enter", "enter", str(source_file), "enter", "enter", "q"],
         authenticated_store(tmp_path),
         client_setup=lambda: setattr(FakeTuiClient, "documents", []),
     )
@@ -537,7 +686,7 @@ def test_upload_success_without_job_defaults_to_return_documents(tmp_path: Path)
 
     output = run_with_inputs(
         tmp_path,
-        ["enter", "enter", str(source_file), "enter", "enter", "q"],
+        ["enter", "enter", "enter", str(source_file), "enter", "enter", "q"],
         authenticated_store(tmp_path),
         client_setup=setup,
     )
@@ -551,12 +700,12 @@ def test_upload_result_uses_compact_footer(tmp_path: Path) -> None:
 
     output = run_with_inputs(
         tmp_path,
-        ["enter", "enter", str(source_file), "enter", "q"],
+        ["enter", "enter", "enter", str(source_file), "enter", "q"],
         authenticated_store(tmp_path),
         client_setup=lambda: setattr(FakeTuiClient, "documents", []),
     )
 
-    assert "Up/Down Select | Enter Choose | B Back | Q Quit" in output
+    assert "Up/Down Select | Enter Choose | I Inspect API | J Raw JSON | F Toggle full IDs | B Back | Q Quit" in output
 
 
 def test_upload_connection_failure_shows_retry_options(tmp_path: Path) -> None:
@@ -569,12 +718,12 @@ def test_upload_connection_failure_shows_retry_options(tmp_path: Path) -> None:
 
     output = run_with_inputs(
         tmp_path,
-        ["enter", "enter", str(source_file), "enter", "q"],
+        ["enter", "enter", "enter", str(source_file), "enter", "q"],
         authenticated_store(tmp_path),
         client_setup=setup,
     )
 
-    assert "ADMIN DOCUMENTS / UPLOAD / ERROR" in output
+    assert "DOCUMENTS / ADMIN ACTIONS / UPLOAD / ERROR" in output
     assert "service_unavailable: Backend unavailable." in output
     assert "Retry upload" in output
     assert "Edit file path" in output
@@ -587,6 +736,51 @@ def test_tui_retrieval_screen_accepts_query_and_shows_evidence(tmp_path: Path) -
     assert "reset procedure evidence" in output
     assert "Generate answer" in output
     assert "Compare modes" in output
+
+
+def test_tui_retrieval_result_inspect_shows_request_payload(tmp_path: Path) -> None:
+    output = run_with_inputs(
+        tmp_path,
+        ["down", "enter", "reset procedure", "enter", "i", "q"],
+        authenticated_store(tmp_path),
+    )
+
+    assert "RETRIEVAL / CONTEXT / INSPECT API" in output
+    assert "Route" in output
+    assert "/query/retrieve" in output
+    assert "Request JSON" in output
+    assert '"query": "reset procedure"' in output
+    assert '"top_k": 8' in output
+
+
+def test_tui_retrieval_result_raw_json_is_on_demand(tmp_path: Path) -> None:
+    output = run_with_inputs(
+        tmp_path,
+        ["down", "enter", "reset procedure", "enter", "j", "q"],
+        authenticated_store(tmp_path),
+    )
+
+    assert "RETRIEVAL / CONTEXT / RAW JSON" in output
+    assert '"evidence"' in output
+    assert '"document_id": "doc-1"' in output
+
+
+def test_tui_retrieval_prompt_renders_lightrag_domain_selector(tmp_path: Path) -> None:
+    output = run_with_inputs(tmp_path, ["down", "enter", "q"], authenticated_store(tmp_path))
+
+    assert "LightRAG domain: fatigue" in output
+    assert ("GET", "/lightrag/domains", None, "secret-token") in FakeTuiClient.calls
+
+
+def test_tui_retrieval_prompt_can_select_lightrag_domain(tmp_path: Path) -> None:
+    run_with_inputs(
+        tmp_path,
+        ["down", "enter", "tab", "fatigue limits", "enter", "q"],
+        authenticated_store(tmp_path),
+    )
+
+    retrieval_calls = [call for call in FakeTuiClient.calls if call[0] == "POST" and call[1] == "/query/retrieve"]
+    assert retrieval_calls[-1][2]["lightrag_domain_id"] == "abaqus"
 
 
 def test_tui_retrieval_screen_preserves_spaces_when_typing_character_by_character(tmp_path: Path) -> None:
@@ -630,12 +824,14 @@ def test_tui_retrieval_result_compare_modes_opens_comparison_screen(tmp_path: Pa
     assert "hybrid" in output
 
 
-def test_tui_backend_gaps_screen_lists_planned_unsupported_surfaces(tmp_path: Path) -> None:
-    output = run_with_inputs(tmp_path, ["8", "q"], authenticated_store(tmp_path))
+def test_tui_health_screen_reads_health_and_readiness(tmp_path: Path) -> None:
+    output = run_with_inputs(tmp_path, ["down", "down", "down", "down", "down", "down", "enter", "q"], authenticated_store(tmp_path))
 
-    assert "chat" in output
-    assert "runs approvals" in output
-    assert "not_supported_by_backend" in output
+    assert "HEALTH" in output
+    assert "readiness" in output
+    assert "Detail" in output
+    assert ("GET", "/health", None, "secret-token") in FakeTuiClient.calls
+    assert ("GET", "/health/readiness", None, "secret-token") in FakeTuiClient.calls
 
 
 def test_logout_clears_session_and_returns_to_logged_out_screen(tmp_path: Path) -> None:
@@ -653,8 +849,165 @@ def test_logout_clears_session_and_returns_to_logged_out_screen(tmp_path: Path) 
 def test_lightrag_tui_screen_uses_backend_graph_proxy(tmp_path: Path) -> None:
     output = run_with_inputs(tmp_path, ["down", "down", "enter", "q"], authenticated_store(tmp_path))
 
-    assert "LIGHTRAG / LABELS" in output
+    assert "GRAPHS / LABELS" in output
     assert ("GET", "/graph/label/popular?limit=20", None, "secret-token") in FakeTuiClient.calls
+
+
+def test_graphs_screen_shows_honest_disabled_state_when_backend_unavailable(tmp_path: Path) -> None:
+    output = run_with_inputs(
+        tmp_path,
+        ["down", "down", "enter", "q"],
+        authenticated_store(tmp_path),
+        client_setup=lambda: setattr(FakeTuiClient, "fail_graphs", True),
+    )
+
+    assert "GRAPHS / LABELS" in output
+    assert "[ERROR]" in output
+    assert "LightRAG graph proxy is disabled" in output
+
+
+def test_lightrag_domains_tui_screen_uses_backend_admin_api(tmp_path: Path) -> None:
+    output = run_with_inputs(tmp_path, ["down", "down", "down", "enter", "q"], authenticated_store(tmp_path))
+
+    assert "LIGHTRAG / DOMAINS" in output
+    assert "Create Domain" in output
+    assert "Show Domain Detail" in output
+    assert "Regenerate Domain Files" in output
+    assert "Permanent Delete Domain" in output
+    assert "fatigue" in output
+
+
+def test_lightrag_domains_screen_shows_disabled_state_without_hiding_actions(tmp_path: Path) -> None:
+    output = run_with_inputs(
+        tmp_path,
+        ["down", "down", "down", "enter", "q"],
+        authenticated_store(tmp_path),
+        client_setup=lambda: setattr(FakeTuiClient, "fail_domains", True),
+    )
+
+    assert "LIGHTRAG / DOMAINS" in output
+    assert "[ERROR]" in output
+    assert "LightRAG domain deployment is disabled" in output
+    assert "Create Domain" in output
+    assert ("GET", "/admin/lightrag/domains", None, "secret-token") in FakeTuiClient.calls
+
+
+def test_tui_create_lightrag_domain_posts_admin_payload(tmp_path: Path) -> None:
+    output = run_with_inputs(
+        tmp_path,
+        [
+            "down",
+            "down",
+            "down",
+            "enter",
+            "down",
+            "enter",
+            *list("fatigue"),
+            "tab",
+            *list("Fatigue Manuals"),
+            "tab",
+            *list("9622"),
+            "tab",
+            "y",
+            "enter",
+            "q",
+        ],
+        authenticated_store(tmp_path),
+    )
+
+    assert "LIGHTRAG / DOMAINS / CREATE" in output
+    assert "[SUCCESS] Domain created." in output
+    assert (
+        "POST",
+        "/admin/lightrag/domains",
+        {
+            "domain_id": "fatigue",
+            "display_name": "Fatigue Manuals",
+            "host_port": 9622,
+            "make_default": True,
+        },
+        "secret-token",
+    ) in FakeTuiClient.calls
+
+
+def test_tui_start_lightrag_domain_posts_up_operation(tmp_path: Path) -> None:
+    output = run_with_inputs(
+        tmp_path,
+        ["down"] * 3 + ["enter"] + ["down"] * 3 + ["enter", *list("fatigue"), "enter", "q"],
+        authenticated_store(tmp_path),
+    )
+
+    assert "LIGHTRAG / DOMAINS / START" in output
+    assert "[SUCCESS] start succeeded." in output
+    assert ("POST", "/admin/lightrag/domains/fatigue/up", None, "secret-token") in FakeTuiClient.calls
+
+
+def test_tui_stop_lightrag_domain_posts_down_operation(tmp_path: Path) -> None:
+    output = run_with_inputs(
+        tmp_path,
+        ["down"] * 3 + ["enter"] + ["down"] * 4 + ["enter", *list("fatigue"), "enter", "q"],
+        authenticated_store(tmp_path),
+    )
+
+    assert "LIGHTRAG / DOMAINS / STOP" in output
+    assert "[SUCCESS] stop succeeded." in output
+    assert ("POST", "/admin/lightrag/domains/fatigue/down", None, "secret-token") in FakeTuiClient.calls
+
+
+def test_tui_recreate_lightrag_domain_requires_confirmation(tmp_path: Path) -> None:
+    output = run_with_inputs(
+        tmp_path,
+        ["down"] * 3 + ["enter"] + ["down"] * 5 + ["enter", *list("fatigue"), "tab", *list("RECREATE"), "enter", "q"],
+        authenticated_store(tmp_path),
+    )
+
+    assert "LIGHTRAG / DOMAINS / RECREATE" in output
+    assert "[SUCCESS] recreate succeeded." in output
+    assert ("POST", "/admin/lightrag/domains/fatigue/recreate", None, "secret-token") in FakeTuiClient.calls
+
+
+def test_tui_remove_lightrag_domain_archives_by_default(tmp_path: Path) -> None:
+    output = run_with_inputs(
+        tmp_path,
+        ["down"] * 3 + ["enter"] + ["down"] * 7 + ["enter", *list("fatigue"), "tab", "tab", *list("REMOVE"), "enter", "q"],
+        authenticated_store(tmp_path),
+    )
+
+    assert "LIGHTRAG / DOMAINS / REMOVE" in output
+    assert "[SUCCESS] Domain removed." in output
+    assert ("DELETE", "/admin/lightrag/domains/fatigue", None, "secret-token") in FakeTuiClient.calls
+
+
+def test_tui_remove_lightrag_domain_permanent_delete_requires_confirmation(tmp_path: Path) -> None:
+    output = run_with_inputs(
+        tmp_path,
+        [
+            "down",
+            "down",
+            "down",
+            "enter",
+            "down",
+            "down",
+            "down",
+            "down",
+            "down",
+            "down",
+            "down",
+            "down",
+            "enter",
+            *list("fatigue"),
+            "tab",
+            "tab",
+            *list("PERMANENT DELETE"),
+            "enter",
+            "q",
+        ],
+        authenticated_store(tmp_path),
+    )
+
+    assert "LIGHTRAG / DOMAINS / REMOVE" in output
+    assert "[SUCCESS] Domain permanently deleted." in output
+    assert ("DELETE", "/admin/lightrag/domains/fatigue?permanent=true", None, "secret-token") in FakeTuiClient.calls
 
 
 def test_admin_screen_renders_backend_403_without_local_admin_check(tmp_path: Path) -> None:
@@ -669,13 +1022,13 @@ def test_admin_screen_renders_backend_403_without_local_admin_check(tmp_path: Pa
         credential_store=store,
         client_factory=FakeTuiClient,
         console=console,
-        input_func=input_sequence(["down", "down", "down", "enter", "q"]),
+        input_func=input_sequence(["enter", "a", "down", "enter", "q"]),
     )
 
     assert ("GET", "/admin/documents", None, "secret-token") in FakeTuiClient.calls
     output = stream.getvalue()
     assert "[ERROR] forbidden: admin role required" in output
-    assert "ADMIN DOCUMENTS" in output
+    assert "DOCUMENTS / ADMIN ACTIONS / LIST ALL" in output
 
 
 def test_jobs_screen_uses_warn_semantic_label_for_running_states(tmp_path: Path) -> None:

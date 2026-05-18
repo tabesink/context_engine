@@ -1,13 +1,13 @@
-# Coding Agent Prompt: Implement `ragcli ui` Login + Arrow-Key TUI with TDD
+# Coding Agent Prompt: Implement `context-engine` Login + Arrow-Key TUI with TDD
 
-You are a senior Python CLI/TUI engineer working in an existing `ragcli` codebase.
+You are a senior Python CLI/TUI engineer working in an existing `context-engine` codebase.
 
 ## Objective
 
 Implement a lightweight interactive TUI launched by:
 
 ```bash
-ragcli ui
+context-engine
 ```
 
 The TUI must support:
@@ -193,7 +193,7 @@ Status: backend gap
 This screen is planned, but the backend route does not exist yet.
 
 Equivalent CLI command:
-  ragcli chat
+  context-engine chat
 
 Expected behavior:
   not_supported_by_backend
@@ -207,7 +207,7 @@ Do not write all tests first.
 
 ### Slice 0
 
-`ragcli ui` command exists and quits cleanly.
+`context-engine` command exists and quits cleanly.
 
 ### Slice 1
 
@@ -302,7 +302,7 @@ test_render_called_once
 
 Implementation is done when:
 
-- `ragcli ui` launches successfully.
+- `context-engine` launches successfully.
 - No session opens login screen.
 - User can log in from TUI.
 - User can log out from TUI.

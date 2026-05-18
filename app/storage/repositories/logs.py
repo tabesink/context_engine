@@ -8,6 +8,19 @@ class LogRepository:
     def __init__(self, session: Session):
         self.session = session
 
+    def record_audit(
+        self,
+        *,
+        actor_id: str | None,
+        event: str,
+        target_id: str | None,
+        metadata: dict,
+    ) -> None:
+        self.session.add(
+            AuditLogRow(actor_id=actor_id, event=event, target_id=target_id, meta=metadata)
+        )
+        self.session.commit()
+
     def record_query(
         self,
         *,

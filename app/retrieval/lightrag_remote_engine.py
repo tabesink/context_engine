@@ -18,12 +18,17 @@ class LightRAGRemoteRetrievalEngine:
         document_ids: list[str] | None,
         top_k: int,
         user_id: str,
+        lightrag_domain_id: str | None = None,
     ) -> list[Evidence]:
         del user_id
-        return self.adapter.retrieve(
+        domain = lightrag_domain_id or self.domain
+        adapter = self.adapter
+        if lightrag_domain_id is not None:
+            adapter = LightRAGRemoteAdapter.for_domain(lightrag_domain_id)
+        return adapter.retrieve(
             query=query,
             mode=mode,
             top_k=top_k,
             document_ids=document_ids,
-            domain=self.domain,
+            domain=domain,
         )

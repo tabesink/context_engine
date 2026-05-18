@@ -1,6 +1,6 @@
-# ragcli TDD Implementation Plans
+# context-engine TDD Implementation Plans
 
-This bundle contains test-driven implementation plans for evolving `ragcli` into an API-first command CLI with:
+This bundle contains test-driven implementation plans for evolving `context-engine` into an API-first command CLI with:
 
 - clean human “screen-like” renderers
 - lightweight shared screen models

@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 """
 LLM Query Cache Cleanup Tool for LightRAG

@@ -35,7 +35,7 @@ Do not mock internal screens, renderers, navigation stack, or screen builders.
 Running:
 
 ```bash
-ragcli ui
+context-engine
 ```
 
 starts the TUI app entrypoint.
@@ -43,7 +43,7 @@ starts the TUI app entrypoint.
 ## Test
 
 ```text
-test_ragcli_ui_starts_tui_app
+`tests/test_cli_launcher.py` and `tests/test_cli_tui.py` (launcher + TUI smoke coverage)
 ```
 
 Expected:
@@ -64,7 +64,7 @@ Expected:
 
 ## Behavior
 
-Given no stored credentials, `ragcli ui` opens the login screen.
+Given no stored credentials, `context-engine` opens the login screen.
 
 ## Test
 
@@ -402,7 +402,7 @@ test_documents_list_json_output_is_unchanged_after_tui_addition
 
 Expected:
 
-- `ragcli documents list --output json` still returns stable JSON shape
+- `context-engine documents list --output json` still returns stable JSON shape
 - no TUI formatting leaks into command-mode JSON
 
 ---

@@ -1,8 +1,10 @@
-# ragcli Documentation
+# context-engine Terminal Client
 
-`ragcli` is the command-line client for the Context Engine backend. It is intentionally thin: it authenticates, stores a backend session token, calls FastAPI routes, and renders either human-oriented output or stable JSON.
+The **`context-engine`** and **`context-tui`** commands (same implementation, `cli.launcher:main`) are the supported operator interface for Context Engine: a **Rich-only interactive terminal UI**. They authenticate via the REST API, store a bearer token locally, call FastAPI routes through `cli/api_client.py` (`cli/services/*` wrappers), and never embed backend business logic.
 
-The CLI targets the current unversioned backend route contract. Examples use paths such as `/auth/login`, `/documents`, `/query/retrieve`, `/admin/documents/upload`, `/jobs/{job_id}`, `/graphs`, and `/graph/label/...`.
+Automation and CI should prefer **calling the REST API directly** (`curl`, HTTP libraries). The launcher is geared toward guided human operation.
+
+Examples use backend paths such as `/auth/login`, `/documents`, `/query/retrieve`, `/admin/documents/upload`, `/jobs/{job_id}`, `/graphs`, `/graph/label/…`, `/lightrag/domains`, and `/admin/lightrag/domains`.
 
 ## Install For Local Development
 
@@ -13,50 +15,55 @@ python -m pip install -e ".[dev]"
 Run the backend separately:
 
 ```bash
-python -m uvicorn app.main:create_app --factory --reload
+uvicorn app.main:create_app --factory --reload
 ```
 
-Then use the CLI:
+Then start the interactive client:
 
 ```bash
-ragcli --api-base-url http://127.0.0.1:8000 login --email admin@example.com
-ragcli documents list
-ragcli documents retrieve --query "where are installation steps"
-ragcli admin documents upload --file ./manual.pdf
-ragcli jobs status --job-id JOB_ID
+context-engine
+# same entry point:
+context-tui --api-base-url http://127.0.0.1:8010
 ```
 
-After login, protected commands use the saved base URL from the session. If a later command passes a different `--api-base-url`, `ragcli` warns and continues using the saved session URL until you log in again.
+Launcher options (see `cli/config.py`):
+
+- **`--api-base-url`**, or **`CONTEXT_ENGINE_API_BASE_URL`** in the environment  
+- **`--config-dir`** (defaults to `~/.context-engine/cli/` for credential files)  
+- **`--keyring`** / **`--no-keyring`**
+
+Sign in via the Login screen inside the UI. Stored sessions keep the backend base URL; if you later launch against a mismatched **`--api-base-url`**, the session flow warns and keeps using the URL from sign-in until you log out/sign in again.
 
 ## Output Modes
 
-Every command supports:
+There is **no** global `--output human|json` flag on the launcher. Scripted JSON access should use **`GET`/`POST`** against FastAPI endpoints and parse JSON responses directly.
 
-```bash
---output human
---output json
-```
+Screens may show compact tables or excerpts; richer shapes come from backend responses surfaced read-only.
 
-JSON output is the stable automation contract. Human output is for operators; many commands currently render pretty-printed JSON or simple Rich tables rather than prose.
+## Capability Areas (menus / flows)
 
-## Command Groups
+Rough map to menus in the UI (exact labels follow `cli/tui/`):
 
-- `login`, `logout`, `auth me`: session lifecycle and current user inspection.
-- `documents`: document list/detail/structure/page retrieval, retrieval queries, and answers.
-- `query`: top-level answer shortcut.
-- `admin documents`: admin-only document upload, index, reindex, delete, and full document listing.
-- `admin audit-logs`, `admin query-logs`: admin-only observability logs.
-- `jobs`: admin-only indexing job list/detail/retry.
-- `lightrag`: LightRAG graph and label reads through backend API routes. These require backend LightRAG configuration; the CLI never connects to LightRAG directly.
-- `users`, `agents`, `retrievers`, `conversations`, `messages`, `chat`, `runs`, `approvals`, and corpus version commands: reserved planned surface that returns `not_supported_by_backend` until matching FastAPI routes exist.
+- Session: stored session summary · `GET /auth/me`
+- Documents: browse document library, structure/page views
+- Documents Admin Actions: nested under Documents for admin users (upload/list/index/reindex/delete)
+- Retrieval: `POST /query/retrieve`; optional answer flows via `/query`, `/query/answer`
+- Graphs: graph/label summaries via backend proxies when configured
+- LightRAG Domains: admin lifecycle screens for list, create, start, stop, recreate, archive remove, and permanent delete
+- Jobs: list/detail/retry for admin-visible jobs
+- Observability: audit and query logs (admin; read-only in UI)
+- Health / readiness shortcuts where wired
+- Backend gaps: documented in `docs/cli_docs/backend_gaps.md`; not exposed as a root TUI screen
 
-API-first LightRAG deployment/domain administration remains future backend work, documented under `docs/cli_docs/api_first_cli/`.
+LightRAG domain administration is TUI-first for human operators and REST-first for automation. Domain deployment requires backend settings such as **`LIGHTRAG_DEPLOY_ENABLED=true`** plus the Docker/image/storage variables documented in **`.env.example`**. Runtime LightRAG reads still depend on **`LIGHTRAG_ENABLED`**, **`LIGHTRAG_BASE_URL`**, and optional **`LIGHTRAG_API_KEY`**.
+
+API-backed screens keep default views clean. Use **`I`** for Inspect API, **`J`** for Raw JSON, **`F`** for full IDs, and **`R`** to refresh. Inspect/raw views redact secrets and never show multipart file bytes.
 
 ## Current Flow
 
 ```mermaid
 flowchart TD
-    user[User] --> cli[ragcli]
+    user[User] --> cli[context-engine TUI]
     cli --> credentials[CredentialStore]
     cli --> client[ApiClient]
     client --> backend[FastAPIBackend]
@@ -70,9 +77,8 @@ flowchart TD
 
 ## Design Constraints
 
-- Do not store passwords.
-- Do not print access tokens.
-- Prefer OS keyring for tokens and warn when falling back to a local file.
-- Keep backend business rules in the backend.
-- Every real command should mirror a backend route.
-- Planned commands should fail explicitly instead of inventing local behavior.
+- Do not persist passwords locally.
+- Do not print bearer tokens into the transcript.
+- Prefer OS keyring for tokens (`--no-keyring` forces file-backed storage with a stderr warning naming the fallback file).
+- Keep backend business rules behind FastAPI handlers.
+- Planned-only backend capabilities must surface explicitly as gaps or errors—never fabricated success locally.

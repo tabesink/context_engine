@@ -2,7 +2,7 @@
 
 ## Goal
 
-Track future LightRAG knowledge-base/domain deployment capabilities for `context_engine` in a way that both `ragcli` and a future admin frontend can use.
+Track future LightRAG knowledge-base/domain deployment capabilities for `context_engine` in a way that both `context-engine` and a future admin frontend can use.
 
 Current code already supports remote LightRAG retrieval, upload forwarding, and graph proxy reads. It does not implement backend admin routes for deploying, starting, stopping, deleting, or configuring LightRAG domains. Those future commands must remain backend-first.
 
@@ -10,8 +10,8 @@ Current code already supports remote LightRAG retrieval, upload forwarding, and 
 
 ## Phase 0: Existing Contracts
 
-- [x] `ragcli` commands mirror backend routes.
-- [x] Existing `ragcli` auth/session behavior is implemented.
+- [x] `context-engine` commands mirror backend routes.
+- [x] Existing `context-engine` auth/session behavior is implemented.
 - [x] Existing admin auth dependency is `require_admin`.
 - [x] Existing job/status route pattern is implemented under `/jobs`.
 - [x] Existing document upload and retrieval routes are implemented.
@@ -141,17 +141,17 @@ Do not port:
 Add commands only after backend routes exist:
 
 ```bash
-ragcli admin lightrag domains list
-ragcli admin lightrag domains create --name NAME --port PORT
-ragcli admin lightrag domains show --domain-id DOMAIN_ID
-ragcli admin lightrag domains delete --domain-id DOMAIN_ID
+context-engine admin lightrag domains list
+context-engine admin lightrag domains create --name NAME --port PORT
+context-engine admin lightrag domains show --domain-id DOMAIN_ID
+context-engine admin lightrag domains delete --domain-id DOMAIN_ID
 
-ragcli admin lightrag deployments deploy --domain-id DOMAIN_ID
-ragcli admin lightrag deployments start --domain-id DOMAIN_ID
-ragcli admin lightrag deployments stop --domain-id DOMAIN_ID
-ragcli admin lightrag deployments restart --domain-id DOMAIN_ID
-ragcli admin lightrag deployments recreate --domain-id DOMAIN_ID
-ragcli admin lightrag deployments status --domain-id DOMAIN_ID
+context-engine admin lightrag deployments deploy --domain-id DOMAIN_ID
+context-engine admin lightrag deployments start --domain-id DOMAIN_ID
+context-engine admin lightrag deployments stop --domain-id DOMAIN_ID
+context-engine admin lightrag deployments restart --domain-id DOMAIN_ID
+context-engine admin lightrag deployments recreate --domain-id DOMAIN_ID
+context-engine admin lightrag deployments status --domain-id DOMAIN_ID
 ```
 
 Future tests:

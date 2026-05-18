@@ -1,4 +1,4 @@
-# ragcli TUI Login + Navigation TDD Implementation Plans
+# context-engine TUI Login + Navigation TDD Implementation Plans
 
 
 
@@ -6,9 +6,9 @@
 
 # File: 00_README.md
 
-# ragcli TUI Login + Navigation TDD Plan Bundle
+# context-engine TUI Login + Navigation TDD Plan Bundle
 
-This bundle updates the previous `ragcli ui` plan to include:
+This bundle updates the previous `context-engine` plan to include:
 
 - In-TUI login and logout
 - Existing-session startup behavior
@@ -37,7 +37,7 @@ Give these files to the coding agent in order:
 
 ## Non-negotiable constraints
 
-- `ragcli ui` must not be a scrolling log of `print()` output.
+- `context-engine` must not be a scrolling log of `print()` output.
 - Every screen transition must clear/redraw the active screen.
 - The TUI must reuse the existing CLI auth/session/API boundaries.
 - The TUI must not call LightRAG directly.
@@ -52,14 +52,14 @@ Give these files to the coding agent in order:
 
 # File: 01_EXECUTIVE_IMPLEMENTATION_PLAN.md
 
-# Executive Implementation Plan: `ragcli ui` Login + Arrow-Key Navigation
+# Executive Implementation Plan: `context-engine` Login + Arrow-Key Navigation
 
 ## Objective
 
-Implement a lightweight interactive TUI for `ragcli` that behaves like a screen application:
+Implement a lightweight interactive TUI for `context-engine` that behaves like a screen application:
 
 ```bash
-ragcli ui
+context-engine
 ```
 
 The TUI must support:
@@ -261,7 +261,7 @@ Users must be able to navigate the TUI with arrows, select options with Enter, m
 
 ## Required behavior
 
-- Starting `ragcli ui` shows login or main menu depending on session state.
+- Starting `context-engine` shows login or main menu depending on session state.
 - Arrow keys move the selected item.
 - Enter opens the selected screen/action.
 - The selected screen replaces the previous screen.
@@ -428,7 +428,7 @@ Behavior:
 
 ## Goal
 
-The user must be able to complete the full session lifecycle inside `ragcli ui`:
+The user must be able to complete the full session lifecycle inside `context-engine`:
 
 ```text
 No session -> login -> main menu -> logout -> login
@@ -441,9 +441,9 @@ The TUI must reuse the existing CLI auth/session logic.
 Normal CLI command mode already supports:
 
 ```bash
-ragcli login --email admin@example.com
-ragcli logout
-ragcli auth me
+context-engine login --email admin@example.com
+context-engine logout
+context-engine auth me
 ```
 
 The TUI must reuse the same backend routes and credential storage:
@@ -457,7 +457,7 @@ The TUI must reuse the same backend routes and credential storage:
 ## Startup flow
 
 ```text
-ragcli ui
+context-engine
    ↓
 Load saved credentials
    ↓
@@ -870,9 +870,9 @@ BACKEND GAPS
 +----------------+------------------------------+-------------+
 | Capability     | CLI Command                  | Status      |
 +----------------+------------------------------+-------------+
-| Chat           | ragcli chat                  | backend gap |
-| Users          | ragcli users list            | backend gap |
-| Conversations  | ragcli conversations list    | backend gap |
+| Chat           | context-engine chat                  | backend gap |
+| Users          | context-engine users list            | backend gap |
+| Conversations  | context-engine conversations list    | backend gap |
 +----------------+------------------------------+-------------+
 
 These commands must return not_supported_by_backend until backend routes exist.
@@ -900,7 +900,7 @@ Example:
 ```text
 ERROR
 
-auth_required: Run `ragcli login` first.
+auth_required: Run `context-engine login` first.
 
 Actions:
   B Back
@@ -969,7 +969,7 @@ Do not mock internal screens, renderers, navigation stack, or screen builders.
 Running:
 
 ```bash
-ragcli ui
+context-engine
 ```
 
 starts the TUI app entrypoint.
@@ -977,7 +977,7 @@ starts the TUI app entrypoint.
 ## Test
 
 ```text
-test_ragcli_ui_starts_tui_app
+`tests/test_cli_launcher.py` and `tests/test_cli_tui.py` (launcher + TUI smoke coverage)
 ```
 
 Expected:
@@ -998,7 +998,7 @@ Expected:
 
 ## Behavior
 
-Given no stored credentials, `ragcli ui` opens the login screen.
+Given no stored credentials, `context-engine` opens the login screen.
 
 ## Test
 
@@ -1336,7 +1336,7 @@ test_documents_list_json_output_is_unchanged_after_tui_addition
 
 Expected:
 
-- `ragcli documents list --output json` still returns stable JSON shape
+- `context-engine documents list --output json` still returns stable JSON shape
 - no TUI formatting leaks into command-mode JSON
 
 ---
@@ -1405,7 +1405,7 @@ After all tests pass:
 
 ## Testing goal
 
-Test `ragcli ui` through observable user behavior.
+Test `context-engine` through observable user behavior.
 
 Prefer tests that simulate:
 
@@ -1533,9 +1533,9 @@ The TUI must not change command mode.
 Add regression tests for:
 
 ```text
-ragcli documents list --output json
-ragcli documents retrieve --query "x" --output json
-ragcli admin documents list --output json
+context-engine documents list --output json
+context-engine documents retrieve --query "x" --output json
+context-engine admin documents list --output json
 unsupported planned command --output json
 ```
 
@@ -1604,16 +1604,16 @@ After each green slice, ask:
 
 # File: 07_CODING_AGENT_PROMPT.md
 
-# Coding Agent Prompt: Implement `ragcli ui` Login + Arrow-Key TUI with TDD
+# Coding Agent Prompt: Implement `context-engine` Login + Arrow-Key TUI with TDD
 
-You are a senior Python CLI/TUI engineer working in an existing `ragcli` codebase.
+You are a senior Python CLI/TUI engineer working in an existing `context-engine` codebase.
 
 ## Objective
 
 Implement a lightweight interactive TUI launched by:
 
 ```bash
-ragcli ui
+context-engine
 ```
 
 The TUI must support:
@@ -1799,7 +1799,7 @@ Status: backend gap
 This screen is planned, but the backend route does not exist yet.
 
 Equivalent CLI command:
-  ragcli chat
+  context-engine chat
 
 Expected behavior:
   not_supported_by_backend
@@ -1813,7 +1813,7 @@ Do not write all tests first.
 
 ### Slice 0
 
-`ragcli ui` command exists and quits cleanly.
+`context-engine` command exists and quits cleanly.
 
 ### Slice 1
 
@@ -1908,7 +1908,7 @@ test_render_called_once
 
 Implementation is done when:
 
-- `ragcli ui` launches successfully.
+- `context-engine` launches successfully.
 - No session opens login screen.
 - User can log in from TUI.
 - User can log out from TUI.

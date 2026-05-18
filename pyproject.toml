@@ -23,7 +23,8 @@ dependencies = [
 ]
 
 [project.scripts]
-ragcli = "cli.main:app"
+context-engine = "cli.launcher:main"
+context-tui = "cli.launcher:main"
 
 [project.optional-dependencies]
 dev = [

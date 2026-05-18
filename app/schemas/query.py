@@ -7,6 +7,7 @@ class QueryRequest(BaseModel):
     query: str = Field(min_length=1)
     mode: RetrievalMode = RetrievalMode.AUTO
     document_ids: list[str] | None = None
+    lightrag_domain_id: str | None = None
     top_k: int = Field(default=8, ge=1, le=30)
     include_debug: bool = False
     allow_general_fallback: bool = False

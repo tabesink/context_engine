@@ -5,11 +5,12 @@ from __future__ import annotations
 MENU_ITEMS = [
     ("1", "Documents"),
     ("2", "Retrieval"),
-    ("3", "LightRAG Graphs"),
-    ("4", "Admin Documents"),
+    ("3", "Graphs"),
+    ("4", "LightRAG Domains"),
     ("5", "Jobs"),
     ("6", "Observability"),
-    ("7", "Backend Gaps"),
-    ("8", "Logout"),
+    ("7", "Health / Readiness"),
+    ("8", "Backend Gaps"),
+    ("9", "Logout"),
     ("Q", "Quit"),
 ]

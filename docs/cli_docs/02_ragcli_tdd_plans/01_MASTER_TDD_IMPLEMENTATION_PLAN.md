@@ -1,15 +1,15 @@
-# Master TDD Implementation Plan: ragcli Screen UX + Lightweight TUI
+# Master TDD Implementation Plan: context-engine Screen UX + Lightweight TUI
 
 ## Objective
 
-Evolve `ragcli` from a thin command client into a clean API-mirrored testing interface for the Context Engine backend and future frontend.
+Evolve `context-engine` from a thin command client into a clean API-mirrored testing interface for the Context Engine backend and future frontend.
 
 The result should support:
 
 1. Existing direct CLI commands.
 2. Better human output that looks like lightweight “screens.”
 3. Shared screen/result models.
-4. Optional lightweight TUI via `ragcli ui`.
+4. Optional lightweight TUI via `context-engine`.
 5. Explicit backend-gap screens for planned unsupported capabilities.
 6. Stable JSON output for automation.
 
@@ -181,7 +181,7 @@ Primary test style:
 
 Goal:
 
-Add `ragcli ui`, a black-and-white terminal UI over the same API-backed screens.
+Add `context-engine`, a black-and-white terminal UI over the same API-backed screens.
 
 Deliverables:
 
@@ -213,11 +213,11 @@ Add workflow helpers that represent future frontend flows.
 
 Candidate flows:
 
-- `ragcli retrieval compare --query "..."`
-- `ragcli admin documents upload-flow --file ./manual.pdf`
-- `ragcli admin dashboard`
-- optional `ragcli screen documents`
-- optional `ragcli screen graph`
+- `context-engine retrieval compare --query "..."`
+- `context-engine admin documents upload-flow --file ./manual.pdf`
+- `context-engine admin dashboard`
+- optional `context-engine screen documents`
+- optional `context-engine screen graph`
 
 Primary test style:
 
@@ -245,7 +245,7 @@ The implementation is acceptable when:
 - All existing command behavior tests pass.
 - New renderer tests pass.
 - JSON output is unchanged for existing supported commands.
-- `ragcli ui` opens and exits cleanly.
+- `context-engine` opens and exits cleanly.
 - TUI uses ASCII tables and minimal semantic color.
 - Unsupported planned commands and screens show `not_supported_by_backend`.
 - No tokens/passwords are printed.

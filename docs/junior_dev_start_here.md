@@ -1,6 +1,6 @@
 # Junior Developer Start Here
 
-This backend lets authenticated users ask questions over uploaded documents. Admins upload and index documents. Normal users query ready documents.
+This backend lets authenticated users ask questions over uploaded documents. Admins upload and index documents. Normal users query ready documents through the HTTP API or the interactive `context-engine` terminal UI (thin HTTP client over the same routes).
 
 ## The Short Version
 
@@ -14,6 +14,8 @@ Evidence can come from:
 
 LightRAG is optional and external. The default local path still works without a running LightRAG service.
 
+Admins can optionally manage same-machine LightRAG domain containers through Context Engine when `LIGHTRAG_DEPLOY_ENABLED=true`. That deployment control plane writes generated files under `.data/lightrag/`; runtime query/upload/graph traffic still goes through `LightRAGRemoteAdapter`.
+
 ## Read Files in This Order
 
 1. `docs/implementation-status.md`
@@ -25,14 +27,24 @@ LightRAG is optional and external. The default local path still works without a 
 7. `app/schemas/query.py`
 8. `app/api/routes/query.py`
 9. `app/services/retrieval_service.py`
-10. `app/retrieval/router.py`
-11. `app/retrieval/semantic_engine.py`
-12. `app/retrieval/navigation_engine.py`
-13. `app/integrations/lightrag_remote_adapter.py`
-14. `app/integrations/lightrag_domains.py`
-15. `app/integrations/pageindex_adapter.py`
-16. `app/workers/tasks.py`
-17. `cli/main.py`
+10. `app/retrieval/routing_policy.py` and `app/retrieval/strategies.py`
+11. `app/retrieval/router.py`
+12. `app/retrieval/semantic_engine.py`
+13. `app/retrieval/navigation_engine.py`
+14. `app/integrations/lightrag_remote_adapter.py`
+15. `app/integrations/lightrag_domains.py`
+16. `app/lightrag_deploy/service.py`
+17. `app/lightrag_deploy/manifest.py`
+18. `app/lightrag_deploy/compose.py`
+19. `app/api/routes/lightrag.py` and `app/api/routes/lightrag_admin.py`
+20. `app/integrations/pageindex_adapter.py`
+21. `app/workers/tasks.py`
+22. `cli/launcher.py` and `cli/config.py`
+23. `cli/api_client.py` and representative modules under `cli/services/`
+24. `cli/query_payload.py`
+25. `cli/tui/app.py`, `cli/tui/navigation.py`, `cli/tui/screen.py`, `cli/tui/session_flow.py`, and `cli/tui/state.py`
+26. `cli/tui/screens/main_menu.py` and `cli/tui/screens/content.py`
+27. `cli/main.py` (legacy shim that delegates to the launcher)
 
 ## Important Words
 
@@ -40,8 +52,12 @@ LightRAG is optional and external. The default local path still works without a 
 - `ParsedDocument`: normalized page/section text extracted from a document.
 - `Evidence`: a retrieved piece of text the answer is allowed to use.
 - `RetrievalMode`: `semantic`, `navigation`, `hybrid`, or `auto`.
+- `RetrievalRoutingPolicy` / strategies: chooses local routing versus `LightRAGRemoteRetrievalEngine` before evidence mapping.
 - `Job`: background indexing work run by the worker.
+- `context-engine` / `context-tui`: installed launcher commands (same implementation) that open the interactive terminal UI against the REST API.
+- `CredentialStore`: local session persistence for bearer tokens (`cli/credentials.py`).
 - `LightRAGRemoteAdapter`: HTTP boundary to an external LightRAG service.
+- `LightRAGDomainService`: admin control-plane service for generated domain env/manifest/compose files and Docker Compose lifecycle operations.
 - `Admin`: user who can mutate documents and indexes.
 - `User`: authenticated user who can query ready documents.
 
@@ -65,10 +81,16 @@ LightRAG upload:
 admin -> /admin/documents/upload -> local mirror record -> /documents/upload on LightRAG
 ```
 
-Query:
+Query (HTTP shaped):
 
 ```text
-user -> /query -> RetrievalService -> local router or remote LightRAG -> evidence -> answer composer
+user -> /query -> RetrievalService -> routing policy + strategies -> local router or remote LightRAG -> evidence -> answer composer
+```
+
+Query (terminal UI—it is still the same HTTP contract):
+
+```text
+operator -> context-engine TUI -> ApiClient -> /query ...
 ```
 
 Graph reads:
@@ -77,12 +99,20 @@ Graph reads:
 user -> /graphs or /graph/label/... -> LightRAGRemoteAdapter -> external LightRAG
 ```
 
+Domain deployment and user listing:
+
+```text
+admin -> /admin/lightrag/domains ... -> LightRAGDomainService -> .data/lightrag + Docker Compose runner
+user -> GET /lightrag/domains -> safe domain list for query/UI selection (same router module as admin domain APIs)
+```
+
 ## Rules of Thumb
 
 - Routes should be thin. Put behavior in services.
 - Services should not know third-party library details.
 - Retrieval engines and adapters should return `Evidence`, never raw external objects.
 - Keep LightRAG communication HTTP-only inside `app/integrations/lightrag_remote_adapter.py`.
-- Tests should call public APIs, CLI commands, adapters, or public services.
+- Keep LightRAG deployment control inside `app/lightrag_deploy/`; TUI screens and CLI services must not call Docker directly.
+- Tests should call public APIs, the launcher/TUI helpers, adapters, or public services (`tests/` uses API tests plus targeted `test_cli_*` modules).
 - Do not add a new abstraction unless it hides real complexity.
 

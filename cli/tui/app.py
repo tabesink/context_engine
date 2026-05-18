@@ -1,4 +1,4 @@
-"""A small Rich-only terminal UI over ragcli screen builders."""
+"""Interactive Rich terminal UI for context-engine."""
 
 from __future__ import annotations
 

@@ -1,37 +1,35 @@
-# CLI API Contract
+# Terminal client ←→ backend contract
 
-This contract maps the implemented `ragcli` surface to the backend that exists today. Commands marked `supported` call real backend routes. Commands marked `backend gap` intentionally return `not_supported_by_backend` until backend behavior exists.
+Maps **capabilities operators reach via the `context-engine`/`context-tui` Rich terminal UI** to the backend that exists today. Items marked **`supported`** call concrete FastAPI routes through `cli/api_client.py`. Backend gaps are documented separately and are not exposed as successful TUI actions.
 
-For future API-first LightRAG deployment/domain administration, see `docs/cli_docs/api_first_cli/`.
+Older Typer-era subcommands were named **`ragcli …`**; shipping entrypoints are **`context-engine`** and **`context-tui`** only (**`cli.launcher:main`**).
 
 ## Auth
 
-| Command | Backend | Role | Status |
+| TUI capability | Backend | Role | Status |
 | --- | --- | --- | --- |
-| `ragcli login --email EMAIL` | `POST /auth/login` with `{email, password}` | public | supported |
-| `ragcli logout` | local credential clear | local | supported |
-| `ragcli auth me` | `GET /auth/me` | authenticated | supported |
+| Login (credentials prompt) | **`POST /auth/login`** `{email, password}` | public | supported |
+| Log out / clear locals | Discard stored token (**local**) | local | supported |
+| Session overview | **`GET /auth/me`** | authenticated | supported |
 
-`/auth/login` returns `{access_token, token_type}`. The CLI stores only the API base URL and access token. Protected commands use the saved base URL and warn if the current root `--api-base-url` differs.
+`/auth/login` returns `{access_token, token_type}`. The launcher stores **`api_base_url` + bearer token** only—never passwords—and warns when a new `--api-base-url` disagrees with the stored login host.
 
-## Documents And Retrieval
+## Documents and retrieval
 
-| Command | Backend | Role | Status |
+| TUI capability | Backend | Role | Status |
 | --- | --- | --- | --- |
-| `ragcli documents list` | `GET /documents` | authenticated | supported |
-| `ragcli documents show --document-id ID` | `GET /documents/{document_id}` | authenticated | supported |
-| `ragcli documents structure --document-id ID` | `GET /documents/{document_id}/structure` | authenticated | supported |
-| `ragcli documents page --document-id ID --page-number N` | `GET /documents/{document_id}/pages/{page_number}` | authenticated | supported |
-| `ragcli documents retrieve --query TEXT` | `POST /query/retrieve` | authenticated | supported |
-| `ragcli documents answer --query TEXT` | `POST /query/answer` | authenticated | supported |
-| `ragcli query --query TEXT` | `POST /query` | authenticated | supported |
-| `ragcli documents retrieve --query TEXT --document-id ID` | `POST /query/retrieve` with `document_ids` | authenticated | supported |
-| `ragcli documents answer --query TEXT --document-id ID` | `POST /query/answer` with `document_ids` | authenticated | supported |
-| `ragcli query --query TEXT --document-id ID` | `POST /query` with `document_ids` | authenticated | supported |
-| `ragcli documents content --pages 1-3` | no range endpoint | authenticated | backend gap |
-| `ragcli documents search --query TEXT` | no separate search endpoint | authenticated | backend gap |
+| Browse document library | `GET /documents` | authenticated | supported |
+| Document detail | `GET /documents/{document_id}` | authenticated | supported |
+| Structure/outline | `GET /documents/{document_id}/structure` | authenticated | supported |
+| Parsed page preview | `GET /documents/{document_id}/pages/{page_number}` | authenticated | supported |
+| Retrieval preview | `POST /query/retrieve` | authenticated | supported |
+| Citation answer | `POST /query/answer` | authenticated | supported |
+| Top-level Q&A shortcut | `POST /query` | authenticated | supported |
+| Scoped retrieval (doc filters) | Same routes with `document_ids` in JSON body | authenticated | supported |
+| Multi-page `content` helper | no range endpoint | authenticated | documented gap |
+| Dedicated search endpoint | no separate search route | authenticated | documented gap |
 
-Retrieval request body:
+Sample retrieve body:
 
 ```json
 {
@@ -44,59 +42,81 @@ Retrieval request body:
 }
 ```
 
-`document_ids` is omitted when no `--document-id` filters are supplied. `include_debug` is accepted for retrieve/answer/query requests, but the backend only returns debug details to admin users.
+`include_debug` is accepted on retrieve/answer/query requests, but **only admins** receive debug payloads from the backend.
 
-## LightRAG Graphs
+## LightRAG graphs
 
-| Command | Backend | Role | Status |
+| TUI capability | Backend | Role | Status |
 | --- | --- | --- | --- |
-| `ragcli lightrag graphs show --label LABEL --max-depth N --max-nodes N` | `GET /graphs?label=LABEL&max_depth=N&max_nodes=N` | authenticated | supported |
-| `ragcli lightrag labels list` | `GET /graph/label/list` | authenticated | supported |
-| `ragcli lightrag labels popular --limit N` | `GET /graph/label/popular?limit=N` | authenticated | supported |
-| `ragcli lightrag labels search --query TEXT --limit N` | `GET /graph/label/search?q=TEXT&limit=N` | authenticated | supported |
+| Graph summary with label and limits | `GET /graphs?label=…&max_depth=…&max_nodes=…` | authenticated | supported |
+| Label catalog | `GET /graph/label/list` | authenticated | supported |
+| Popular labels | `GET /graph/label/popular?limit=…` | authenticated | supported |
+| Label search | `GET /graph/label/search?q=…&limit=…` | authenticated | supported |
 
-These commands require the backend to have `LIGHTRAG_ENABLED=true` and a reachable remote LightRAG service. When disabled, the backend returns `LightRAG is disabled`; the CLI renders that API error.
+Requires backend **`LIGHTRAG_ENABLED=true`** with a reachable remote LightRAG service. When disabled, FastAPI returns **`LightRAG is disabled`**; the UI surfaces that API error unchanged.
 
-## Admin Documents
+This capability is surfaced as **`Graphs`** in the root TUI menu.
 
-| Command | Backend | Role | Status |
+## LightRAG domains
+
+| TUI capability | Backend | Role | Status |
 | --- | --- | --- | --- |
-| `ragcli admin documents upload --file PATH` | `POST /admin/documents/upload` multipart field `file` | admin | supported |
-| `ragcli admin documents index --document-id ID` | `POST /admin/documents/{document_id}/index` | admin | supported |
-| `ragcli admin documents reindex --document-id ID` | `POST /admin/documents/{document_id}/reindex` | admin | supported |
-| `ragcli admin documents delete --document-id ID` | `DELETE /admin/documents/{document_id}` | admin | supported |
-| `ragcli admin documents list` | `GET /admin/documents` | admin | supported |
-| `ragcli admin corpus publish` | no corpus version endpoint | admin | backend gap |
-| `ragcli admin corpus rollback` | no corpus version endpoint | admin | backend gap |
-| `ragcli admin corpus cleanup` | no corpus cleanup endpoint | admin | backend gap |
+| Retrieval domain picker | `GET /lightrag/domains` | authenticated | supported |
+| Domain overview | `GET /admin/lightrag/domains` | admin | supported |
+| Create domain | `POST /admin/lightrag/domains` | admin | supported |
+| Start domain | `POST /admin/lightrag/domains/{domain_id}/up` | admin | supported |
+| Stop domain | `POST /admin/lightrag/domains/{domain_id}/down` | admin | supported |
+| Recreate domain | `POST /admin/lightrag/domains/{domain_id}/recreate` | admin | supported |
+| Archive remove | `DELETE /admin/lightrag/domains/{domain_id}` | admin | supported |
+| Permanent delete | `DELETE /admin/lightrag/domains/{domain_id}?permanent=true` | admin | supported when enabled |
 
-## Admin Observability
+Create accepts:
 
-| Command | Backend | Role | Status |
+```json
+{
+  "domain_id": "fatigue",
+  "display_name": "Fatigue Manuals",
+  "host_port": 9622,
+  "make_default": true
+}
+```
+
+Admin domain routes require **`LIGHTRAG_DEPLOY_ENABLED=true`**. Runtime graph/retrieval behavior remains controlled separately by **`LIGHTRAG_ENABLED`**, **`LIGHTRAG_BASE_URL`**, and optional **`LIGHTRAG_API_KEY`**. The runtime **`LIGHTRAG_DOMAIN_MANIFEST`** and deploy **`LIGHTRAG_DOMAINS_MANIFEST`** default to the same file path but are separate settings.
+
+## Admin documents
+
+| TUI capability | Backend | Role | Status |
 | --- | --- | --- | --- |
-| `ragcli admin audit-logs list` | `GET /admin/audit-logs` | admin | supported |
-| `ragcli admin query-logs list` | `GET /admin/query-logs` | admin | supported |
+| Upload | `POST /admin/documents/upload` (`multipart/form-data`, field `file`) | admin | supported |
+| Index | `POST /admin/documents/{document_id}/index` | admin | supported |
+| Reindex | `POST /admin/documents/{document_id}/reindex` | admin | supported |
+| Delete | `DELETE /admin/documents/{document_id}` | admin | supported |
+| Admin listing | `GET /admin/documents` | admin | supported |
+| Corpus publish/rollback/cleanup | no matching endpoints | admin | documented gap |
+
+These admin routes are surfaced from **`Documents -> Admin Actions`** in the TUI (not a standalone root menu).
+
+## Admin observability
+
+| TUI capability | Backend | Role | Status |
+| --- | --- | --- | --- |
+| Audit feed | `GET /admin/audit-logs` | admin | supported |
+| Query log feed | `GET /admin/query-logs` | admin | supported |
 
 ## Jobs
 
-| Command | Backend | Role | Status |
+| TUI capability | Backend | Role | Status |
 | --- | --- | --- | --- |
-| `ragcli jobs list` | `GET /jobs` | admin | supported |
-| `ragcli jobs status --job-id ID` | `GET /jobs/{job_id}` | admin | supported |
-| `ragcli jobs retry --job-id ID` | `POST /jobs/{job_id}/retry` | admin | supported |
+| List jobs | `GET /jobs` | admin | supported |
+| Job detail | `GET /jobs/{job_id}` | admin | supported |
+| Retry | `POST /jobs/{job_id}/retry` | admin | supported |
 
-## Planned Surface
+## Planned surface
 
-These commands are part of the full prompt surface, but the current backend has no matching route contract:
+These ideas once mapped to Typer stubs; backends still lack matching contracts. Keep them out of the root TUI until behavior plus tests land, and track them in `docs/cli_docs/backend_gaps.md`:
 
-- `ragcli users create`
-- `ragcli users list`
-- `ragcli retrievers list`
-- `ragcli agents list`
-- `ragcli conversations create/list/show`
-- `ragcli chat`
-- `ragcli messages send/list`
-- `ragcli runs status/cancel`
-- `ragcli runs approvals list/approve/reject`
-
-Until backend behavior exists, these commands should return a structured `not_supported_by_backend` error instead of pretending success.
+- User administration (`POST /users`, `GET /users`, …)
+- Retriever registry / agent registry (`GET /retrievers`, `GET /agents`)
+- Conversations & chat (`/conversations`, `/chat`, `/messages`, …)
+- Agent runs & approvals (`/runs/*`, `/runs/approvals/*`)
+- Corpus lifecycle publish/rollback/cleanup

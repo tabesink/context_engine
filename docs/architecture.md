@@ -1,11 +1,11 @@
 # Backend Architecture
 
-The app is a backend-only multi-user Context Engine. It exposes one FastAPI API, one auth model, one document registry, one job system, and a common `Evidence` contract across local retrieval and optional remote LightRAG retrieval.
+The app is a backend-only multi-user Context Engine. It exposes one FastAPI API, one auth model, one document registry, one job system, one optional LightRAG deployment control plane, and a common `Evidence` contract across local retrieval and optional remote LightRAG retrieval.
 
 ## System Shape
 
 ```text
-HTTP client or ragcli
+HTTP client or `context-engine` TUI (`context-engine` / `context-tui`)
   -> FastAPI route
   -> application service
   -> repository / retrieval router / job queue / remote adapter
@@ -13,11 +13,12 @@ HTTP client or ragcli
   -> response schema
 ```
 
-Retrieval has two runtime paths. The mode/feature-flag decision is owned by `app/retrieval/routing_policy.py` so code and docs have one routing matrix:
+Retrieval has two runtime backends. `RetrievalRoutingPolicy` in `app/retrieval/routing_policy.py` picks `RetrievalBackend.LOCAL` versus `RetrievalBackend.LIGHTRAG`; `RetrievalService` dispatches through small strategy objects in `app/retrieval/strategies.py` (`LocalRetrievalStrategy` wraps `RetrievalRouter`; `LightRAGRetrievalStrategy` wraps `LightRAGRemoteRetrievalEngine`). That keeps one routing matrix in code and docs:
 
 ```text
 LIGHTRAG_ENABLED=false
   RetrievalService
+    -> LocalRetrievalStrategy
     -> RetrievalRouter
        -> SemanticRetrievalEngine
        -> NavigationRetrievalEngine
@@ -25,20 +26,22 @@ LIGHTRAG_ENABLED=false
 
 LIGHTRAG_ENABLED=true and mode in auto|semantic|hybrid
   RetrievalService
+    -> LightRAGRetrievalStrategy
     -> LightRAGRemoteRetrievalEngine
        -> LightRAGRemoteAdapter
        -> external LightRAG HTTP API
 
 LIGHTRAG_ENABLED=true and mode=navigation
   RetrievalService
-    -> local RetrievalRouter navigation path
+    -> LocalRetrievalStrategy
+    -> RetrievalRouter navigation path
 ```
 
 Both paths return local `Evidence` objects. API routes never expose raw LightRAG, PageIndex, or storage rows.
 
 ## Package Ownership
 
-- `app/api/`: HTTP routes and dependency wiring only.
+- `app/api/`: HTTP routes and dependency wiring only. LightRAG graph proxies live in `app/api/routes/lightrag.py`; admin domain lifecycle and the user-safe domain list live in `app/api/routes/lightrag_admin.py` alongside other admin routers in `app/api/routes/admin.py`.
 - `app/core/`: configuration, logging, security, and error helpers.
 - `app/domain/`: dataclasses/enums that define the app vocabulary.
 - `app/schemas/`: Pydantic request/response models.
@@ -46,19 +49,20 @@ Both paths return local `Evidence` objects. API routes never expose raw LightRAG
 - `app/retrieval/`: retrieval interfaces, local engines, router, merger, and answer composition.
 - `app/indexing/`: parsers, chunking, navigation index builder, and semantic index builder.
 - `app/integrations/`: wrappers around external/reference systems, including remote LightRAG HTTP.
+- `app/lightrag_deploy/`: admin-only LightRAG domain deployment control, manifest/env/compose generation, and Docker Compose runner boundary.
 - `app/storage/`: database session and repositories.
 - `app/workers/`: Redis queue and background indexing tasks.
-- `cli/`: Typer `ragcli` API client.
+- `cli/`: TUI launcher (`cli/launcher.py`), argparse-backed settings (`cli/config.py`), credential storage (`cli/credentials.py`), `ApiClient` (`cli/api_client.py`), typed HTTP helpers (`cli/services/`), optional query JSON builders (`cli/query_payload.py`). The interactive UI is Rich-based under `cli/tui/` (`app.py`, `navigation.py`, `screen.py`, `session_flow.py`, `state.py`, `styles.py`, `keys.py`, TUI-local `screens/` and `renderers/`). ASCII screen layouts and reusable tables live under `cli/screens/` and `cli/renderers/`; guided multi-step UX helpers live under `cli/flows/` and are composed into TUI stacks rather than exposing separate Typer commands. Legacy `cli/main.py` delegates to the launcher (`app()` callable for backwards-compatible imports).
 - `scripts/`: seed, backup, and evaluation commands.
-- `tests/`: behavior tests through API, CLI, adapter, or public service interfaces.
+- `tests/`: behavior tests through API, terminal client helpers, adapter, or public service interfaces.
 
 ## Request Flow: Query
 
 ```text
 POST /query, /query/retrieve, or /query/answer
-  -> QueryRequest
+  -> QueryRequest (optional document filter, optional lightrag_domain_id)
   -> auth dependency
-  -> RetrievalService
+  -> RetrievalService (routing policy + local/remote strategy)
   -> local RetrievalRouter or remote LightRAG adapter
   -> EvidenceResponse list
   -> optional AnswerComposer
@@ -97,6 +101,22 @@ LIGHTRAG_ENABLED=true
 
 Local indexing uses the worker/job system. Remote LightRAG ingestion is owned by the external LightRAG service and tracked through mirrored metadata such as `lightrag.track_id`.
 
+## LightRAG Domain Deployment Control
+
+Runtime LightRAG traffic remains HTTP-only through `LightRAGRemoteAdapter`. Deployment control is separate:
+
+```text
+Admin API or TUI
+  -> LightRAGDomainService
+  -> .data/lightrag/domains.json + generated domain.env files
+  -> generated .data/lightrag/docker-compose.lightrag-domains.yml
+  -> Docker Compose runner
+```
+
+Deployment routes are disabled by default with `LIGHTRAG_DEPLOY_ENABLED=false`. When enabled, admins can create, list, show, regenerate, start, stop, recreate, archive, or explicitly permanently delete domains. Any authenticated user may call `GET /lightrag/domains` for a safe subset of domain metadata used to pick `lightrag_domain_id` on uploads and queries (admin mutating routes still require deploy mode on).
+
+Each managed domain lives under `.data/lightrag/domains/<domain>/` and gets one generated `domain.env`. Domain removal archives data by default under `.data/lightrag/deleted/`.
+
 ## LightRAG Graph Proxy
 
 The API exposes authenticated read-only graph proxy routes:
@@ -106,7 +126,7 @@ The API exposes authenticated read-only graph proxy routes:
 - `GET /graph/label/popular`
 - `GET /graph/label/search`
 
-These routes call the configured remote LightRAG service only when `LIGHTRAG_ENABLED=true`. When disabled, they return a disabled-service error instead of falling back locally.
+These routes call the configured remote LightRAG service only when `LIGHTRAG_ENABLED=true`. When disabled, they return HTTP `400` with a disabled LightRAG message instead of falling back locally.
 
 ## Storage
 

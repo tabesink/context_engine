@@ -1,8 +1,8 @@
-# Coding Agent Prompt: Improve ragcli TUI Visual UX
+# Coding Agent Prompt: Improve context-engine TUI Visual UX
 
 You are a senior Python CLI/TUI engineer and product-minded UX designer.
 
-Improve the `ragcli ui` visual design so it feels like a polished terminal application, not raw command output.
+Improve the `context-engine` visual design so it feels like a polished terminal application, not raw command output.
 
 ## Current problem
 

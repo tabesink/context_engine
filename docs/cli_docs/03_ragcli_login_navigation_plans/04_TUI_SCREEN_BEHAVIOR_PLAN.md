@@ -233,9 +233,9 @@ BACKEND GAPS
 +----------------+------------------------------+-------------+
 | Capability     | CLI Command                  | Status      |
 +----------------+------------------------------+-------------+
-| Chat           | ragcli chat                  | backend gap |
-| Users          | ragcli users list            | backend gap |
-| Conversations  | ragcli conversations list    | backend gap |
+| Chat           | context-engine chat                  | backend gap |
+| Users          | context-engine users list            | backend gap |
+| Conversations  | context-engine conversations list    | backend gap |
 +----------------+------------------------------+-------------+
 
 These commands must return not_supported_by_backend until backend routes exist.
@@ -263,7 +263,7 @@ Example:
 ```text
 ERROR
 
-auth_required: Run `ragcli login` first.
+auth_required: Run `context-engine login` first.
 
 Actions:
   B Back

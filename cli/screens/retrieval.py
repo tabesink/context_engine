@@ -14,6 +14,7 @@ def _evidence_rows(evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
             {
                 "#": index,
                 "source": item.get("document_id", item.get("source_document_id", "")),
+                "document": item.get("document_id", item.get("source_document_id", "")),
                 "engine": item.get("source_engine", item.get("engine", "")),
                 "score": item.get("score", ""),
                 "pages": _page_range(item),
@@ -37,21 +38,23 @@ def build_retrieval_screen(response: dict[str, Any]) -> ScreenResult:
         ScreenSection(
             title="Request",
             rows=[
+                {"field": "Query", "value": response.get("query", "")},
                 {"field": "Requested mode", "value": response.get("mode", "")},
                 {"field": "Top K", "value": response.get("top_k", "")},
+                {"field": "LightRAG domain", "value": response.get("lightrag_domain_id", "default")},
                 {"field": "Document filter", "value": response.get("document_filter", "none")},
                 {
                     "field": "General fallback",
                     "value": response.get("allow_general_fallback", False),
                 },
-                {"field": "Debug requested", "value": bool(response.get("debug"))},
+                {"field": "Debug requested", "value": response.get("include_debug", bool(response.get("debug")))},
             ],
             columns=["field", "value"],
         ),
         ScreenSection(
             title="Results",
             rows=_evidence_rows(evidence),
-            columns=["#", "source", "engine", "score", "pages", "section"],
+            columns=["#", "engine", "score", "pages", "document", "section"],
         )
     ]
     for index, item in enumerate(evidence, start=1):
@@ -93,8 +96,8 @@ def build_retrieval_screen(response: dict[str, Any]) -> ScreenResult:
         summary={"query": response.get("query", "")},
         sections=sections,
         actions=[
-            ScreenAction("Ask with answer", f"ragcli documents answer --query \"{response.get('query', '...')}\""),
-            ScreenAction("Retrieve semantic", f"ragcli documents retrieve --query \"{response.get('query', '...')}\" --mode semantic --top-k 5"),
+            ScreenAction("Ask with answer", f"context-engine documents answer --query \"{response.get('query', '...')}\""),
+            ScreenAction("Retrieve semantic", f"context-engine documents retrieve --query \"{response.get('query', '...')}\" --mode semantic --top-k 5"),
         ],
         raw=response,
     )
@@ -117,7 +120,7 @@ def build_answer_screen(response: dict[str, Any], *, title: str = "Answer") -> S
         actions=[
             ScreenAction(
                 "Retrieve only",
-                f"ragcli documents retrieve --query \"{response.get('query', '...')}\"",
+                f"context-engine documents retrieve --query \"{response.get('query', '...')}\"",
             )
         ],
         raw=response,

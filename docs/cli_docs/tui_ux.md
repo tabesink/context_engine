@@ -1,6 +1,6 @@
-# ragcli TUI UX
+# context-engine TUI UX
 
-`ragcli ui` is a lightweight terminal rehearsal layer for future frontend screens. It is intentionally simple: Rich-only, mostly monochrome, ASCII tables, and shared screen builders.
+Launch **`context-engine`** (or **`context-tui`**) for the interactive Rich terminal layer that rehearses future browser screens. It stays intentionally simple: Rich-only, mostly monochrome, ASCII tables, and shared screen builders under `cli/tui/`.
 
 ## Main Menu
 
@@ -10,37 +10,44 @@ CONTEXT ENGINE
 Backend: http://127.0.0.1:8000
 Session: saved
 
-[1] Session
-[2] Documents
-[3] Retrieval
-[4] LightRAG Graphs
-[5] Admin Documents
-[6] Jobs
-[7] Observability
-[8] Backend Gaps
-[Q] Quit
+> Documents
+  Retrieval
+  Graphs
+  LightRAG Domains
+  Jobs
+  Observability
+  Health / Readiness
+  Logout
+  Quit
 ```
 
 ## Interaction Model
 
-- The TUI starts and exits cleanly with `q`.
-- Screens are selected by simple key input.
-- Retrieval accepts one query and renders evidence from `POST /query/retrieve`.
-- Tables use ASCII borders so output is portable across terminals.
-- Color is reserved for future semantic accents and is centralized in `cli/tui/styles.py`.
+- Clean exit with **`q`** (and standard interrupt handling outside raw modes).
+- Screens are reachable via simple keystrokes/menu entries.
+- Retrieval accepts a prompt and renders evidence from **`POST /query/retrieve`**.
+- LightRAG domain forms collect only inputs needed by the backend and show API success/errors directly.
+- API-backed screens expose progressive disclosure keys: **`I`** Inspect API, **`J`** Raw JSON, **`F`** toggle full IDs, **`R`** refresh, **`B`** back, and **`Q`** quit.
+- Inspect views show method, route, status, latency, request payload, response summary, and selected IDs when available.
+- Raw JSON is always on demand and redacts tokens/passwords/API keys, truncates long text, and never displays multipart bytes.
+- ASCII-friendly tables maximize portability across terminals.
+- Color accents live in **`cli/tui/styles.py`** for future refinement.
 
 ## Screen Behavior
 
-- Session shows backend/session summary without exposing tokens.
-- Documents renders the same document library model used by `ragcli documents list`.
-- Retrieval renders the same retrieval model used by `ragcli documents retrieve`.
-- LightRAG renders backend label/graph API data only; it never uses a direct LightRAG client.
-- Admin Documents and Observability render backend responses without local authorization decisions.
-- Backend Gaps lists planned unsupported surfaces as `not_supported_by_backend`.
+- Session shows backend/session summaries without leaking tokens.
+- Documents mirrors the **`GET /documents`** document library payload, and shows nested **Admin Actions** only for admin users.
+- Retrieval mirrors **`POST /query/retrieve`** / answer routes.
+- Graphs screens consume backend proxy JSON only—no direct LightRAG SDK.
+- LightRAG Domains lists configured domains and exposes nested admin lifecycle actions (create/show/start/stop/recreate/regenerate/archive/permanent delete).
+- Recreate and remove flows require typed confirmations; permanent delete is explicit and depends on backend configuration.
+- Documents admin actions (upload/list/index/reindex/delete) call existing `/admin/documents` routes from inside the Documents area.
+- Observability stays read-through of backend payloads.
+- Backend gaps are documented in `docs/cli_docs/backend_gaps.md`; they are not exposed as a root TUI screen.
 
 ## Non-goals
 
-- No widget-heavy framework.
-- No local business logic that bypasses backend APIs.
-- No fake chat, users, runs, approvals, or corpus lifecycle behavior.
-- No terminal graph visualization beyond summaries and JSON export hints.
+- Widget-heavy TUIs/frameworks unrelated to shipping needs.
+- Local business logic skipping FastAPI validations.
+- Fake chat/users/runs approvals/corpus lifecycle behavior.
+- Local graph visualization beyond summaries + JSON cues.

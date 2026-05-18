@@ -1,4 +1,4 @@
-"""Credential storage for ragcli."""
+"""Credential storage for the terminal app."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ class CredentialStore:
         self,
         config_dir: Path,
         *,
-        service_name: str = "context-engine-ragcli",
+        service_name: str = "context-engine-cli",
         keyring_enabled: bool = True,
     ):
         self.config_dir = config_dir

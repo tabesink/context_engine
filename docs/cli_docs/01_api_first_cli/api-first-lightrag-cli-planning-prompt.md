@@ -4,9 +4,9 @@
 
 Use this prompt for future deployment/domain-management planning. The task is **planning only**. Do not implement code yet.
 
-The current codebase already supports remote LightRAG retrieval, admin upload forwarding, and graph proxy reads through the FastAPI backend and `ragcli`. The future goal is to add LightRAG knowledge-base/domain deployment, status, deletion, and selected `easy-deploy-lightrag` lifecycle capabilities through the **FastAPI backend first**, then mirror those routes in `ragcli`.
+The current codebase already supports remote LightRAG retrieval, admin upload forwarding, and graph proxy reads through the FastAPI backend and `context-engine`. The future goal is to add LightRAG knowledge-base/domain deployment, status, deletion, and selected `easy-deploy-lightrag` lifecycle capabilities through the **FastAPI backend first**, then mirror those routes in `context-engine`.
 
-This is important because `ragcli` is not a separate local operator tool. In this project, every real `ragcli` command mirrors an API route. Therefore, the same capabilities must also be usable later from an admin frontend.
+This is important because `context-engine` is not a separate local operator tool. In this project, every real `context-engine` command mirrors an API route. Therefore, the same capabilities must also be usable later from an admin frontend.
 
 ---
 
@@ -20,7 +20,7 @@ Design future deployment work so that:
 
 - `context_engine` remains the multi-user application/control plane.
 - LightRAG remains the independently deployed retrieval/index/graph engine.
-- `ragcli` continues to mirror backend API routes.
+- `context-engine` continues to mirror backend API routes.
 - A future admin frontend can call the exact same backend routes.
 - Deployment and deletion actions are protected by backend admin authorization.
 - The codebase stays simple, modular, and easy to follow.
@@ -93,9 +93,9 @@ Focus on existing domain/deployment lifecycle behavior:
 
 ## Core Correction To Previous Plan
 
-Do **not** design `ragcli lightrag ...` as a local-only operator command surface.
+Do **not** design `context-engine lightrag ...` as a local-only operator command surface.
 
-In this codebase, `ragcli` commands should be mirrors of FastAPI routes.
+In this codebase, `context-engine` commands should be mirrors of FastAPI routes.
 
 Therefore, design the feature as:
 
@@ -104,7 +104,7 @@ Admin frontend
       \
        -> context_engine FastAPI admin deployment routes
       /
-ragcli
+context-engine
 ```
 
 The backend owns the behavior. The CLI only calls the backend.
@@ -116,7 +116,7 @@ The backend owns the behavior. The CLI only calls the backend.
 Use a control-plane design:
 
 ```text
-ragcli
+context-engine
   -> ApiClient
   -> context_engine FastAPI
   -> admin-only deployment routes
@@ -157,7 +157,7 @@ The FastAPI backend becomes the single API surface for both CLI and frontend.
 - graph data
 - its own runtime process/container
 
-### `ragcli` owns
+### `context-engine` owns
 
 - command parsing
 - credential use
@@ -171,7 +171,7 @@ The FastAPI backend becomes the single API surface for both CLI and frontend.
 ## Non-Negotiable Constraints
 
 1. **API-first**
-   - Every new real `ragcli` command must map to a backend API route.
+   - Every new real `context-engine` command must map to a backend API route.
    - If no route exists, the command must return `not_supported_by_backend`.
 
 2. **Frontend-ready**
@@ -205,7 +205,7 @@ The FastAPI backend becomes the single API surface for both CLI and frontend.
 
 Before proposing the implementation, answer these:
 
-1. What current `ragcli` commands exist, and what routes do they mirror?
+1. What current `context-engine` commands exist, and what routes do they mirror?
 2. What LightRAG deployment capabilities exist in `easy-deploy-lightrag`?
 3. Which of those capabilities should become backend admin API routes?
 4. Which capabilities should be deferred?
@@ -282,30 +282,30 @@ Long-running deployment operations should return a `job_id`.
 These commands should only exist if the backend route exists.
 
 ```bash
-ragcli admin lightrag domains list
-ragcli admin lightrag domains create --name NAME --port PORT
-ragcli admin lightrag domains show --domain-id DOMAIN_ID
-ragcli admin lightrag domains delete --domain-id DOMAIN_ID
+context-engine admin lightrag domains list
+context-engine admin lightrag domains create --name NAME --port PORT
+context-engine admin lightrag domains show --domain-id DOMAIN_ID
+context-engine admin lightrag domains delete --domain-id DOMAIN_ID
 
-ragcli admin lightrag deployments deploy --domain-id DOMAIN_ID
-ragcli admin lightrag deployments start --domain-id DOMAIN_ID
-ragcli admin lightrag deployments stop --domain-id DOMAIN_ID
-ragcli admin lightrag deployments restart --domain-id DOMAIN_ID
-ragcli admin lightrag deployments recreate --domain-id DOMAIN_ID
-ragcli admin lightrag deployments status --domain-id DOMAIN_ID
+context-engine admin lightrag deployments deploy --domain-id DOMAIN_ID
+context-engine admin lightrag deployments start --domain-id DOMAIN_ID
+context-engine admin lightrag deployments stop --domain-id DOMAIN_ID
+context-engine admin lightrag deployments restart --domain-id DOMAIN_ID
+context-engine admin lightrag deployments recreate --domain-id DOMAIN_ID
+context-engine admin lightrag deployments status --domain-id DOMAIN_ID
 
-ragcli admin lightrag deployments regenerate --domain-id DOMAIN_ID
-ragcli admin lightrag deployments config --domain-id DOMAIN_ID
-ragcli admin lightrag deployments events --domain-id DOMAIN_ID
+context-engine admin lightrag deployments regenerate --domain-id DOMAIN_ID
+context-engine admin lightrag deployments config --domain-id DOMAIN_ID
+context-engine admin lightrag deployments events --domain-id DOMAIN_ID
 ```
 
 You may recommend shorter aliases if they remain clear, for example:
 
 ```bash
-ragcli admin lightrag domain list
-ragcli admin lightrag domain create
-ragcli admin lightrag domain deploy
-ragcli admin lightrag domain status
+context-engine admin lightrag domain list
+context-engine admin lightrag domain create
+context-engine admin lightrag domain deploy
+context-engine admin lightrag domain status
 ```
 
 But explain the tradeoff.
@@ -319,7 +319,7 @@ Do not expose raw local shell commands as the primary model.
 Avoid this as the main design:
 
 ```bash
-ragcli lightrag domain up
+context-engine lightrag domain up
 ```
 
 unless it maps to:
@@ -474,7 +474,7 @@ Return a markdown plan with:
 3. Current codebase map
 4. `easy-deploy-lightrag` capability inventory
 5. Proposed backend API routes
-6. Proposed mirrored `ragcli` commands
+6. Proposed mirrored `context-engine` commands
 7. Frontend/admin UX implications
 8. Backend service/module design
 9. Storage/source-of-truth design
@@ -521,7 +521,7 @@ Create vertical slices:
 
 ### Phase 5: CLI mirrored commands
 
-- Add `ragcli admin lightrag ...`.
+- Add `context-engine admin lightrag ...`.
 - Ensure every command maps to a backend route.
 - Human and JSON outputs are tested.
 
@@ -554,7 +554,7 @@ Defer these unless the codebase already has simple support:
 
 The final plan must make it obvious that:
 
-- `ragcli` mirrors backend routes.
+- `context-engine` mirrors backend routes.
 - The future admin frontend can use the same routes.
 - Deployment operations are backend admin actions.
 - The CLI does not directly manage Docker as the primary implementation.

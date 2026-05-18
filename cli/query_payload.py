@@ -11,6 +11,7 @@ def build_query_payload(
     include_debug: bool,
     allow_general_fallback: bool,
     document_ids: list[str] | None = None,
+    lightrag_domain_id: str | None = None,
 ) -> dict[str, Any]:
     request = QueryRequest(
         query=query,
@@ -19,8 +20,11 @@ def build_query_payload(
         include_debug=include_debug,
         allow_general_fallback=allow_general_fallback,
         document_ids=document_ids,
+        lightrag_domain_id=lightrag_domain_id,
     )
     payload = request.model_dump(mode="json")
     if payload.get("document_ids") is None:
         payload.pop("document_ids")
+    if payload.get("lightrag_domain_id") is None:
+        payload.pop("lightrag_domain_id")
     return payload

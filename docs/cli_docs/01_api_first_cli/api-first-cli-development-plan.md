@@ -2,12 +2,12 @@
 
 ## Goal
 
-Maintain `ragcli` as a thin API client for every stable backend capability that operators need. The FastAPI backend remains the source of truth for auth, permissions, retrieval, LightRAG behavior, deployment state, and validation.
+Maintain `context-engine` as a thin API client for every stable backend capability that operators need. The FastAPI backend remains the source of truth for auth, permissions, retrieval, LightRAG behavior, deployment state, and validation.
 
 This document now records the implemented API-first CLI shape and the remaining future work. New CLI behavior should still be added with vertical TDD slices.
 
 ```text
-ragcli -> FastAPI API -> backend services
+context-engine -> FastAPI API -> backend services
 future admin UI -> same FastAPI API -> same backend services
 ```
 
@@ -34,26 +34,26 @@ Remaining API-first gap:
 Prefer explicit commands that make the backend route obvious:
 
 ```bash
-ragcli lightrag graphs show --label LABEL
-ragcli lightrag labels list
-ragcli lightrag labels popular --limit 20
-ragcli lightrag labels search --query TEXT --limit 20
+context-engine lightrag graphs show --label LABEL
+context-engine lightrag labels list
+context-engine lightrag labels popular --limit 20
+context-engine lightrag labels search --query TEXT --limit 20
 
-ragcli documents retrieve --query TEXT --document-id DOC_ID
-ragcli documents answer --query TEXT --document-id DOC_ID
-ragcli query --query TEXT --document-id DOC_ID
+context-engine documents retrieve --query TEXT --document-id DOC_ID
+context-engine documents answer --query TEXT --document-id DOC_ID
+context-engine query --query TEXT --document-id DOC_ID
 ```
 
 For future deployment and domain lifecycle work, keep the admin namespace from the LightRAG architecture note:
 
 ```bash
-ragcli admin lightrag domains list
-ragcli admin lightrag domains create --name NAME --port PORT
-ragcli admin lightrag domains show --domain-id DOMAIN_ID
-ragcli admin lightrag domains delete --domain-id DOMAIN_ID
+context-engine admin lightrag domains list
+context-engine admin lightrag domains create --name NAME --port PORT
+context-engine admin lightrag domains show --domain-id DOMAIN_ID
+context-engine admin lightrag domains delete --domain-id DOMAIN_ID
 
-ragcli admin lightrag deployments deploy --domain-id DOMAIN_ID
-ragcli admin lightrag deployments status --domain-id DOMAIN_ID
+context-engine admin lightrag deployments deploy --domain-id DOMAIN_ID
+context-engine admin lightrag deployments status --domain-id DOMAIN_ID
 ```
 
 Short aliases can come later. The first implementation should favor clear route parity and stable automation output.
@@ -95,17 +95,17 @@ Target route mapping:
 
 | Command | Backend | Role |
 | --- | --- | --- |
-| `ragcli lightrag graphs show --label LABEL` | `GET /graphs?label=LABEL` | authenticated |
-| `ragcli lightrag labels list` | `GET /graph/label/list` | authenticated |
-| `ragcli lightrag labels popular --limit N` | `GET /graph/label/popular?limit=N` | authenticated |
-| `ragcli lightrag labels search --query TEXT --limit N` | `GET /graph/label/search?q=TEXT&limit=N` | authenticated |
+| `context-engine lightrag graphs show --label LABEL` | `GET /graphs?label=LABEL` | authenticated |
+| `context-engine lightrag labels list` | `GET /graph/label/list` | authenticated |
+| `context-engine lightrag labels popular --limit N` | `GET /graph/label/popular?limit=N` | authenticated |
+| `context-engine lightrag labels search --query TEXT --limit N` | `GET /graph/label/search?q=TEXT&limit=N` | authenticated |
 
 Covered behavior:
 
-1. `ragcli lightrag labels list` calls `GET /graph/label/list`.
-2. `ragcli lightrag graphs show` calls `GET /graphs`.
-3. `ragcli lightrag labels popular` calls `GET /graph/label/popular`.
-4. `ragcli lightrag labels search` calls `GET /graph/label/search`.
+1. `context-engine lightrag labels list` calls `GET /graph/label/list`.
+2. `context-engine lightrag graphs show` calls `GET /graphs`.
+3. `context-engine lightrag labels popular` calls `GET /graph/label/popular`.
+4. `context-engine lightrag labels search` calls `GET /graph/label/search`.
 
 Acceptance:
 
@@ -121,10 +121,10 @@ The CLI exposes the API `document_ids` request capability on query commands.
 Target commands:
 
 ```bash
-ragcli documents retrieve --query TEXT --document-id DOC_ID
-ragcli documents retrieve --query TEXT --document-id DOC1 --document-id DOC2
-ragcli documents answer --query TEXT --document-id DOC_ID
-ragcli query --query TEXT --document-id DOC_ID
+context-engine documents retrieve --query TEXT --document-id DOC_ID
+context-engine documents retrieve --query TEXT --document-id DOC1 --document-id DOC2
+context-engine documents answer --query TEXT --document-id DOC_ID
+context-engine query --query TEXT --document-id DOC_ID
 ```
 
 Covered behavior:
@@ -145,8 +145,8 @@ Acceptance:
 CLI coverage exists for stable admin observability routes.
 
 ```bash
-ragcli admin audit-logs list
-ragcli admin query-logs list
+context-engine admin audit-logs list
+context-engine admin query-logs list
 ```
 
 Acceptance:
@@ -167,7 +167,7 @@ Expected order:
 2. Domain registry or repository.
 3. Deployment service boundary.
 4. Local deployment backend adapter.
-5. Mirrored `ragcli admin lightrag ...` commands.
+5. Mirrored `context-engine admin lightrag ...` commands.
 6. Frontend-ready JSON and OpenAPI documentation.
 
 Acceptance:

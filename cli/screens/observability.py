@@ -18,7 +18,7 @@ def build_audit_logs_screen(logs: list[dict[str, Any]]) -> ScreenResult:
                 columns=["created_at", "user", "event", "status"],
             )
         ],
-        actions=[ScreenAction("Query logs", "ragcli admin query-logs list")],
+        actions=[ScreenAction("Query logs", "context-engine admin query-logs list")],
         raw=logs,
     )
 
@@ -37,7 +37,7 @@ def build_query_logs_screen(logs: list[dict[str, Any]]) -> ScreenResult:
         actions=[
             ScreenAction(
                 "Retrieve with debug",
-                'ragcli documents retrieve --query "reset procedure" --include-debug',
+                'context-engine documents retrieve --query "reset procedure" --include-debug',
             )
         ],
         raw=logs,

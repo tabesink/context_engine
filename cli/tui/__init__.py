@@ -1,1 +1,1 @@
-"""Lightweight Rich-only TUI for ragcli."""
+"""Lightweight Rich-only TUI for context-engine."""

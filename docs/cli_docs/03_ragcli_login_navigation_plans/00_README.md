@@ -1,6 +1,6 @@
-# ragcli TUI Login + Navigation TDD Plan Bundle
+# context-engine TUI Login + Navigation TDD Plan Bundle
 
-This bundle updates the previous `ragcli ui` plan to include:
+This bundle updates the previous `context-engine` plan to include:
 
 - In-TUI login and logout
 - Existing-session startup behavior
@@ -29,7 +29,7 @@ Give these files to the coding agent in order:
 
 ## Non-negotiable constraints
 
-- `ragcli ui` must not be a scrolling log of `print()` output.
+- `context-engine` must not be a scrolling log of `print()` output.
 - Every screen transition must clear/redraw the active screen.
 - The TUI must reuse the existing CLI auth/session/API boundaries.
 - The TUI must not call LightRAG directly.

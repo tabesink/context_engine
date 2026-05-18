@@ -14,6 +14,10 @@ KEY_QUIT = "quit"
 KEY_BACKSPACE = "backspace"
 KEY_REFRESH = "refresh"
 KEY_UPLOAD = "upload"
+KEY_INSPECT = "inspect"
+KEY_RAW_JSON = "raw_json"
+KEY_TOGGLE_FULL_IDS = "toggle_full_ids"
+KEY_DEBUG = "debug"
 
 
 def read_tui_key(_prompt: str = "") -> str:
@@ -24,20 +28,44 @@ def read_tui_key(_prompt: str = "") -> str:
 
 
 def normalize_key(raw: str) -> str:
-    if raw in {KEY_UP, KEY_DOWN, KEY_ENTER, KEY_TAB, KEY_BACK, KEY_QUIT, KEY_BACKSPACE, KEY_REFRESH, KEY_UPLOAD}:
+    if raw in {
+        KEY_UP,
+        KEY_DOWN,
+        KEY_ENTER,
+        KEY_TAB,
+        KEY_BACK,
+        KEY_QUIT,
+        KEY_BACKSPACE,
+        KEY_REFRESH,
+        KEY_UPLOAD,
+        KEY_INSPECT,
+        KEY_RAW_JSON,
+        KEY_TOGGLE_FULL_IDS,
+        KEY_DEBUG,
+    }:
         return raw
     if raw in {"\x00H", "\xe0H"}:
         return KEY_UP
     if raw in {"\x00P", "\xe0P"}:
         return KEY_DOWN
     # Keep literal character input (especially spaces) intact for text fields.
+    if len(raw) == 1 and raw.isalpha() and raw.isupper():
+        return raw
     lowered = raw.strip().lower()
     if lowered in {"q", "quit"}:
         return KEY_QUIT
     if lowered == "upload":
         return KEY_UPLOAD
-    if lowered == "refresh" or raw == "\x12":
+    if lowered in {"r", "refresh"} or raw == "\x12":
         return KEY_REFRESH
+    if lowered in {"i", "inspect"}:
+        return KEY_INSPECT
+    if lowered in {"j", "json", "raw", "raw_json"}:
+        return KEY_RAW_JSON
+    if lowered in {"f", "full", "full_ids", "ids"}:
+        return KEY_TOGGLE_FULL_IDS
+    if lowered in {"d", "debug"}:
+        return KEY_DEBUG
     if lowered in {"b", "back", "\x1b"}:
         return KEY_BACK
     if lowered in {"up", "arrowup"} or raw == "\x1b[A":
@@ -51,6 +79,17 @@ def normalize_key(raw: str) -> str:
     if lowered == "backspace" or raw in {"\x08", "\x7f"}:
         return KEY_BACKSPACE
     return raw
+
+
+def text_input_key(key: str) -> str:
+    command_literals = {
+        KEY_REFRESH: "r",
+        KEY_INSPECT: "i",
+        KEY_RAW_JSON: "j",
+        KEY_TOGGLE_FULL_IDS: "f",
+        KEY_DEBUG: "d",
+    }
+    return command_literals.get(key, key)
 
 
 def _read_windows_key() -> str:

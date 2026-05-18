@@ -1,5 +1,6 @@
 from time import perf_counter
 
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -15,6 +16,7 @@ from app.retrieval.semantic_engine import SemanticRetrievalEngine
 from app.retrieval.strategies import LightRAGRetrievalStrategy, LocalRetrievalStrategy, RetrievalStrategy
 from app.schemas.query import QueryRequest, QueryResponse, RetrieveResponse
 from app.storage.repositories.logs import LogRepository
+from app.storage.repositories.documents import DocumentRepository
 from app.storage.tables import UserRow
 
 
@@ -63,6 +65,7 @@ class RetrievalService:
         return result
 
     def _retrieve_result(self, *, request: QueryRequest, user: UserRow) -> RetrievalResult:
+        self._validate_lightrag_document_filter(request)
         route = self.routing_policy.resolve(
             lightrag_enabled=self.settings.lightrag_enabled,
             mode=request.mode,
@@ -73,6 +76,7 @@ class RetrievalService:
             document_ids=request.document_ids,
             top_k=request.top_k,
             user_id=user.id,
+            lightrag_domain_id=request.lightrag_domain_id,
         )
 
     def answer(self, *, request: QueryRequest, user: UserRow) -> QueryResponse:
@@ -87,6 +91,24 @@ class RetrievalService:
             include_debug=request.include_debug and user.role == "admin",
         )
         return QueryResponse(**response.model_dump(), answer=answer)
+
+    def _validate_lightrag_document_filter(self, request: QueryRequest) -> None:
+        if not request.lightrag_domain_id or not request.document_ids:
+            return
+        documents = DocumentRepository(self.session)
+        for document_id in request.document_ids:
+            document = documents.get(document_id)
+            metadata = document.meta if document else {}
+            lightrag = metadata.get("lightrag", {}) if isinstance(metadata, dict) else {}
+            domain_id = lightrag.get("domain_id") or lightrag.get("domain")
+            if domain_id != request.lightrag_domain_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Selected documents must belong to LightRAG domain "
+                        f"'{request.lightrag_domain_id}'"
+                    ),
+                )
 
     def _retrieve_response(self, result: RetrievalResult, *, include_debug: bool) -> RetrieveResponse:
         return RetrieveResponse(

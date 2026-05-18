@@ -1,4 +1,6 @@
-from fastapi import UploadFile
+import json
+
+from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -22,9 +24,19 @@ class DocumentService:
         self.documents = DocumentRepository(session)
         self.storage = FileStorage()
 
-    def upload(self, *, actor_id: str, file: UploadFile) -> tuple[DocumentRow, str | None]:
+    def upload(
+        self,
+        *,
+        actor_id: str,
+        file: UploadFile,
+        lightrag_domain_id: str | None = None,
+    ) -> tuple[DocumentRow, str | None]:
         if self.settings.lightrag_enabled:
-            return self._upload_remote(actor_id=actor_id, file=file)
+            return self._upload_remote(
+                actor_id=actor_id,
+                file=file,
+                lightrag_domain_id=lightrag_domain_id,
+            )
 
         path = self.storage.save_upload(file)
         document = self.documents.create(
@@ -43,13 +55,22 @@ class DocumentService:
         job_id = JobService(self.session).enqueue_index_document(document_id=document.id)
         return document, job_id
 
-    def _upload_remote(self, *, actor_id: str, file: UploadFile) -> tuple[DocumentRow, str | None]:
+    def _upload_remote(
+        self,
+        *,
+        actor_id: str,
+        file: UploadFile,
+        lightrag_domain_id: str | None = None,
+    ) -> tuple[DocumentRow, str | None]:
+        domain_id = lightrag_domain_id or self.settings.lightrag_domain
+        self._validate_lightrag_domain(domain_id)
         path = self.storage.save_upload(file)
         metadata = {
             "original_filename": file.filename,
             "lightrag": {
                 "enabled": True,
-                "domain": self.settings.lightrag_domain,
+                "domain": domain_id,
+                "domain_id": domain_id,
             },
         }
         document = self.documents.create(
@@ -61,12 +82,12 @@ class DocumentService:
             status=DocumentStatus.INDEXING,
         )
         try:
-            remote = LightRAGRemoteAdapter.for_domain().upload_document(
+            remote = LightRAGRemoteAdapter.for_domain(domain_id).upload_document(
                 file_path=path,
                 filename=document.filename,
                 content_type=document.content_type,
                 metadata={"local_document_id": document.id},
-                domain=self.settings.lightrag_domain,
+                domain=domain_id,
             )
         except LightRAGAdapterError as exc:
             self.documents.update_status(document, DocumentStatus.FAILED, error_message=str(exc))
@@ -92,6 +113,30 @@ class DocumentService:
             metadata={"filename": document.filename, "engine": "lightrag"},
         )
         return document, None
+
+    def _validate_lightrag_domain(self, domain_id: str) -> None:
+        path = self.settings.lightrag_domain_manifest or self.settings.lightrag_domains_manifest
+        if not path or not path.is_file():
+            return
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        domains = payload.get("domains", [])
+        if isinstance(domains, dict):
+            entry = domains.get(domain_id)
+        else:
+            entry = next(
+                (
+                    item
+                    for item in domains
+                    if isinstance(item, dict)
+                    and (item.get("id") == domain_id or item.get("name") == domain_id)
+                ),
+                None,
+            )
+        if not isinstance(entry, dict):
+            raise HTTPException(status_code=400, detail=f"LightRAG domain '{domain_id}' does not exist")
+        status = str(entry.get("status") or "").lower()
+        if status in {"stopped", "unhealthy", "archived", "error"}:
+            raise HTTPException(status_code=400, detail=f"LightRAG domain '{domain_id}' is not available")
 
     def get_ready_or_404(self, document_id: str) -> DocumentRow:
         document = self.documents.get(document_id)

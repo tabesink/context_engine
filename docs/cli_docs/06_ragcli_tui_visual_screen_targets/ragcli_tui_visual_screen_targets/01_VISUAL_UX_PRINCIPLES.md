@@ -1,8 +1,8 @@
-# ragcli TUI Visual UX Principles
+# context-engine TUI Visual UX Principles
 
 ## Objective
 
-Improve `ragcli ui` so it feels like a clean terminal application, not raw command output.
+Improve `context-engine` so it feels like a clean terminal application, not raw command output.
 
 The current UI is functional, but it can be improved by:
 
@@ -23,9 +23,9 @@ CLI ready.
 API base URL: http://127.0.0.1:8010
 
 Example commands:
-  .venv\Scripts\ragcli.exe --api-base-url http://127.0.0.1:8010 --help
-  .venv\Scripts\ragcli.exe --api-base-url http://127.0.0.1:8010 login
-  .venv\Scripts\ragcli.exe --api-base-url http://127.0.0.1:8010 ui
+  .venv\Scripts\context-engine.exe --api-base-url http://127.0.0.1:8010 --help
+  .venv\Scripts\context-engine.exe --api-base-url http://127.0.0.1:8010 login
+  .venv\Scripts\context-engine.exe --api-base-url http://127.0.0.1:8010 ui
 
 UPLOAD COMPLETE
 

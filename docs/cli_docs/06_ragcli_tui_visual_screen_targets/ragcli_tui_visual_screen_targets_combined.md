@@ -1,4 +1,4 @@
-# ragcli TUI Visual UX Screen Target Documentation
+# context-engine TUI Visual UX Screen Target Documentation
 
 
 
@@ -6,9 +6,9 @@
 
 # File: 00_README.md
 
-# ragcli TUI Visual Screen Targets
+# context-engine TUI Visual Screen Targets
 
-This bundle contains downloadable markdown documentation for improving the `ragcli ui` visual UX.
+This bundle contains downloadable markdown documentation for improving the `context-engine` visual UX.
 
 Focus:
 - clean full-screen TUI views
@@ -58,11 +58,11 @@ Use ASCII tables only.
 
 # File: 01_VISUAL_UX_PRINCIPLES.md
 
-# ragcli TUI Visual UX Principles
+# context-engine TUI Visual UX Principles
 
 ## Objective
 
-Improve `ragcli ui` so it feels like a clean terminal application, not raw command output.
+Improve `context-engine` so it feels like a clean terminal application, not raw command output.
 
 The current UI is functional, but it can be improved by:
 
@@ -83,9 +83,9 @@ CLI ready.
 API base URL: http://127.0.0.1:8010
 
 Example commands:
-  .venv\Scripts\ragcli.exe --api-base-url http://127.0.0.1:8010 --help
-  .venv\Scripts\ragcli.exe --api-base-url http://127.0.0.1:8010 login
-  .venv\Scripts\ragcli.exe --api-base-url http://127.0.0.1:8010 ui
+  .venv\Scripts\context-engine.exe --api-base-url http://127.0.0.1:8010 --help
+  .venv\Scripts\context-engine.exe --api-base-url http://127.0.0.1:8010 login
+  .venv\Scripts\context-engine.exe --api-base-url http://127.0.0.1:8010 ui
 
 UPLOAD COMPLETE
 
@@ -279,7 +279,7 @@ Avoid defaulting to:
 
 # Upload Flow Screen Targets
 
-These are the target ASCII screen views for the `ragcli ui` upload flow.
+These are the target ASCII screen views for the `context-engine` upload flow.
 
 Use these as inspiration for implementation and tests.
 
@@ -535,7 +535,7 @@ Do not show command hints like:
 
 ```text
 Next:
-  ragcli admin documents upload --file ./manual.pdf
+  context-engine admin documents upload --file ./manual.pdf
 ```
 
 Inside the TUI, the user should receive actions, not instructions to leave the TUI.
@@ -800,11 +800,11 @@ These capabilities are planned but do not have backend routes yet.
 +----------------+-------------------------------+--------------------------+
 | Capability     | CLI Command                   | Status                   |
 +----------------+-------------------------------+--------------------------+
-| Chat           | ragcli chat                   | not_supported_by_backend |
-| Users          | ragcli users list             | not_supported_by_backend |
-| Conversations  | ragcli conversations list     | not_supported_by_backend |
-| Runs           | ragcli runs status            | not_supported_by_backend |
-| Approvals      | ragcli runs approvals list    | not_supported_by_backend |
+| Chat           | context-engine chat                   | not_supported_by_backend |
+| Users          | context-engine users list             | not_supported_by_backend |
+| Conversations  | context-engine conversations list     | not_supported_by_backend |
+| Runs           | context-engine runs status            | not_supported_by_backend |
+| Approvals      | context-engine runs approvals list    | not_supported_by_backend |
 +----------------+-------------------------------+--------------------------+
 
 > View command details
@@ -926,11 +926,11 @@ test_logged_out_screen_offers_login_again
 
 # File: 05_CODING_AGENT_VISUAL_IMPLEMENTATION_PROMPT.md
 
-# Coding Agent Prompt: Improve ragcli TUI Visual UX
+# Coding Agent Prompt: Improve context-engine TUI Visual UX
 
 You are a senior Python CLI/TUI engineer and product-minded UX designer.
 
-Improve the `ragcli ui` visual design so it feels like a polished terminal application, not raw command output.
+Improve the `context-engine` visual design so it feels like a polished terminal application, not raw command output.
 
 ## Current problem
 

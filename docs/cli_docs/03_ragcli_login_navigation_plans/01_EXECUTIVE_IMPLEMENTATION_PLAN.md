@@ -1,11 +1,11 @@
-# Executive Implementation Plan: `ragcli ui` Login + Arrow-Key Navigation
+# Executive Implementation Plan: `context-engine` Login + Arrow-Key Navigation
 
 ## Objective
 
-Implement a lightweight interactive TUI for `ragcli` that behaves like a screen application:
+Implement a lightweight interactive TUI for `context-engine` that behaves like a screen application:
 
 ```bash
-ragcli ui
+context-engine
 ```
 
 The TUI must support:

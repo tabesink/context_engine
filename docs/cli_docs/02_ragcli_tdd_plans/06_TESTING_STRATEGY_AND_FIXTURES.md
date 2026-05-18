@@ -1,4 +1,4 @@
-# Testing Strategy and Fixtures for ragcli TDD
+# Testing Strategy and Fixtures for context-engine TDD
 
 ## Test philosophy
 
@@ -41,11 +41,11 @@ Use a CLI runner to execute commands as a user would.
 Examples:
 
 ```text
-ragcli documents list --output json
-ragcli documents list
-ragcli documents retrieve --query "reset procedure"
-ragcli lightrag labels popular
-ragcli admin documents upload --file ./manual.pdf
+context-engine documents list --output json
+context-engine documents list
+context-engine documents retrieve --query "reset procedure"
+context-engine lightrag labels popular
+context-engine admin documents upload --file ./manual.pdf
 ```
 
 Mock HTTP responses at the backend boundary.

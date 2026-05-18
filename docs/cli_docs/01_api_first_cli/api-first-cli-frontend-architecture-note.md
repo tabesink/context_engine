@@ -2,16 +2,16 @@
 
 ## Short Answer
 
-Yes, for implemented capabilities, because `ragcli` is API-first.
+Yes, for implemented capabilities, because `context-engine` is API-first.
 
-Implemented `ragcli` commands call FastAPI routes for auth, documents, retrieval, admin document operations, logs, jobs, and LightRAG graph reads. The CLI does not manage LightRAG deployments locally.
+Implemented `context-engine` commands call FastAPI routes for auth, documents, retrieval, admin document operations, logs, jobs, and LightRAG graph reads. The CLI does not manage LightRAG deployments locally.
 
-For future LightRAG deployment/domain administration, the same rule applies: if `ragcli` commands directly manage LightRAG deployments locally, then a future admin frontend cannot reuse those capabilities. A browser frontend cannot safely run local shell scripts, Docker commands, or edit local deployment manifests.
+For future LightRAG deployment/domain administration, the same rule applies: if `context-engine` commands directly manage LightRAG deployments locally, then a future admin frontend cannot reuse those capabilities. A browser frontend cannot safely run local shell scripts, Docker commands, or edit local deployment manifests.
 
 For frontend readiness, the backend must expose admin-only FastAPI routes for LightRAG domain/knowledge-base deployment, deletion, status, and configuration. Then:
 
 ```text
-ragcli -> FastAPI API
+context-engine -> FastAPI API
 frontend -> same FastAPI API
 ```
 
@@ -21,12 +21,12 @@ This makes the CLI and frontend two clients of the same control plane.
 
 ## Current Principle
 
-Every real `ragcli` command mirrors a backend route.
+Every real `context-engine` command mirrors a backend route.
 
 That means this is the required model for future deployment commands:
 
 ```text
-ragcli admin lightrag domain deploy
+context-engine admin lightrag domain deploy
   -> POST /admin/lightrag/domains/{domain_id}/deploy
   -> backend deployment service
   -> local compose / deployment backend
@@ -35,7 +35,7 @@ ragcli admin lightrag domain deploy
 Not this:
 
 ```text
-ragcli lightrag domain deploy
+context-engine lightrag domain deploy
   -> local shell/Docker logic directly
 ```
 
@@ -49,7 +49,7 @@ A local-only CLI implementation would create two systems:
 
 ```text
 CLI path:
-ragcli -> local scripts -> Docker/manifest
+context-engine -> local scripts -> Docker/manifest
 
 Future frontend path:
 frontend -> ??? no equivalent backend routes
@@ -61,7 +61,7 @@ An API-first implementation creates one shared system:
 
 ```text
 CLI path:
-ragcli -> FastAPI routes -> deployment service
+context-engine -> FastAPI routes -> deployment service
 
 Frontend path:
 admin UI -> same FastAPI routes -> same deployment service
@@ -79,7 +79,7 @@ Add LightRAG deployment/deletion/status capabilities to `context_engine` in this
 2. Backend service layer
 3. Storage/domain registry
 4. Deployment backend implementation
-5. Mirrored `ragcli admin lightrag ...` commands
+5. Mirrored `context-engine admin lightrag ...` commands
 6. Future frontend using same routes
 
 ---
@@ -89,17 +89,17 @@ Add LightRAG deployment/deletion/status capabilities to `context_engine` in this
 Use admin namespace because deployment is privileged:
 
 ```bash
-ragcli admin lightrag domains list
-ragcli admin lightrag domains create --name "AbleMed Manuals" --port 9621
-ragcli admin lightrag domains show --domain-id kb_123
-ragcli admin lightrag domains delete --domain-id kb_123
+context-engine admin lightrag domains list
+context-engine admin lightrag domains create --name "AbleMed Manuals" --port 9621
+context-engine admin lightrag domains show --domain-id kb_123
+context-engine admin lightrag domains delete --domain-id kb_123
 
-ragcli admin lightrag deployments deploy --domain-id kb_123
-ragcli admin lightrag deployments start --domain-id kb_123
-ragcli admin lightrag deployments stop --domain-id kb_123
-ragcli admin lightrag deployments restart --domain-id kb_123
-ragcli admin lightrag deployments recreate --domain-id kb_123
-ragcli admin lightrag deployments status --domain-id kb_123
+context-engine admin lightrag deployments deploy --domain-id kb_123
+context-engine admin lightrag deployments start --domain-id kb_123
+context-engine admin lightrag deployments stop --domain-id kb_123
+context-engine admin lightrag deployments restart --domain-id kb_123
+context-engine admin lightrag deployments recreate --domain-id kb_123
+context-engine admin lightrag deployments status --domain-id kb_123
 ```
 
 Shorter aliases are acceptable later, but the first implementation should be explicit.

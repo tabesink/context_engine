@@ -85,9 +85,21 @@ curl http://localhost:8000/health
 
 ---
 
-## CLI
+## Terminal Application
 
-After `pip install -e .`, the Typer CLI is available as `ragcli` (`ragcli --help`).
+After `pip install -e .`, launch the interactive terminal UI with:
+
+```powershell
+context-engine
+```
+
+or:
+
+```powershell
+context-tui
+```
+
+The terminal UI is the supported local CLI workflow for login/session, documents, retrieval, LightRAG views, admin document actions, jobs, observability, and health/readiness checks.
 
 ## Test
 

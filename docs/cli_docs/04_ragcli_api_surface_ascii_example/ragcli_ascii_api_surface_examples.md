@@ -1,6 +1,8 @@
-# ragcli ASCII Human Output Examples For All CLI/API Surfaces
+# context-engine ASCII Human Output Examples For All CLI/API Surfaces
 
-This document shows proposed human-mode CLI output examples for the full `ragcli` surface.
+> **Product note:** Install **`context-engine`** / **`context-tui`** to open the Rich interactive UI (**`cli.launcher:main`**). Prompt lines such as **`$ context-engine documents list`** label the *underlying capability / REST shape* retained from earlier Typer experiments—they are **not** valid standalone shell commands today.
+
+This document shows proposed human-mode CLI output examples for the full **`context-engine` surface**.
 
 Design rules:
 
@@ -9,7 +11,7 @@ Design rules:
 - Use color only in the actual terminal for semantic status, not in the text examples here.
 - Keep JSON output separate and stable.
 - Human output may be improved for readability.
-- CLI must remain API-first and route-mirrored.
+- The terminal client must remain API-first and route-mirrored.
 - Planned/backend-gap commands must return `not_supported_by_backend`.
 
 ---
@@ -21,7 +23,7 @@ Design rules:
 Command:
 
 ```bash
-ragcli login --email admin@example.com
+context-engine login --email admin@example.com
 ```
 
 Example human output:
@@ -48,8 +50,8 @@ Saved session:
 +----------------+---------------------------+
 
 Next:
-  ragcli auth me
-  ragcli documents list
+  context-engine auth me
+  context-engine documents list
 ```
 
 Failed login:
@@ -60,7 +62,7 @@ LOGIN FAILED
 auth_failed: Invalid email or password.
 
 Next:
-  ragcli login --email admin@example.com
+  context-engine login --email admin@example.com
 ```
 
 Security note:
@@ -77,7 +79,7 @@ The password is never stored.
 Command:
 
 ```bash
-ragcli auth me
+context-engine auth me
 ```
 
 Example human output:
@@ -98,8 +100,8 @@ User:
 +----------------+---------------------------+
 
 Next:
-  ragcli documents list
-  ragcli admin documents list
+  context-engine documents list
+  context-engine admin documents list
 ```
 
 If not logged in:
@@ -107,10 +109,10 @@ If not logged in:
 ```text
 AUTH REQUIRED
 
-auth_required: Run `ragcli login` first.
+auth_required: Run `context-engine login` first.
 
 Next:
-  ragcli login --email admin@example.com
+  context-engine login --email admin@example.com
 ```
 
 ---
@@ -120,7 +122,7 @@ Next:
 Command:
 
 ```bash
-ragcli logout
+context-engine logout
 ```
 
 Example human output:
@@ -141,7 +143,7 @@ Cleared:
 +----------------+-------+
 
 Next:
-  ragcli login --email admin@example.com
+  context-engine login --email admin@example.com
 ```
 
 ---
@@ -153,7 +155,7 @@ Next:
 Command:
 
 ```bash
-ragcli documents list
+context-engine documents list
 ```
 
 Example human output:
@@ -173,8 +175,8 @@ Backend:
 +---------+----------------------+----------+-------+------------+
 
 Next:
-  ragcli documents show --document-id doc_123
-  ragcli documents retrieve --query "reset procedure" --document-id doc_123
+  context-engine documents show --document-id doc_123
+  context-engine documents retrieve --query "reset procedure" --document-id doc_123
 ```
 
 Empty state:
@@ -185,7 +187,7 @@ DOCUMENTS
 No documents found.
 
 Next:
-  ragcli admin documents upload --file ./manual.pdf
+  context-engine admin documents upload --file ./manual.pdf
 ```
 
 ---
@@ -195,7 +197,7 @@ Next:
 Command:
 
 ```bash
-ragcli documents show --document-id doc_123
+context-engine documents show --document-id doc_123
 ```
 
 Example human output:
@@ -215,9 +217,9 @@ DOCUMENT DETAIL
 +----------------+----------------------------+
 
 Available actions:
-  ragcli documents structure --document-id doc_123
-  ragcli documents page --document-id doc_123 --page-number 1
-  ragcli documents retrieve --query "your question" --document-id doc_123
+  context-engine documents structure --document-id doc_123
+  context-engine documents page --document-id doc_123 --page-number 1
+  context-engine documents retrieve --query "your question" --document-id doc_123
 ```
 
 Not found:
@@ -228,7 +230,7 @@ DOCUMENT NOT FOUND
 not_found: Document `doc_missing` was not found.
 
 Next:
-  ragcli documents list
+  context-engine documents list
 ```
 
 ---
@@ -238,7 +240,7 @@ Next:
 Command:
 
 ```bash
-ragcli documents structure --document-id doc_123
+context-engine documents structure --document-id doc_123
 ```
 
 Example human output:
@@ -262,8 +264,8 @@ Document:
 +-------+-----------------------------+-------------+
 
 Next:
-  ragcli documents page --document-id doc_123 --page-number 13
-  ragcli documents retrieve --query "Pendant Reset" --document-id doc_123
+  context-engine documents page --document-id doc_123 --page-number 13
+  context-engine documents retrieve --query "Pendant Reset" --document-id doc_123
 ```
 
 ---
@@ -273,7 +275,7 @@ Next:
 Command:
 
 ```bash
-ragcli documents page --document-id doc_123 --page-number 13
+context-engine documents page --document-id doc_123 --page-number 13
 ```
 
 Example human output:
@@ -296,9 +298,9 @@ Content:
   and perform the reset sequence using the pendant controls.
 
 Next:
-  ragcli documents page --document-id doc_123 --page-number 12
-  ragcli documents page --document-id doc_123 --page-number 14
-  ragcli documents retrieve --query "pendant reset" --document-id doc_123
+  context-engine documents page --document-id doc_123 --page-number 12
+  context-engine documents page --document-id doc_123 --page-number 14
+  context-engine documents retrieve --query "pendant reset" --document-id doc_123
 ```
 
 ---
@@ -308,7 +310,7 @@ Next:
 Command:
 
 ```bash
-ragcli documents retrieve --query "how do I reset the pendant?" --mode hybrid --top-k 3 --document-id doc_123
+context-engine documents retrieve --query "how do I reset the pendant?" --mode hybrid --top-k 3 --document-id doc_123
 ```
 
 Example human output:
@@ -384,9 +386,9 @@ Text:
   the controller.
 
 Next:
-  ragcli documents answer --query "how do I reset the pendant?" --document-id doc_123
-  ragcli documents page --document-id doc_123 --page-number 12
-  ragcli documents retrieve --query "how do I reset the pendant?" --mode semantic --top-k 5
+  context-engine documents answer --query "how do I reset the pendant?" --document-id doc_123
+  context-engine documents page --document-id doc_123 --page-number 12
+  context-engine documents retrieve --query "how do I reset the pendant?" --mode semantic --top-k 5
 ```
 
 ---
@@ -396,7 +398,7 @@ Next:
 Command:
 
 ```bash
-ragcli documents retrieve --query "installation steps" --mode auto --top-k 3 --include-debug
+context-engine documents retrieve --query "installation steps" --mode auto --top-k 3 --include-debug
 ```
 
 Example human output:
@@ -447,7 +449,7 @@ For non-admin users, the debug section is omitted even when `--include-debug` is
 Command:
 
 ```bash
-ragcli documents answer --query "how do I reset the pendant?" --document-id doc_123
+context-engine documents answer --query "how do I reset the pendant?" --document-id doc_123
 ```
 
 Example human output:
@@ -475,8 +477,8 @@ Sources:
 +-----+----------+-------+---------------------+-------+
 
 Next:
-  ragcli documents page --document-id doc_123 --page-number 12
-  ragcli documents retrieve --query "how do I reset the pendant?" --document-id doc_123
+  context-engine documents page --document-id doc_123 --page-number 12
+  context-engine documents retrieve --query "how do I reset the pendant?" --document-id doc_123
 ```
 
 ---
@@ -486,7 +488,7 @@ Next:
 Command:
 
 ```bash
-ragcli query --query "what does the manual say about reset?"
+context-engine query --query "what does the manual say about reset?"
 ```
 
 Example human output:
@@ -511,7 +513,7 @@ Sources:
 +-----+----------+-------+---------------------+
 
 Next:
-  ragcli documents retrieve --query "what does the manual say about reset?"
+  context-engine documents retrieve --query "what does the manual say about reset?"
 ```
 
 ---
@@ -521,7 +523,7 @@ Next:
 Command:
 
 ```bash
-ragcli documents content --document-id doc_123 --pages 1-3
+context-engine documents content --document-id doc_123 --pages 1-3
 ```
 
 Example human output:
@@ -529,7 +531,7 @@ Example human output:
 ```text
 BACKEND GAP
 
-not_supported_by_backend: `ragcli documents content --pages 1-3` needs a backend route first.
+not_supported_by_backend: `context-engine documents content --pages 1-3` needs a backend route first.
 
 Reason:
 +----------------+---------------------------------------------+
@@ -541,7 +543,7 @@ Reason:
 +----------------+---------------------------------------------+
 
 Available today:
-  ragcli documents page --document-id doc_123 --page-number 1
+  context-engine documents page --document-id doc_123 --page-number 1
 ```
 
 ---
@@ -551,7 +553,7 @@ Available today:
 Command:
 
 ```bash
-ragcli documents search --query "reset"
+context-engine documents search --query "reset"
 ```
 
 Example human output:
@@ -559,7 +561,7 @@ Example human output:
 ```text
 BACKEND GAP
 
-not_supported_by_backend: `ragcli documents search` needs a backend route first.
+not_supported_by_backend: `context-engine documents search` needs a backend route first.
 
 Reason:
 +----------------+--------------------------------+
@@ -571,7 +573,7 @@ Reason:
 +----------------+--------------------------------+
 
 Available today:
-  ragcli documents retrieve --query "reset"
+  context-engine documents retrieve --query "reset"
 ```
 
 ---
@@ -583,7 +585,7 @@ Available today:
 Command:
 
 ```bash
-ragcli lightrag labels list
+context-engine lightrag labels list
 ```
 
 Example human output:
@@ -602,8 +604,8 @@ LIGHTRAG LABELS
 +-----+------------------------+
 
 Next:
-  ragcli lightrag labels search --query "reset"
-  ragcli lightrag graphs show --label "pendant reset"
+  context-engine lightrag labels search --query "reset"
+  context-engine lightrag graphs show --label "pendant reset"
 ```
 
 ---
@@ -613,7 +615,7 @@ Next:
 Command:
 
 ```bash
-ragcli lightrag labels popular --limit 10
+context-engine lightrag labels popular --limit 10
 ```
 
 Example human output:
@@ -632,7 +634,7 @@ POPULAR LIGHTRAG LABELS
 +-----+------------------------+-------+
 
 Next:
-  ragcli lightrag graphs show --label "installation"
+  context-engine lightrag graphs show --label "installation"
 ```
 
 ---
@@ -642,7 +644,7 @@ Next:
 Command:
 
 ```bash
-ragcli lightrag labels search --query "reset" --limit 5
+context-engine lightrag labels search --query "reset" --limit 5
 ```
 
 Example human output:
@@ -664,7 +666,7 @@ Query:
 +-----+------------------------+-------+
 
 Next:
-  ragcli lightrag graphs show --label "pendant reset"
+  context-engine lightrag graphs show --label "pendant reset"
 ```
 
 ---
@@ -674,7 +676,7 @@ Next:
 Command:
 
 ```bash
-ragcli lightrag graphs show --label "pendant reset" --max-depth 2 --max-nodes 100
+context-engine lightrag graphs show --label "pendant reset" --max-depth 2 --max-nodes 100
 ```
 
 Example human output:
@@ -716,7 +718,7 @@ Note:
   Use JSON output for frontend graph visualization.
 
 Next:
-  ragcli lightrag graphs show --label "pendant reset" --output json
+  context-engine lightrag graphs show --label "pendant reset" --output json
 ```
 
 ---
@@ -726,7 +728,7 @@ Next:
 Command:
 
 ```bash
-ragcli lightrag labels popular
+context-engine lightrag labels popular
 ```
 
 Example human output:
@@ -753,7 +755,7 @@ Next:
 Command:
 
 ```bash
-ragcli admin documents upload --file ./manual.pdf
+context-engine admin documents upload --file ./manual.pdf
 ```
 
 Example human output when local indexing job is created:
@@ -775,8 +777,8 @@ Upload result:
 +----------------+----------------------------+
 
 Next:
-  ragcli jobs status --job-id job_456
-  ragcli admin documents index --document-id doc_123
+  context-engine jobs status --job-id job_456
+  context-engine admin documents index --document-id doc_123
 ```
 
 Example human output when LightRAG forwarding is enabled:
@@ -799,8 +801,8 @@ Upload result:
 +------------------------+----------------------------+
 
 Next:
-  ragcli admin documents list
-  ragcli lightrag labels popular
+  context-engine admin documents list
+  context-engine lightrag labels popular
 ```
 
 ---
@@ -810,7 +812,7 @@ Next:
 Command:
 
 ```bash
-ragcli admin documents list
+context-engine admin documents list
 ```
 
 Example human output:
@@ -827,9 +829,9 @@ ADMIN DOCUMENTS
 +---------+----------------------+----------+-------------+------------+
 
 Admin actions:
-  ragcli admin documents index --document-id doc_789
-  ragcli admin documents reindex --document-id doc_123
-  ragcli admin documents delete --document-id doc_789
+  context-engine admin documents index --document-id doc_789
+  context-engine admin documents reindex --document-id doc_123
+  context-engine admin documents delete --document-id doc_789
 ```
 
 ---
@@ -839,7 +841,7 @@ Admin actions:
 Command:
 
 ```bash
-ragcli admin documents index --document-id doc_123
+context-engine admin documents index --document-id doc_123
 ```
 
 Example human output:
@@ -864,7 +866,7 @@ Result:
 +----------------+----------------------------+
 
 Next:
-  ragcli jobs status --job-id job_456
+  context-engine jobs status --job-id job_456
 ```
 
 ---
@@ -874,7 +876,7 @@ Next:
 Command:
 
 ```bash
-ragcli admin documents reindex --document-id doc_123
+context-engine admin documents reindex --document-id doc_123
 ```
 
 Example human output:
@@ -899,7 +901,7 @@ Result:
 +----------------+----------------------------+
 
 Next:
-  ragcli jobs status --job-id job_789
+  context-engine jobs status --job-id job_789
 ```
 
 ---
@@ -909,7 +911,7 @@ Next:
 Command:
 
 ```bash
-ragcli admin documents delete --document-id doc_789
+context-engine admin documents delete --document-id doc_789
 ```
 
 Example human output:
@@ -927,7 +929,7 @@ Deleted:
 +----------------+----------------------------+
 
 Next:
-  ragcli admin documents list
+  context-engine admin documents list
 ```
 
 ---
@@ -937,7 +939,7 @@ Next:
 Command:
 
 ```bash
-ragcli admin documents list
+context-engine admin documents list
 ```
 
 Example human output for normal user:
@@ -951,7 +953,7 @@ Reason:
   The backend rejected this request.
 
 Next:
-  ragcli auth me
+  context-engine auth me
 ```
 
 The CLI should not infer admin permissions locally. It should send the request and render the backend response.
@@ -963,7 +965,7 @@ The CLI should not infer admin permissions locally. It should send the request a
 Command:
 
 ```bash
-ragcli admin corpus publish
+context-engine admin corpus publish
 ```
 
 Example human output:
@@ -971,7 +973,7 @@ Example human output:
 ```text
 BACKEND GAP
 
-not_supported_by_backend: `ragcli admin corpus publish` needs a backend route first.
+not_supported_by_backend: `context-engine admin corpus publish` needs a backend route first.
 
 +----------------+---------------------------------------+
 | Field          | Value                                 |
@@ -985,8 +987,8 @@ not_supported_by_backend: `ragcli admin corpus publish` needs a backend route fi
 Same pattern for:
 
 ```bash
-ragcli admin corpus rollback
-ragcli admin corpus cleanup
+context-engine admin corpus rollback
+context-engine admin corpus cleanup
 ```
 
 ---
@@ -998,7 +1000,7 @@ ragcli admin corpus cleanup
 Command:
 
 ```bash
-ragcli admin audit-logs list
+context-engine admin audit-logs list
 ```
 
 Example human output:
@@ -1015,7 +1017,7 @@ AUDIT LOGS
 +---------------------+-------------------+----------------------+----------+
 
 Next:
-  ragcli admin query-logs list
+  context-engine admin query-logs list
 ```
 
 ---
@@ -1025,7 +1027,7 @@ Next:
 Command:
 
 ```bash
-ragcli admin query-logs list
+context-engine admin query-logs list
 ```
 
 Example human output:
@@ -1042,7 +1044,7 @@ QUERY LOGS
 +---------------------+------------------+------------+-------+---------------------------+
 
 Next:
-  ragcli documents retrieve --query "reset procedure" --include-debug
+  context-engine documents retrieve --query "reset procedure" --include-debug
 ```
 
 ---
@@ -1054,7 +1056,7 @@ Next:
 Command:
 
 ```bash
-ragcli jobs list
+context-engine jobs list
 ```
 
 Example human output:
@@ -1071,8 +1073,8 @@ JOBS
 +---------+----------------+----------+----------+---------------------+
 
 Next:
-  ragcli jobs status --job-id job_456
-  ragcli jobs retry --job-id job_789
+  context-engine jobs status --job-id job_456
+  context-engine jobs retry --job-id job_789
 ```
 
 ---
@@ -1082,7 +1084,7 @@ Next:
 Command:
 
 ```bash
-ragcli jobs status --job-id job_789
+context-engine jobs status --job-id job_789
 ```
 
 Example human output:
@@ -1105,8 +1107,8 @@ Error:
   Could not parse document. The file appears to be corrupted.
 
 Next:
-  ragcli jobs retry --job-id job_789
-  ragcli admin documents delete --document-id doc_789
+  context-engine jobs retry --job-id job_789
+  context-engine admin documents delete --document-id doc_789
 ```
 
 Successful job:
@@ -1127,7 +1129,7 @@ Result:
   Document parsed and indexed successfully.
 
 Next:
-  ragcli documents show --document-id doc_456
+  context-engine documents show --document-id doc_456
 ```
 
 ---
@@ -1137,7 +1139,7 @@ Next:
 Command:
 
 ```bash
-ragcli jobs retry --job-id job_789
+context-engine jobs retry --job-id job_789
 ```
 
 Example human output:
@@ -1162,7 +1164,7 @@ Result:
 +----------------+----------------------------+
 
 Next:
-  ragcli jobs status --job-id job_790
+  context-engine jobs status --job-id job_790
 ```
 
 ---
@@ -1176,7 +1178,7 @@ The following commands are reserved CLI/API surfaces. Until backend routes exist
 Command:
 
 ```bash
-ragcli users create --email user@example.com
+context-engine users create --email user@example.com
 ```
 
 Example human output:
@@ -1184,7 +1186,7 @@ Example human output:
 ```text
 BACKEND GAP
 
-not_supported_by_backend: `ragcli users create` needs a backend route first.
+not_supported_by_backend: `context-engine users create` needs a backend route first.
 
 +----------------+-----------------------------+
 | Field          | Value                       |
@@ -1202,7 +1204,7 @@ not_supported_by_backend: `ragcli users create` needs a backend route first.
 Command:
 
 ```bash
-ragcli users list
+context-engine users list
 ```
 
 Example human output:
@@ -1210,7 +1212,7 @@ Example human output:
 ```text
 BACKEND GAP
 
-not_supported_by_backend: `ragcli users list` needs a backend route first.
+not_supported_by_backend: `context-engine users list` needs a backend route first.
 
 +----------------+-----------------------------+
 | Field          | Value                       |
@@ -1228,7 +1230,7 @@ not_supported_by_backend: `ragcli users list` needs a backend route first.
 Command:
 
 ```bash
-ragcli retrievers list
+context-engine retrievers list
 ```
 
 Example human output:
@@ -1236,7 +1238,7 @@ Example human output:
 ```text
 BACKEND GAP
 
-not_supported_by_backend: `ragcli retrievers list` needs a backend route first.
+not_supported_by_backend: `context-engine retrievers list` needs a backend route first.
 
 +----------------+-----------------------------+
 | Field          | Value                       |
@@ -1254,7 +1256,7 @@ not_supported_by_backend: `ragcli retrievers list` needs a backend route first.
 Command:
 
 ```bash
-ragcli agents list
+context-engine agents list
 ```
 
 Example human output:
@@ -1262,7 +1264,7 @@ Example human output:
 ```text
 BACKEND GAP
 
-not_supported_by_backend: `ragcli agents list` needs a backend route first.
+not_supported_by_backend: `context-engine agents list` needs a backend route first.
 
 +----------------+-----------------------------+
 | Field          | Value                       |
@@ -1280,7 +1282,7 @@ not_supported_by_backend: `ragcli agents list` needs a backend route first.
 Command:
 
 ```bash
-ragcli conversations list
+context-engine conversations list
 ```
 
 Example human output:
@@ -1288,7 +1290,7 @@ Example human output:
 ```text
 BACKEND GAP
 
-not_supported_by_backend: `ragcli conversations list` needs a backend route first.
+not_supported_by_backend: `context-engine conversations list` needs a backend route first.
 
 +----------------+-----------------------------+
 | Field          | Value                       |
@@ -1302,8 +1304,8 @@ not_supported_by_backend: `ragcli conversations list` needs a backend route firs
 Same pattern for:
 
 ```bash
-ragcli conversations create
-ragcli conversations show --conversation-id CONV_ID
+context-engine conversations create
+context-engine conversations show --conversation-id CONV_ID
 ```
 
 ---
@@ -1313,7 +1315,7 @@ ragcli conversations show --conversation-id CONV_ID
 Command:
 
 ```bash
-ragcli chat
+context-engine chat
 ```
 
 Example human output:
@@ -1321,7 +1323,7 @@ Example human output:
 ```text
 BACKEND GAP
 
-not_supported_by_backend: `ragcli chat` needs a backend route first.
+not_supported_by_backend: `context-engine chat` needs a backend route first.
 
 +----------------+-----------------------------+
 | Field          | Value                       |
@@ -1342,7 +1344,7 @@ Note:
 Command:
 
 ```bash
-ragcli messages send --conversation-id conv_123 --content "hello"
+context-engine messages send --conversation-id conv_123 --content "hello"
 ```
 
 Example human output:
@@ -1350,7 +1352,7 @@ Example human output:
 ```text
 BACKEND GAP
 
-not_supported_by_backend: `ragcli messages send` needs a backend route first.
+not_supported_by_backend: `context-engine messages send` needs a backend route first.
 
 +----------------+-----------------------------+
 | Field          | Value                       |
@@ -1364,7 +1366,7 @@ not_supported_by_backend: `ragcli messages send` needs a backend route first.
 Same pattern for:
 
 ```bash
-ragcli messages list --conversation-id conv_123
+context-engine messages list --conversation-id conv_123
 ```
 
 ---
@@ -1374,7 +1376,7 @@ ragcli messages list --conversation-id conv_123
 Command:
 
 ```bash
-ragcli runs status --run-id run_123
+context-engine runs status --run-id run_123
 ```
 
 Example human output:
@@ -1382,7 +1384,7 @@ Example human output:
 ```text
 BACKEND GAP
 
-not_supported_by_backend: `ragcli runs status` needs a backend route first.
+not_supported_by_backend: `context-engine runs status` needs a backend route first.
 
 +----------------+-----------------------------+
 | Field          | Value                       |
@@ -1396,7 +1398,7 @@ not_supported_by_backend: `ragcli runs status` needs a backend route first.
 Same pattern for:
 
 ```bash
-ragcli runs cancel --run-id run_123
+context-engine runs cancel --run-id run_123
 ```
 
 ---
@@ -1406,7 +1408,7 @@ ragcli runs cancel --run-id run_123
 Command:
 
 ```bash
-ragcli runs approvals list
+context-engine runs approvals list
 ```
 
 Example human output:
@@ -1414,7 +1416,7 @@ Example human output:
 ```text
 BACKEND GAP
 
-not_supported_by_backend: `ragcli runs approvals list` needs a backend route first.
+not_supported_by_backend: `context-engine runs approvals list` needs a backend route first.
 
 +----------------+-----------------------------+
 | Field          | Value                       |
@@ -1428,8 +1430,8 @@ not_supported_by_backend: `ragcli runs approvals list` needs a backend route fir
 Same pattern for:
 
 ```bash
-ragcli runs approvals approve --approval-id approval_123
-ragcli runs approvals reject --approval-id approval_123
+context-engine runs approvals approve --approval-id approval_123
+context-engine runs approvals reject --approval-id approval_123
 ```
 
 ---
@@ -1441,10 +1443,10 @@ ragcli runs approvals reject --approval-id approval_123
 ```text
 AUTH REQUIRED
 
-auth_required: Run `ragcli login` first.
+auth_required: Run `context-engine login` first.
 
 Next:
-  ragcli login --email admin@example.com
+  context-engine login --email admin@example.com
 ```
 
 ## 8.2 Connection Failure
@@ -1459,7 +1461,7 @@ Next:
     python -m uvicorn app.main:create_app --factory --reload
 
   Or pass a different backend:
-    ragcli --api-base-url http://localhost:8000 auth me
+    context-engine --api-base-url http://localhost:8000 auth me
 ```
 
 ## 8.3 Saved Session Base URL Warning
@@ -1481,14 +1483,14 @@ Status:
   400
 
 Next:
-  ragcli documents list
+  context-engine documents list
 ```
 
 ---
 
 # 9. TUI Screen Example For Retrieved Context
 
-Inside `ragcli ui`, the retrieved context screen should replace the previous screen.
+Inside `context-engine`, the retrieved context screen should replace the previous screen.
 
 ```text
 RETRIEVED CONTEXT

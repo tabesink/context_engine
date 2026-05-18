@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, UploadFile
+from fastapi import APIRouter, Depends, Form, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_admin
@@ -22,10 +22,15 @@ def admin_ping(admin: UserRow = Depends(require_admin)) -> dict[str, str]:
 @router.post("/documents/upload")
 def upload_document(
     file: UploadFile,
+    lightrag_domain_id: str | None = Form(default=None),
     admin: UserRow = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> UploadResponse:
-    document, job_id = DocumentService(session).upload(actor_id=admin.id, file=file)
+    document, job_id = DocumentService(session).upload(
+        actor_id=admin.id,
+        file=file,
+        lightrag_domain_id=lightrag_domain_id,
+    )
     return UploadResponse(document=document_response(document), job_id=job_id)
 
 

@@ -8,7 +8,7 @@ from rich.console import Console
 
 from cli.api_client import ApiClientError
 from cli.credentials import StoredCredentials
-from cli.tui.keys import KEY_BACKSPACE, KEY_DOWN, KEY_ENTER, KEY_QUIT, KEY_TAB, KEY_UP
+from cli.tui.keys import KEY_BACKSPACE, KEY_DOWN, KEY_ENTER, KEY_QUIT, KEY_TAB, KEY_UP, text_input_key
 from cli.tui.navigation import move_selection_down, move_selection_up
 from cli.tui.screen import ScreenCommand
 from cli.tui.state import TuiState
@@ -56,17 +56,17 @@ class LoginScreen:
                 self.password = self.password[:-1]
             return ScreenCommand.none()
         if self.active_field == "email":
-            self.email += key
+            self.email += text_input_key(key)
         else:
-            self.password += key
+            self.password += text_input_key(key)
         return ScreenCommand.none()
 
     def _submit(self, state: TuiState) -> ScreenCommand:
         from cli.tui.screens.main_menu import MainMenuScreen
 
-        client = state.client_factory(state.api_base_url, None)
+        state.reset_anonymous_client()
         try:
-            result = client.post("/auth/login", {"email": self.email, "password": self.password})
+            result = state.auth_service().login(self.email, self.password)
         except ApiClientError as exc:
             return ScreenCommand.reset(LoginFailedScreen(f"{exc.code}: {exc.message}"))
 
@@ -74,6 +74,13 @@ class LoginScreen:
         state.credential_store.save(StoredCredentials(base_url=state.api_base_url, access_token=token))
         state.client = state.client_factory(state.api_base_url, token)
         state.user_email = self.email
+        state.user_role = None
+        try:
+            current_user = state.auth_service().current_user()
+            role = current_user.get("role") if isinstance(current_user, dict) else None
+            state.user_role = str(role).lower() if role else None
+        except ApiClientError:
+            state.user_role = None
         state.last_error = None
         return ScreenCommand.reset(MainMenuScreen())
 

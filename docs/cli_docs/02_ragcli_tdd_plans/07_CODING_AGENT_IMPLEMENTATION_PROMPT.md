@@ -1,4 +1,4 @@
-# Coding Agent Prompt: Implement ragcli Screen UX + Lightweight TUI Using TDD
+# Coding Agent Prompt: Implement context-engine Screen UX + Lightweight TUI Using TDD
 
 ## Role
 
@@ -8,7 +8,7 @@ Write clean, boring, maintainable code that a junior developer can follow.
 
 ## Context
 
-This repo contains `ragcli`, a thin command-line client for the Context Engine backend.
+This repo contains `context-engine`, a thin command-line client for the Context Engine backend.
 
 The CLI:
 
@@ -30,7 +30,7 @@ The result should include:
 1. Better human output for existing commands.
 2. ASCII table rendering.
 3. Shared screen/result models.
-4. `ragcli ui` lightweight TUI.
+4. `context-engine` lightweight TUI.
 5. Guided flows for retrieval comparison and admin upload/dashboard if feasible.
 6. Explicit backend-gap rendering for unsupported planned commands.
 7. Stable JSON output.
@@ -97,7 +97,7 @@ cli/renderers/
 Start with one tracer bullet:
 
 ```text
-ragcli documents list
+context-engine documents list
 ```
 
 Behavior:
@@ -166,7 +166,7 @@ Do not create a full UI framework.
 Add:
 
 ```text
-ragcli ui
+context-engine
 ```
 
 Suggested modules:
@@ -213,9 +213,9 @@ Add only if the first three phases are green.
 Candidate flows:
 
 ```bash
-ragcli retrieval compare --query "reset procedure"
-ragcli admin documents upload-flow --file ./manual.pdf
-ragcli admin dashboard
+context-engine retrieval compare --query "reset procedure"
+context-engine admin documents upload-flow --file ./manual.pdf
+context-engine admin dashboard
 ```
 
 Each flow must compose real backend routes.

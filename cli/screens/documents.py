@@ -18,7 +18,7 @@ def build_document_library_screen(
             api_group="documents",
             summary={"backend": base_url} if base_url else {},
             sections=[ScreenSection(title="No documents found", text="")],
-            actions=[ScreenAction("Upload document", "ragcli admin documents upload --file ./manual.pdf")],
+            actions=[ScreenAction("Upload document", "context-engine admin documents upload --file ./manual.pdf")],
             raw=documents,
         )
     return ScreenResult(
@@ -35,11 +35,11 @@ def build_document_library_screen(
         actions=[
             ScreenAction(
                 "Show document",
-                f"ragcli documents show --document-id {documents[0].get('id', '<id>')}",
+                f"context-engine documents show --document-id {documents[0].get('id', '<id>')}",
             ),
             ScreenAction(
                 "Retrieve evidence",
-                f"ragcli documents retrieve --query \"reset procedure\" --document-id {documents[0].get('id', '<id>')}",
+                f"context-engine documents retrieve --query \"reset procedure\" --document-id {documents[0].get('id', '<id>')}",
             ),
         ],
         raw=documents,
@@ -66,9 +66,9 @@ def build_document_detail_screen(document: dict[str, Any]) -> ScreenResult:
             )
         ],
         actions=[
-            ScreenAction("Structure", f"ragcli documents structure --document-id {document_id}"),
-            ScreenAction("Page", f"ragcli documents page --document-id {document_id} --page-number 1"),
-            ScreenAction("Retrieve", f"ragcli documents retrieve --query \"your question\" --document-id {document_id}"),
+            ScreenAction("Structure", f"context-engine documents structure --document-id {document_id}"),
+            ScreenAction("Page", f"context-engine documents page --document-id {document_id} --page-number 1"),
+            ScreenAction("Retrieve", f"context-engine documents retrieve --query \"your question\" --document-id {document_id}"),
         ],
         raw=document,
     )
@@ -90,11 +90,11 @@ def build_document_structure_screen(structure: dict[str, Any]) -> ScreenResult:
         actions=[
             ScreenAction(
                 "Open page",
-                f"ragcli documents page --document-id {structure.get('document_id', '<id>')} --page-number 1",
+                f"context-engine documents page --document-id {structure.get('document_id', '<id>')} --page-number 1",
             ),
             ScreenAction(
                 "Retrieve section",
-                f"ragcli documents retrieve --query \"Pendant Reset\" --document-id {structure.get('document_id', '<id>')}",
+                f"context-engine documents retrieve --query \"Pendant Reset\" --document-id {structure.get('document_id', '<id>')}",
             ),
         ],
         raw=structure,
@@ -123,15 +123,15 @@ def build_document_page_screen(page: dict[str, Any]) -> ScreenResult:
         actions=[
             ScreenAction(
                 "Previous page",
-                f"ragcli documents page --document-id {document_id} --page-number {max(int(page_number or 1) - 1, 1)}",
+                f"context-engine documents page --document-id {document_id} --page-number {max(int(page_number or 1) - 1, 1)}",
             ),
             ScreenAction(
                 "Next page",
-                f"ragcli documents page --document-id {document_id} --page-number {int(page_number or 1) + 1}",
+                f"context-engine documents page --document-id {document_id} --page-number {int(page_number or 1) + 1}",
             ),
             ScreenAction(
                 "Retrieve",
-                f"ragcli documents retrieve --query \"pendant reset\" --document-id {document_id}",
+                f"context-engine documents retrieve --query \"pendant reset\" --document-id {document_id}",
             ),
         ],
         raw=page,

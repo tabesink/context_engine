@@ -5,7 +5,7 @@
 
 .DESCRIPTION
   Creates .venv if needed, installs editable project dependencies only when
-  required, then shows/validates the ragcli command against the configured API.
+  required, then launches the TUI-only CLI against the configured API.
 
 .PARAMETER Dev
   Install optional dev dependencies as well (equivalent to -e ".[dev]").
@@ -38,7 +38,8 @@ if (-not (Test-Path .env) -and (Test-Path .env.example)) {
 
 $venvDir = '.venv'
 $venvPython = Join-Path $venvDir 'Scripts\python.exe'
-$venvCli = Join-Path $venvDir 'Scripts\ragcli.exe'
+$venvCli = Join-Path $venvDir 'Scripts\context-engine.exe'
+$fallbackCli = Join-Path $venvDir 'Scripts\context-tui.exe'
 
 if (-not (Test-Path $venvPython)) {
     uv venv $venvDir
@@ -48,6 +49,10 @@ $baseMarker = Join-Path $venvDir '.deps-base.stamp'
 $devMarker = Join-Path $venvDir '.deps-dev.stamp'
 $needsInstall = $RefreshDeps -or (-not (Test-Path $baseMarker))
 if ($Dev -and -not (Test-Path $devMarker)) {
+    $needsInstall = $true
+}
+if (-not (Test-Path $venvCli) -and -not (Test-Path $fallbackCli)) {
+    # New script entrypoints require reinstall when migrating from old ragcli-only envs.
     $needsInstall = $true
 }
 
@@ -75,16 +80,21 @@ if (-not $ApiBaseUrl) {
 }
 
 if (-not (Test-Path $venvCli)) {
-    throw "ragcli executable not found at $venvCli"
+    if (Test-Path $fallbackCli) {
+        $venvCli = $fallbackCli
+    } else {
+        throw "context-engine executable not found. Re-run with -RefreshDeps."
+    }
 }
 
 Write-Host "CLI ready."
 Write-Host "API base URL: $ApiBaseUrl"
 Write-Host ""
 Write-Host "Example commands:"
-Write-Host "  $venvCli --api-base-url $ApiBaseUrl --help"
-Write-Host "  $venvCli --api-base-url $ApiBaseUrl login"
-Write-Host "  $venvCli --api-base-url $ApiBaseUrl ui"
+Write-Host "  `$env:CONTEXT_ENGINE_API_BASE_URL = '$ApiBaseUrl'"
+Write-Host "  $venvCli --help"
+Write-Host "  $venvCli"
 Write-Host ""
 
-& $venvCli --api-base-url $ApiBaseUrl ui
+$env:CONTEXT_ENGINE_API_BASE_URL = $ApiBaseUrl
+& $venvCli

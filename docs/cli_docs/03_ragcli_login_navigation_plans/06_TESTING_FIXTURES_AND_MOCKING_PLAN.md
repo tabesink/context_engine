@@ -2,7 +2,7 @@
 
 ## Testing goal
 
-Test `ragcli ui` through observable user behavior.
+Test `context-engine` through observable user behavior.
 
 Prefer tests that simulate:
 
@@ -130,9 +130,9 @@ The TUI must not change command mode.
 Add regression tests for:
 
 ```text
-ragcli documents list --output json
-ragcli documents retrieve --query "x" --output json
-ragcli admin documents list --output json
+context-engine documents list --output json
+context-engine documents retrieve --query "x" --output json
+context-engine admin documents list --output json
 unsupported planned command --output json
 ```
 

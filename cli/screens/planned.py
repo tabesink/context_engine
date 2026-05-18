@@ -6,42 +6,42 @@ from cli.screens.models import ScreenAction, ScreenResult, ScreenSection
 
 
 PLANNED_GAPS = [
-    "ragcli chat",
-    "ragcli users list",
-    "ragcli conversations list",
-    "ragcli messages list",
-    "ragcli runs status",
-    "ragcli runs approvals list",
-    "ragcli admin corpus publish",
-    "ragcli admin corpus rollback",
-    "ragcli admin corpus cleanup",
+    "context-engine chat",
+    "context-engine users list",
+    "context-engine conversations list",
+    "context-engine messages list",
+    "context-engine runs status",
+    "context-engine runs approvals list",
+    "context-engine admin corpus publish",
+    "context-engine admin corpus rollback",
+    "context-engine admin corpus cleanup",
 ]
 
 GAP_DETAILS = {
-    "ragcli users create": ("user creation", "none", "POST /users"),
-    "ragcli users list": ("user listing", "none", "GET /users"),
-    "ragcli retrievers list": ("retriever registry", "none", "GET /retrievers"),
-    "ragcli agents list": ("agent registry", "none", "GET /agents"),
-    "ragcli conversations list": ("conversation history", "none", "GET /conversations"),
-    "ragcli conversations create": ("conversation creation", "none", "POST /conversations"),
-    "ragcli conversations show": ("conversation detail", "none", "GET /conversations/{conversation_id}"),
-    "ragcli chat": ("interactive chat", "none", "POST /chat or /messages"),
-    "ragcli messages send": ("send conversation message", "none", "POST /messages"),
-    "ragcli messages list": ("conversation messages", "none", "GET /messages"),
-    "ragcli runs status": ("agent run status", "none", "GET /runs/{run_id}"),
-    "ragcli runs cancel": ("agent run cancellation", "none", "POST /runs/{run_id}/cancel"),
-    "ragcli runs approvals list": ("human approval queue", "none", "GET /runs/approvals"),
-    "ragcli runs approvals approve": ("approve run action", "none", "POST /runs/approvals/{approval_id}/approve"),
-    "ragcli runs approvals reject": ("reject run action", "none", "POST /runs/approvals/{approval_id}/reject"),
-    "ragcli admin corpus publish": ("corpus version publish", "none", "POST /admin/corpus/publish"),
-    "ragcli admin corpus rollback": ("corpus version rollback", "none", "POST /admin/corpus/rollback"),
-    "ragcli admin corpus cleanup": ("corpus cleanup", "none", "POST /admin/corpus/cleanup"),
-    "ragcli documents content": (
+    "context-engine users create": ("user creation", "none", "POST /users"),
+    "context-engine users list": ("user listing", "none", "GET /users"),
+    "context-engine retrievers list": ("retriever registry", "none", "GET /retrievers"),
+    "context-engine agents list": ("agent registry", "none", "GET /agents"),
+    "context-engine conversations list": ("conversation history", "none", "GET /conversations"),
+    "context-engine conversations create": ("conversation creation", "none", "POST /conversations"),
+    "context-engine conversations show": ("conversation detail", "none", "GET /conversations/{conversation_id}"),
+    "context-engine chat": ("interactive chat", "none", "POST /chat or /messages"),
+    "context-engine messages send": ("send conversation message", "none", "POST /messages"),
+    "context-engine messages list": ("conversation messages", "none", "GET /messages"),
+    "context-engine runs status": ("agent run status", "none", "GET /runs/{run_id}"),
+    "context-engine runs cancel": ("agent run cancellation", "none", "POST /runs/{run_id}/cancel"),
+    "context-engine runs approvals list": ("human approval queue", "none", "GET /runs/approvals"),
+    "context-engine runs approvals approve": ("approve run action", "none", "POST /runs/approvals/{approval_id}/approve"),
+    "context-engine runs approvals reject": ("reject run action", "none", "POST /runs/approvals/{approval_id}/reject"),
+    "context-engine admin corpus publish": ("corpus version publish", "none", "POST /admin/corpus/publish"),
+    "context-engine admin corpus rollback": ("corpus version rollback", "none", "POST /admin/corpus/rollback"),
+    "context-engine admin corpus cleanup": ("corpus cleanup", "none", "POST /admin/corpus/cleanup"),
+    "context-engine documents content": (
         "page range content",
         "none",
         "GET /documents/{document_id}/content?pages=",
     ),
-    "ragcli documents search": ("document text search", "none", "GET /documents/search?q="),
+    "context-engine documents search": ("document text search", "none", "GET /documents/search?q="),
 }
 
 
@@ -99,12 +99,12 @@ def build_backend_gaps_screen() -> ScreenResult:
 
 
 def _detail_key(command: str) -> str:
-    if command.startswith("ragcli admin corpus publish"):
-        return "ragcli admin corpus publish"
-    if command.startswith("ragcli admin corpus rollback"):
-        return "ragcli admin corpus rollback"
-    if command.startswith("ragcli documents content"):
-        return "ragcli documents content"
-    if command.startswith("ragcli documents search"):
-        return "ragcli documents search"
+    if command.startswith("context-engine admin corpus publish"):
+        return "context-engine admin corpus publish"
+    if command.startswith("context-engine admin corpus rollback"):
+        return "context-engine admin corpus rollback"
+    if command.startswith("context-engine documents content"):
+        return "context-engine documents content"
+    if command.startswith("context-engine documents search"):
+        return "context-engine documents search"
     return command

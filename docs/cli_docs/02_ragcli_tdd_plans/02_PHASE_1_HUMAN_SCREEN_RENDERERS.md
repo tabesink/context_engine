@@ -145,7 +145,7 @@ Refactor:
 
 Behavior:
 
-> `ragcli documents list` renders a document library table in human mode.
+> `context-engine documents list` renders a document library table in human mode.
 
 RED test:
 
@@ -180,7 +180,7 @@ Refactor:
 
 Behavior:
 
-> `ragcli documents list --output json` returns the existing stable JSON shape.
+> `context-engine documents list --output json` returns the existing stable JSON shape.
 
 RED test:
 
@@ -384,7 +384,7 @@ test_planned_command_json_output_returns_structured_error
 Expected human:
 
 ```text
-not_supported_by_backend: `ragcli chat` needs a backend route first.
+not_supported_by_backend: `context-engine chat` needs a backend route first.
 ```
 
 Expected JSON:
@@ -393,7 +393,7 @@ Expected JSON:
 {
   "error": {
     "code": "not_supported_by_backend",
-    "message": "`ragcli chat` needs a backend route first.",
+    "message": "`context-engine chat` needs a backend route first.",
     "status": 1
   }
 }

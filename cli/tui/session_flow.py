@@ -19,11 +19,17 @@ def choose_start_screen(state: TuiState) -> TuiScreen:
     state.api_base_url = creds.base_url.rstrip("/")
     state.client = state.client_factory(state.api_base_url, creds.access_token)
     try:
-        user = state.client.get("/auth/me")
+        user = state.auth_service().current_user()
     except ApiClientError:
         state.credential_store.clear()
         state.reset_anonymous_client()
         return LoginScreen(message="Previous session expired. Please log in again.")
 
-    state.user_email = str(user.get("email", "saved session")) if isinstance(user, dict) else "saved session"
+    if isinstance(user, dict):
+        state.user_email = str(user.get("email", "saved session"))
+        role = user.get("role")
+        state.user_role = str(role).lower() if role else None
+    else:
+        state.user_email = "saved session"
+        state.user_role = None
     return MainMenuScreen()

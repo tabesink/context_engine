@@ -14,6 +14,7 @@ class RetrievalStrategy(Protocol):
         document_ids: list[str] | None,
         top_k: int,
         user_id: str,
+        lightrag_domain_id: str | None = None,
     ) -> RetrievalResult:
         ...
 
@@ -30,7 +31,9 @@ class LocalRetrievalStrategy:
         document_ids: list[str] | None,
         top_k: int,
         user_id: str,
+        lightrag_domain_id: str | None = None,
     ) -> RetrievalResult:
+        del lightrag_domain_id
         return self.router.retrieve(
             query=query,
             mode=mode,
@@ -52,11 +55,13 @@ class LightRAGRetrievalStrategy:
         document_ids: list[str] | None,
         top_k: int,
         user_id: str,
+        lightrag_domain_id: str | None = None,
     ) -> RetrievalResult:
         evidence = self.engine.retrieve(
             query=query,
             mode=mode,
             document_ids=document_ids,
+            lightrag_domain_id=lightrag_domain_id,
             top_k=top_k,
             user_id=user_id,
         )

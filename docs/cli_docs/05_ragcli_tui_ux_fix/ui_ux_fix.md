@@ -1,14 +1,14 @@
-# ragcli TUI Documents Upload UX Fix
+# context-engine TUI Documents Upload UX Fix
 
 ## Purpose
 
 This document converts the current Documents-screen UX gap into an implementation-ready plan and coding-agent prompt.
 
-The current `ragcli ui` Documents screen shows a command suggestion:
+The current `context-engine` Documents screen shows a command suggestion:
 
 ```text
 Next:
-  ragcli admin documents upload --file ./manual.pdf
+  context-engine admin documents upload --file ./manual.pdf
 ```
 
 This is useful in a command reference, but not user-friendly inside an interactive TUI. A TUI user should be able to select an upload action, enter a file path, submit the upload, and see the result without leaving the TUI.
@@ -25,7 +25,7 @@ DOCUMENTS
 No documents found
 
 Next:
-  ragcli admin documents upload --file ./manual.pdf
+  context-engine admin documents upload --file ./manual.pdf
 
 No documents found.
 
@@ -55,7 +55,7 @@ Replace:
 
 ```text
 Next:
-  ragcli admin documents upload --file ./manual.pdf
+  context-engine admin documents upload --file ./manual.pdf
 ```
 
 With:
@@ -190,7 +190,7 @@ The form must support:
 The upload flow must reuse the existing backend contract:
 
 ```bash
-ragcli admin documents upload --file PATH
+context-engine admin documents upload --file PATH
 ```
 
 which maps to:
@@ -576,7 +576,7 @@ Use the following prompt with your coding agent.
 ```markdown
 # Prompt: Fix TUI Documents Empty-State UX and Add Interactive Upload Flow
 
-You are a senior Python CLI/TUI engineer. Improve the current `ragcli ui` Documents screen so it behaves like a real interactive TUI screen, not a command reference page.
+You are a senior Python CLI/TUI engineer. Improve the current `context-engine` Documents screen so it behaves like a real interactive TUI screen, not a command reference page.
 
 ## Current Problem
 
@@ -588,7 +588,7 @@ DOCUMENTS
 No documents found
 
 Next:
-  ragcli admin documents upload --file ./manual.pdf
+  context-engine admin documents upload --file ./manual.pdf
 
 No documents found.
 
@@ -672,7 +672,7 @@ The form should support:
 The upload flow must reuse the existing backend contract:
 
 ```bash
-ragcli admin documents upload --file PATH
+context-engine admin documents upload --file PATH
 ```
 
 which maps to:

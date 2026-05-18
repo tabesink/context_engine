@@ -1,1 +1,1 @@
-"""Human renderers for ragcli."""
+"""Human renderers for context-engine terminal screens."""

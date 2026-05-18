@@ -47,6 +47,8 @@ def _domain_entry(manifest: dict[str, Any], requested: str) -> dict[str, Any] | 
         return entry if isinstance(entry, dict) else None
     if isinstance(domains, list):
         for entry in domains:
-            if isinstance(entry, dict) and entry.get("name") == requested:
+            if isinstance(entry, dict) and (
+                entry.get("id") == requested or entry.get("name") == requested
+            ):
                 return entry
     return None

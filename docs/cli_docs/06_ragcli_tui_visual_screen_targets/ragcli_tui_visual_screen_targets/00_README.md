@@ -1,6 +1,6 @@
-# ragcli TUI Visual Screen Targets
+# context-engine TUI Visual Screen Targets
 
-This bundle contains downloadable markdown documentation for improving the `ragcli ui` visual UX.
+This bundle contains downloadable markdown documentation for improving the `context-engine` visual UX.
 
 Focus:
 - clean full-screen TUI views

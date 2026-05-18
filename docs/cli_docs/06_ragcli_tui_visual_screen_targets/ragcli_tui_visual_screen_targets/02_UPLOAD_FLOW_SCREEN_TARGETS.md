@@ -1,6 +1,6 @@
 # Upload Flow Screen Targets
 
-These are the target ASCII screen views for the `ragcli ui` upload flow.
+These are the target ASCII screen views for the `context-engine` upload flow.
 
 Use these as inspiration for implementation and tests.
 

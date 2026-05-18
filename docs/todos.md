@@ -1,0 +1,1 @@
+- remove the email admin/usder email - replace with a username instead: SEED_ADMIN_EMAIL=admin@example.com; SEED_ADMIN_PASSWORD=admin123
