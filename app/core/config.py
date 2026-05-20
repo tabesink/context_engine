@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     lightrag_dockerfile: Path | None = None
     lightrag_build_context: Path | None = None
     lightrag_postgres_url: str | None = None
+    lightrag_postgres_host: str = "postgres"
+    lightrag_postgres_port: int = 5432
+    lightrag_postgres_database_prefix: str = "lightrag"
+    lightrag_postgres_user_prefix: str = "lightrag"
+    lightrag_postgres_password: str = "lightrag"
     lightrag_redis_url: str | None = None
     lightrag_neo4j_uri: str | None = None
     lightrag_neo4j_username: str | None = None

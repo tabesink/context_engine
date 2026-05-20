@@ -75,6 +75,30 @@ def test_create_domain_generates_manifest_env_and_compose(tmp_path: Path) -> Non
     )
 
 
+def test_create_domain_renders_postgres_owned_lightrag_storage_without_manifest_secrets(
+    tmp_path: Path,
+) -> None:
+    service = _service(tmp_path)
+
+    service.create_domain(LightRAGDomainCreateRequest(domain_id="manual-domain"))
+
+    env_text = (tmp_path / "lightrag/domains/manual-domain/domain.env").read_text(
+        encoding="utf-8"
+    )
+    manifest_text = (tmp_path / "lightrag/domains.json").read_text(encoding="utf-8")
+    assert "WORKSPACE=manual-domain" in env_text
+    assert "LIGHTRAG_KV_STORAGE=PGKVStorage" in env_text
+    assert "LIGHTRAG_DOC_STATUS_STORAGE=PGDocStatusStorage" in env_text
+    assert "LIGHTRAG_GRAPH_STORAGE=PGGraphStorage" in env_text
+    assert "LIGHTRAG_VECTOR_STORAGE=PGVectorStorage" in env_text
+    assert "POSTGRES_HOST=postgres" in env_text
+    assert "POSTGRES_DATABASE=lightrag_manual_domain" in env_text
+    assert "POSTGRES_USER=lightrag_manual_domain" in env_text
+    assert "POSTGRES_PASSWORD=" in env_text
+    assert "postgres_database" in manifest_text
+    assert "POSTGRES_PASSWORD" not in manifest_text
+
+
 def test_create_domain_auto_selects_next_available_port(tmp_path: Path) -> None:
     service = _service(tmp_path)
 

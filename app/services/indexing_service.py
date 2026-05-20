@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 from app.domain.models import DocumentStatus
 from app.indexing.navigation_index_builder import NavigationIndexBuilder
 from app.indexing.parsers import DocumentParser
-from app.indexing.semantic_index_builder import SemanticIndexBuilder
 from app.storage.repositories.documents import DocumentRepository
 
 
@@ -15,14 +14,20 @@ class IndexingService:
         self.documents = DocumentRepository(session)
         self.parser = DocumentParser()
         self.navigation_builder = NavigationIndexBuilder()
-        self.semantic_builder = SemanticIndexBuilder()
 
     def index_document(self, document_id: str) -> None:
         document = self.documents.get(document_id)
         if not document:
             raise ValueError(f"Document {document_id} not found")
 
-        self.documents.update_status(document, DocumentStatus.INDEXING)
+        metadata = document.meta | {
+            "navigation": {
+                **(document.meta.get("navigation") or {}),
+                "enabled": True,
+                "status": "processing",
+            }
+        }
+        document = self.documents.update_metadata(document, metadata)
         try:
             parsed = self.parser.parse(
                 document_id=UUID(document.id),
@@ -48,11 +53,30 @@ class IndexingService:
                 tree=tree,
                 version=next_version,
             )
-            chunks = self.semantic_builder.build(parsed)
-            self.documents.replace_semantic_chunks(document_id=document.id, chunks=chunks)
             document.active_index_version = next_version
-            self.documents.update_status(document, DocumentStatus.READY)
+            metadata = document.meta | {
+                "navigation": {
+                    **(document.meta.get("navigation") or {}),
+                    "enabled": True,
+                    "status": "ready",
+                    "parsed_pages_available": True,
+                    "navigation_index_available": True,
+                }
+            }
+            document = self.documents.update_metadata(document, metadata)
+            if document.meta.get("semantic_engine") != "lightrag":
+                self.documents.update_status(document, DocumentStatus.READY)
         except Exception as exc:
-            self.documents.update_status(document, DocumentStatus.FAILED, error_message=str(exc))
+            metadata = document.meta | {
+                "navigation": {
+                    **(document.meta.get("navigation") or {}),
+                    "enabled": True,
+                    "status": "failed",
+                    "message": str(exc),
+                }
+            }
+            document = self.documents.update_metadata(document, metadata)
+            if document.meta.get("semantic_engine") != "lightrag":
+                self.documents.update_status(document, DocumentStatus.FAILED, error_message=str(exc))
             raise
 

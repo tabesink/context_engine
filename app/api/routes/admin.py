@@ -22,14 +22,18 @@ def admin_ping(admin: UserRow = Depends(require_admin)) -> dict[str, str]:
 @router.post("/documents/upload")
 def upload_document(
     file: UploadFile,
+    semantic_engine: str = Form(default="lightrag"),
     lightrag_domain_id: str | None = Form(default=None),
+    process_navigation: bool = Form(default=True),
     admin: UserRow = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> UploadResponse:
     document, job_id = DocumentService(session).upload(
         actor_id=admin.id,
         file=file,
+        semantic_engine=semantic_engine,
         lightrag_domain_id=lightrag_domain_id,
+        process_navigation=process_navigation,
     )
     return UploadResponse(document=document_response(document), job_id=job_id)
 
@@ -54,6 +58,17 @@ def reindex_document(
     del admin
     job_id = JobService(session).enqueue_index_document(document_id=document_id)
     return {"job_id": job_id}
+
+
+@router.post("/documents/{document_id}/refresh-lightrag-status")
+def refresh_lightrag_status(
+    document_id: str,
+    admin: UserRow = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> DocumentResponse:
+    del admin
+    document = DocumentService(session).refresh_lightrag_status(document_id=document_id)
+    return document_response(document)
 
 
 @router.delete("/documents/{document_id}")

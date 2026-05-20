@@ -20,6 +20,11 @@ class LightRAGDeploySettings:
     dockerfile: Path | None = None
     build_context: Path | None = None
     postgres_url: str | None = None
+    postgres_host: str = "postgres"
+    postgres_port: int = 5432
+    postgres_database_prefix: str = "lightrag"
+    postgres_user_prefix: str = "lightrag"
+    postgres_password: str = "lightrag"
     redis_url: str | None = None
     neo4j_uri: str | None = None
     neo4j_username: str | None = None
@@ -47,6 +52,11 @@ class LightRAGDeploySettings:
             dockerfile=settings.lightrag_dockerfile,
             build_context=settings.lightrag_build_context,
             postgres_url=settings.lightrag_postgres_url,
+            postgres_host=settings.lightrag_postgres_host,
+            postgres_port=settings.lightrag_postgres_port,
+            postgres_database_prefix=settings.lightrag_postgres_database_prefix,
+            postgres_user_prefix=settings.lightrag_postgres_user_prefix,
+            postgres_password=settings.lightrag_postgres_password,
             redis_url=settings.lightrag_redis_url,
             neo4j_uri=settings.lightrag_neo4j_uri,
             neo4j_username=settings.lightrag_neo4j_username,

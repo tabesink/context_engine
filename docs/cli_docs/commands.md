@@ -108,12 +108,12 @@ Domain deploy screens are admin-only through backend authorization. **`LIGHTRAG_
 
 | UI intent | REST |
 | --- | --- |
-| Upload | **`POST /admin/documents/upload`** (`multipart/form-data`; field **`file`**) |
+| Upload | **`POST /admin/documents/upload`** (`multipart/form-data`; fields **`file`**, optional **`semantic_engine=lightrag`**, optional **`lightrag_domain_id`**) |
 | List all docs (admin lens) | **`GET /admin/documents`** |
 | Index · reindex · delete | **`POST /admin/documents/{id}/index`** · **`/reindex`** · **`DELETE /admin/documents/{id}`** |
 | Planned corpus lifecycle knobs | Backend routes **missing** (`publish`, `rollback`, …) |
 
-Indexing jobs enqueue when **`INDEX_JOBS_INLINE=false`**; LightRAG-forwarded uploads may surface **`job_id: null`** with **`lightrag.*`** metadata.
+LightRAG uploads enqueue a **`lightrag_ingest_document`** job and return queued **`lightrag.*`** metadata. Optional navigation processing is tracked separately under **`metadata.navigation`**.
 
 In the TUI, these operations are nested under **`Documents -> Admin Actions`** (not a separate root menu item).
 

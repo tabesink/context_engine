@@ -1,6 +1,6 @@
 # Deployment Notes
 
-The supported local deployment uses Docker Compose with PostgreSQL, Redis, the API, and one worker. Runtime LightRAG remains an external HTTP service configured with `LIGHTRAG_*` variables. Context Engine can also optionally manage same-machine LightRAG domain containers through admin-only deployment-control APIs.
+The supported local deployment uses Docker Compose with PostgreSQL, Redis, the API, and one worker. Context Engine can also manage same-machine LightRAG domain containers through admin-only deployment-control APIs; generated LightRAG services share the same Docker network and use per-domain PostgreSQL databases.
 
 ## Required Environment
 
@@ -21,16 +21,16 @@ Important settings:
 - `STORAGE_ROOT`: persistent mounted upload directory.
 - `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD`: first admin credentials for `scripts.seed_admin`.
 - `ALLOWED_ORIGINS`: comma-separated CORS origins, or `*` for local development.
-- `LIGHTRAG_ENABLED`: `false` by default. Set to `true` only when a compatible LightRAG service is reachable.
+- `LIGHTRAG_ENABLED`: enables LightRAG semantic retrieval, ingestion, and graph proxying. Runtime semantic retrieval has no local fallback.
 - `LIGHTRAG_BASE_URL`: base URL of the external LightRAG service, default `http://localhost:9621`.
-- `LIGHTRAG_API_KEY`: optional bearer token sent to LightRAG.
+- `LIGHTRAG_API_KEY`: optional API key sent to LightRAG with the `X-API-Key` header.
 - `LIGHTRAG_DOMAIN`: default LightRAG domain name.
 - `LIGHTRAG_DOMAIN_MANIFEST`: optional JSON manifest for per-domain base URLs/API keys.
 - `LIGHTRAG_TIMEOUT_SECONDS`: HTTP timeout for LightRAG calls.
 - `LIGHTRAG_DEPLOY_ENABLED`: gates **mutating** LightRAG domain deployment APIs (`/admin/lightrag/domains...`). The read-only `GET /lightrag/domains` listing remains available to authenticated users so clients can choose `lightrag_domain_id` when manifests exist.
 - `LIGHTRAG_DEPLOY_ROOT`, `LIGHTRAG_DOMAINS_ROOT`, `LIGHTRAG_DOMAINS_MANIFEST`, `LIGHTRAG_COMPOSE_FILE`, `LIGHTRAG_DELETED_ROOT`: generated deployment state under `.data/lightrag`.
 - `LIGHTRAG_DEFAULT_PORT_START`, `LIGHTRAG_DEFAULT_CONTAINER_PORT`, `LIGHTRAG_DOCKER_NETWORK`, `LIGHTRAG_DOMAIN_ENV_FILENAME`: port allocation defaults, compose bridge network name, and per-domain env file name.
-- Optional dependency injection for compose services: `LIGHTRAG_DOCKERFILE`, `LIGHTRAG_BUILD_CONTEXT`, `LIGHTRAG_POSTGRES_URL`, `LIGHTRAG_REDIS_URL`, `LIGHTRAG_NEO4J_*` when generated domain env templates need them.
+- LightRAG local build and storage settings: `LIGHTRAG_DOCKERFILE`, `LIGHTRAG_BUILD_CONTEXT`, `LIGHTRAG_POSTGRES_HOST`, `LIGHTRAG_POSTGRES_PORT`, `LIGHTRAG_POSTGRES_DATABASE_PREFIX`, `LIGHTRAG_POSTGRES_USER_PREFIX`, and `LIGHTRAG_POSTGRES_PASSWORD`.
 - `LIGHTRAG_ARCHIVE_DELETED_DOMAINS`, `LIGHTRAG_ALLOW_PERMANENT_DELETE`: archival versus hard delete semantics for removed domains.
 - `LIGHTRAG_IMAGE`, `LIGHTRAG_DOCKER_COMPOSE_BIN`, `LIGHTRAG_DOCKER_EXECUTION_MODE`, `LIGHTRAG_DOCKER_TIMEOUT_SECONDS`: image and Docker Compose execution settings.
 
@@ -88,7 +88,7 @@ The UI calls the backend over HTTP via `cli/api_client.py` and helpers in `cli/s
 
 ## LightRAG Runtime
 
-LightRAG is optional and external:
+LightRAG is the semantic retrieval runtime:
 
 ```env
 LIGHTRAG_ENABLED=true
@@ -99,11 +99,12 @@ LIGHTRAG_API_KEY=
 When enabled:
 
 - `auto`, `semantic`, and `hybrid` query modes use remote LightRAG.
-- `navigation` query mode remains local.
-- Admin uploads are forwarded to LightRAG and may return `job_id: null` because ingestion is owned by the remote service.
+- `hybrid` may add local navigation evidence when available.
+- `navigation` query mode remains local page/tree retrieval.
+- Admin uploads enqueue `lightrag_ingest_document`; the worker uploads to LightRAG, polls status, and updates `documents.metadata.lightrag`.
 - `/graphs` and `/graph/label/...` proxy to LightRAG.
 
-When disabled, local upload/index/query behavior remains active and graph proxy routes respond with HTTP `400` and detail `LightRAG is disabled`.
+When disabled, semantic retrieval and graph proxy routes respond with clear LightRAG-disabled errors. Local navigation/page browsing remains a separate capability.
 
 ## LightRAG Domain Deployment Control
 
@@ -123,7 +124,9 @@ When enabled, admins can manage domains through `/admin/lightrag/domains...` or 
   deleted/<domain>-<timestamp>/
 ```
 
-Context Engine does not rewrite the root `docker-compose.yml`. It generates a separate LightRAG domains compose file and invokes `docker compose -f ...` through a fakeable runner. Permanent delete remains disabled unless `LIGHTRAG_ALLOW_PERMANENT_DELETE=true`.
+Context Engine generates a separate LightRAG domains compose file and invokes `docker compose -f ...` through a fakeable runner. The generated services connect to the shared network from the root compose stack. Permanent delete remains disabled unless `LIGHTRAG_ALLOW_PERMANENT_DELETE=true`.
+
+Each domain env selects PostgreSQL-backed LightRAG storage (`PGKVStorage`, `PGDocStatusStorage`, `PGGraphStorage`, `PGVectorStorage`) and uses a domain-specific database name such as `lightrag_manuals`. The root PostgreSQL image must support both `vector` and Apache `AGE`; `migrations/0002_smoke_lightrag_postgres_extensions.sql` is the smoke check for that requirement.
 
 ## Backup
 
@@ -133,9 +136,9 @@ Local file uploads live under `.data/uploads` by default. The helper script arch
 python -m scripts.backup
 ```
 
-For production PostgreSQL backups, use `pg_dump` against `DATABASE_URL`. Back up the upload volume or object-store equivalent at the same consistency point.
+For production PostgreSQL backups, use `pg_dump` against `DATABASE_URL` and each `lightrag_<domain>` database. Back up the upload volume or object-store equivalent at the same consistency point.
 
 ## Restore
 
-Restore the database with `psql` or provider tooling, then restore the upload directory from the file archive. If LightRAG is enabled, restore or rebuild the external LightRAG service/index separately because it is not part of this Compose stack.
+Restore the Context Engine database and each LightRAG domain database with `psql` or provider tooling, then restore the upload directory and `.data/lightrag` generated state from file backups.
 

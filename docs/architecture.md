@@ -1,6 +1,6 @@
 # Backend Architecture
 
-The app is a backend-only multi-user Context Engine. It exposes one FastAPI API, one auth model, one document registry, one job system, one optional LightRAG deployment control plane, and a common `Evidence` contract across local retrieval and optional remote LightRAG retrieval.
+The app is a backend-only multi-user Context Engine. It exposes one FastAPI API, one auth model, one document registry, one job system, one LightRAG deployment control plane, and a common `Evidence` contract across LightRAG semantic retrieval and local document navigation.
 
 ## System Shape
 
@@ -13,14 +13,13 @@ HTTP client or `context-engine` TUI (`context-engine` / `context-tui`)
   -> response schema
 ```
 
-Retrieval has two runtime backends. `RetrievalRoutingPolicy` in `app/retrieval/routing_policy.py` picks `RetrievalBackend.LOCAL` versus `RetrievalBackend.LIGHTRAG`; `RetrievalService` dispatches through small strategy objects in `app/retrieval/strategies.py` (`LocalRetrievalStrategy` wraps `RetrievalRouter`; `LightRAGRetrievalStrategy` wraps `LightRAGRemoteRetrievalEngine`). That keeps one routing matrix in code and docs:
+Retrieval has two runtime capabilities: LightRAG semantic retrieval and local navigation/page retrieval. `RetrievalRoutingPolicy` in `app/retrieval/routing_policy.py` picks local navigation versus LightRAG-backed retrieval; `RetrievalService` dispatches through small strategy objects in `app/retrieval/strategies.py`.
 
 ```text
-LIGHTRAG_ENABLED=false
+mode=navigation or LightRAG-disabled semantic request
   RetrievalService
     -> LocalRetrievalStrategy
     -> RetrievalRouter
-       -> SemanticRetrievalEngine
        -> NavigationRetrievalEngine
        -> HybridMerger
 
@@ -30,6 +29,7 @@ LIGHTRAG_ENABLED=true and mode in auto|semantic|hybrid
     -> LightRAGRemoteRetrievalEngine
        -> LightRAGRemoteAdapter
        -> external LightRAG HTTP API
+    -> NavigationRetrievalEngine for hybrid enrichment
 
 LIGHTRAG_ENABLED=true and mode=navigation
   RetrievalService
@@ -46,8 +46,8 @@ Both paths return local `Evidence` objects. API routes never expose raw LightRAG
 - `app/domain/`: dataclasses/enums that define the app vocabulary.
 - `app/schemas/`: Pydantic request/response models.
 - `app/services/`: use cases and orchestration.
-- `app/retrieval/`: retrieval interfaces, local engines, router, merger, and answer composition.
-- `app/indexing/`: parsers, chunking, navigation index builder, and semantic index builder.
+- `app/retrieval/`: retrieval interfaces, local navigation engine, LightRAG remote engine, router, merger, and answer composition.
+- `app/indexing/`: parsers, chunking helpers, and navigation index builder.
 - `app/integrations/`: wrappers around external/reference systems, including remote LightRAG HTTP.
 - `app/lightrag_deploy/`: admin-only LightRAG domain deployment control, manifest/env/compose generation, and Docker Compose runner boundary.
 - `app/storage/`: database session and repositories.
@@ -69,37 +69,23 @@ POST /query, /query/retrieve, or /query/answer
   -> response schema
 ```
 
-`mode=auto` uses deterministic local routing when LightRAG is disabled. When LightRAG is enabled, `auto`, `semantic`, and `hybrid` are sent to LightRAG as `mix`; `navigation` stays local.
+When LightRAG is enabled, `auto`, `semantic`, and `hybrid` are sent to LightRAG as `mix`; `hybrid` may add local navigation evidence. `navigation` stays local page/tree retrieval.
 
 `include_debug` is accepted on query requests, but debug details are returned only for admin users.
 
 ## Request Flow: Upload and Index
 
 ```text
-LIGHTRAG_ENABLED=false
-  POST /admin/documents/upload
-    -> require_admin
-    -> DocumentService stores file and metadata
-    -> JobService enqueues or runs indexing
-    -> response includes document_id and job_id
-
-worker
-  -> parse document
-  -> build navigation index
-  -> build semantic index
-  -> mark active index version ready
-```
-
-```text
 LIGHTRAG_ENABLED=true
   POST /admin/documents/upload
     -> require_admin
     -> DocumentService stores a local mirror record and file
-    -> LightRAGRemoteAdapter forwards multipart upload
-    -> response includes document_id, job_id null, and lightrag metadata
+    -> JobService enqueues lightrag_ingest_document
+    -> optional navigation_process_document job updates metadata.navigation
+    -> response includes document_id, lightrag job_id, and queued lightrag metadata
 ```
 
-Local indexing uses the worker/job system. Remote LightRAG ingestion is owned by the external LightRAG service and tracked through mirrored metadata such as `lightrag.track_id`.
+Navigation processing uses the worker/job system. Remote LightRAG ingestion is started by a worker job, serialized per domain with a Redis lock, and tracked through mirrored metadata such as `lightrag.track_id`.
 
 ## LightRAG Domain Deployment Control
 
@@ -115,7 +101,7 @@ Admin API or TUI
 
 Deployment routes are disabled by default with `LIGHTRAG_DEPLOY_ENABLED=false`. When enabled, admins can create, list, show, regenerate, start, stop, recreate, archive, or explicitly permanently delete domains. Any authenticated user may call `GET /lightrag/domains` for a safe subset of domain metadata used to pick `lightrag_domain_id` on uploads and queries (admin mutating routes still require deploy mode on).
 
-Each managed domain lives under `.data/lightrag/domains/<domain>/` and gets one generated `domain.env`. Domain removal archives data by default under `.data/lightrag/deleted/`.
+Each managed domain lives under `.data/lightrag/domains/<domain>/`, gets one generated `domain.env`, and uses a LightRAG-owned PostgreSQL database such as `lightrag_manuals`. Domain removal archives data by default under `.data/lightrag/deleted/`.
 
 ## LightRAG Graph Proxy
 
@@ -135,9 +121,9 @@ Local development defaults are deliberately small:
 - SQLite database at `.data/context_engine.db` unless `DATABASE_URL` overrides it.
 - Local filesystem uploads under `.data/uploads` unless `STORAGE_ROOT` overrides it.
 - Redis URL defaults to `redis://localhost:6379/0`, with background jobs used when `INDEX_JOBS_INLINE=false`.
-- Semantic chunks currently use deterministic local embeddings stored in normal database fields, which keeps tests and local development credential-free.
+- Context Engine stores LightRAG document IDs, track IDs, status, and navigation metadata; it does not store semantic chunks or embeddings.
 
-Docker Compose uses PostgreSQL with the `pgvector/pgvector` image, Redis, API, and worker services. Real pgvector column/type usage remains a hardening item; do not assume every local run uses pgvector.
+Docker Compose uses PostgreSQL, Redis, API, worker, and generated LightRAG domain services on a shared named network. Option 3 requires a validated PostgreSQL image/build with both `vector` and Apache `AGE` extensions.
 
 ## Security
 
@@ -162,7 +148,7 @@ The internal domain model names the evidence identifier `id`. Public query respo
 
 ## Hybrid Merge Rules
 
-Local hybrid retrieval queries both local engines, then:
+Hybrid retrieval combines LightRAG semantic evidence with local navigation evidence when local navigation data exists, then:
 
 1. Deduplicates by document, page range, and normalized text hash.
 2. Normalizes missing scores to `0.5`.
@@ -170,12 +156,13 @@ Local hybrid retrieval queries both local engines, then:
 4. Keeps at most `top_k` items.
 5. Preserves source engine metadata.
 
-When LightRAG handles `hybrid`, upstream retrieval and ranking are owned by LightRAG and normalized back into local evidence.
+LightRAG owns semantic retrieval and ranking. Context Engine only normalizes LightRAG results into local evidence and optionally merges navigation evidence.
 
 ## Failure Model
 
 - Upload failure returns a request error and creates no usable document record.
-- Local index failure marks the job failed and leaves the previous active index untouched.
+- Navigation processing failure marks the navigation job failed and records `metadata.navigation.status="failed"` without changing semantic readiness.
+- LightRAG ingestion failure marks the ingestion job failed and updates the document's LightRAG status metadata.
 - LightRAG timeout/connect failures become service-unavailable responses.
 - LightRAG auth/upstream/invalid-response failures become bad-gateway style responses.
 - Query failure returns a structured API error.

@@ -21,9 +21,9 @@ Current adaptation:
 - Keep retrieval and graph communication HTTP-only in `app/integrations/lightrag_remote_adapter.py`.
 - Resolve optional domain-specific base URLs/API keys in `app/integrations/lightrag_domains.py`.
 - Convert remote chunks/references into the local `Evidence` model.
-- Forward admin uploads to `/documents/upload` when `LIGHTRAG_ENABLED=true`.
+- Queue admin uploads for LightRAG ingestion when `LIGHTRAG_ENABLED=true`.
 - Proxy read-only graph routes through `/graphs` and `/graph/label/...`.
-- Keep local semantic/navigation retrieval available when LightRAG is disabled.
+- Keep local navigation retrieval available for page/tree browsing and hybrid enrichment.
 - Manage optional domain deployment through local Context Engine code under `app/lightrag_deploy/`, using generated `.data/lightrag` manifest/env/compose files rather than importing LightRAG internals.
 
 Do not copy:
@@ -35,11 +35,11 @@ Do not copy:
 - Retrieval internals that would bypass the remote adapter boundary.
 - Docker/deployment code into TUI screens or CLI service wrappers.
 
-## Local Semantic Retrieval
+## Semantic Retrieval Boundary
 
-The local fallback path uses the app's own parser, chunking, and deterministic hashed embeddings. This keeps development and tests credential-free.
+LightRAG is the semantic retrieval plane. Context Engine no longer owns semantic chunks, embeddings, vector indexes, or graph internals.
 
-The Compose database image supports pgvector, but real pgvector column/type usage is a future hardening item. Documentation should not imply pgvector is required for every local run.
+Tests should fake the HTTP adapter boundary when they need deterministic behavior; they should not recreate a local semantic fallback.
 
 ## PageIndex
 
@@ -80,7 +80,6 @@ The app owns these interfaces and models:
 - `Evidence`
 - `ParsedDocument`
 - `NavigationIndexBuilder`
-- `SemanticIndexBuilder`
 - `AnswerComposer`
 - `LightRAGRemoteAdapter`
 - `LightRAGDomainService`

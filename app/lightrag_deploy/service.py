@@ -1,4 +1,5 @@
 import shutil
+import re
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -57,12 +58,16 @@ class LightRAGDomainService:
         host_port = request.host_port or self._next_port(existing)
         timestamp = self.now()
         service_name = f"lightrag_{domain_id}"
+        postgres_suffix = self._postgres_identifier(domain_id)
         host_base_url = f"http://127.0.0.1:{host_port}"
         container_base_url = f"http://{service_name}:{self.settings.default_container_port}"
         base_url = container_base_url if self.settings.docker_execution_mode == "socket" else host_base_url
         domain = LightRAGDomain(
             id=domain_id,
             display_name=request.display_name or domain_id,
+            workspace=domain_id,
+            postgres_database=f"{self.settings.postgres_database_prefix}_{postgres_suffix}",
+            postgres_user=f"{self.settings.postgres_user_prefix}_{postgres_suffix}",
             host="127.0.0.1",
             host_port=host_port,
             container_port=self.settings.default_container_port,
@@ -137,6 +142,10 @@ class LightRAGDomainService:
     def _archive_path(self, domain_id: str) -> Path:
         timestamp = self.now().strftime("%Y-%m-%d-%H%M%S")
         return self.settings.deleted_root / f"{domain_id}-{timestamp}"
+
+    def _postgres_identifier(self, domain_id: str) -> str:
+        safe = re.sub(r"[^a-z0-9_]", "_", domain_id.lower())
+        return safe[:48].strip("_") or "domain"
 
     def _operation_result(
         self,

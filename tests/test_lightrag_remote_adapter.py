@@ -36,7 +36,7 @@ def test_remote_adapter_normalizes_query_data_chunks_to_evidence() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/query/data"
-        assert request.headers["authorization"] == "Bearer token"
+        assert request.headers["x-api-key"] == "token"
         body = request.read().decode()
         assert '"mode":"mix"' in body
         return httpx.Response(
@@ -115,7 +115,7 @@ def test_remote_adapter_normalizes_upload_response(tmp_path: Path) -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/documents/upload"
-        assert request.headers["authorization"] == "Bearer token"
+        assert request.headers["x-api-key"] == "token"
         return httpx.Response(
             200,
             json={"status": "success", "track_id": "track-1", "message": "accepted"},

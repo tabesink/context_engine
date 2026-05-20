@@ -1,6 +1,9 @@
 services:
   postgres:
-    image: pgvector/pgvector:pg16
+    build:
+      context: .
+      dockerfile: docker/postgres.Dockerfile
+    image: context-engine-postgres-age-vector:pg16
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-context_engine}
       POSTGRES_USER: ${POSTGRES_USER:-context_engine}
@@ -9,11 +12,15 @@ services:
       - "${PUBLISH_POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    networks:
+      - context_engine_lightrag
 
   redis:
     image: redis:7-alpine
     ports:
       - "${PUBLISH_REDIS_PORT:-6386}:6379"
+    networks:
+      - context_engine_lightrag
 
   api:
     build: .
@@ -28,6 +35,8 @@ services:
     depends_on:
       - postgres
       - redis
+    networks:
+      - context_engine_lightrag
 
   worker:
     build: .
@@ -40,8 +49,14 @@ services:
     depends_on:
       - postgres
       - redis
+    networks:
+      - context_engine_lightrag
 
 volumes:
   postgres-data:
   uploads:
+
+networks:
+  context_engine_lightrag:
+    name: ${LIGHTRAG_DOCKER_NETWORK:-context_engine_lightrag}
 

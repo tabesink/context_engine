@@ -25,6 +25,11 @@ def test_env_example_declares_lightrag_deployment_settings() -> None:
         "LIGHTRAG_DOCKER_EXECUTION_MODE",
         "LIGHTRAG_DOCKER_COMPOSE_BIN",
         "LIGHTRAG_DOCKER_TIMEOUT_SECONDS",
+        "LIGHTRAG_POSTGRES_HOST",
+        "LIGHTRAG_POSTGRES_PORT",
+        "LIGHTRAG_POSTGRES_DATABASE_PREFIX",
+        "LIGHTRAG_POSTGRES_USER_PREFIX",
+        "LIGHTRAG_POSTGRES_PASSWORD",
     ]:
         assert f"{key}=" in env_example
 
@@ -45,6 +50,11 @@ def test_settings_parse_lightrag_deployment_fields(tmp_path: Path) -> None:
         lightrag_docker_execution_mode="socket",
         lightrag_docker_compose_bin="docker compose",
         lightrag_docker_timeout_seconds=30,
+        lightrag_postgres_host="postgres",
+        lightrag_postgres_port=5432,
+        lightrag_postgres_database_prefix="lr",
+        lightrag_postgres_user_prefix="lr_user",
+        lightrag_postgres_password="secret",
     )
 
     deploy = LightRAGDeploySettings.from_app_settings(settings)
@@ -55,6 +65,9 @@ def test_settings_parse_lightrag_deployment_fields(tmp_path: Path) -> None:
     assert deploy.default_port_start == 9700
     assert deploy.image == "example/lightrag:test"
     assert deploy.docker_execution_mode == "socket"
+    assert deploy.postgres_host == "postgres"
+    assert deploy.postgres_database_prefix == "lr"
+    assert deploy.postgres_user_prefix == "lr_user"
 
 
 def test_domain_path_resolver_creates_expected_domain_tree(tmp_path: Path) -> None:

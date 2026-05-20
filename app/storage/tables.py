@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
@@ -57,20 +57,6 @@ class NavigationIndexRow(Base):
     document_id: Mapped[str] = mapped_column(String(36), ForeignKey("documents.id"), primary_key=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
     tree: Mapped[list] = mapped_column(json_type(), default=list)
-
-
-class SemanticChunkRow(Base):
-    __tablename__ = "semantic_chunks"
-
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    document_id: Mapped[str] = mapped_column(String(36), ForeignKey("documents.id"), index=True)
-    chunk_index: Mapped[int] = mapped_column(Integer)
-    text: Mapped[str] = mapped_column(Text)
-    embedding: Mapped[list[float]] = mapped_column(json_type(), default=list)
-    page_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    page_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    score_hint: Mapped[float | None] = mapped_column(Float, nullable=True)
-    meta: Mapped[dict] = mapped_column("metadata", json_type(), default=dict)
 
 
 class JobRow(Base):

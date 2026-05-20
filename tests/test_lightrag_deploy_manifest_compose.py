@@ -136,3 +136,24 @@ def test_compose_generation_is_deterministic(tmp_path: Path) -> None:
     assert '- "127.0.0.1:9622:9621"' in output
     assert f"- {domain.paths['inputs']}:/app/data/inputs" in output
     assert f"name: {settings.docker_network}" in output
+
+
+def test_compose_generation_can_build_lightrag_from_local_source(tmp_path: Path) -> None:
+    settings = LightRAGDeploySettings(
+        enabled=True,
+        deploy_root=tmp_path / "lightrag",
+        domains_root=tmp_path / "lightrag" / "domains",
+        manifest_path=tmp_path / "lightrag" / "domains.json",
+        compose_file=tmp_path / "lightrag" / "docker-compose.lightrag-domains.yml",
+        deleted_root=tmp_path / "lightrag" / "deleted",
+        dockerfile=Path("docker/lightrag.Dockerfile"),
+        build_context=Path("."),
+    )
+    domain = _domain(tmp_path)
+
+    output = ComposeGenerator(settings).render([domain])
+
+    assert "build:" in output
+    assert "context: ." in output
+    assert "dockerfile: docker/lightrag.Dockerfile" in output
+    assert "image: " not in output

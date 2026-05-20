@@ -16,8 +16,9 @@ from app.lightrag_deploy.models import LightRAGDomainCreateRequest  # noqa: E402
 from app.lightrag_deploy.service import LightRAGDomainService  # noqa: E402
 from app.lightrag_deploy.settings import LightRAGDeploySettings  # noqa: E402
 from app.main import app  # noqa: E402
+from app.services.lightrag_ingestion_service import LightRAGIngestionService  # noqa: E402
 from app.services.job_service import JobService  # noqa: E402
-from app.storage.db import SessionLocal  # noqa: E402
+from app.storage.db import SessionLocal, create_db_and_tables  # noqa: E402
 from app.storage.repositories.jobs import JobRepository  # noqa: E402
 from app.storage.repositories.documents import DocumentRepository  # noqa: E402
 from app.storage.repositories.users import UserRepository  # noqa: E402
@@ -189,28 +190,23 @@ def test_query_retrieve_uses_remote_lightrag_when_enabled(monkeypatch: pytest.Mo
     assert body["evidence"][0]["text"] == "Remote context for summarize remote context"
 
 
-def test_admin_upload_forwards_to_lightrag_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_admin_upload_queues_lightrag_ingestion_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LIGHTRAG_ENABLED", "true")
+    monkeypatch.setenv("INDEX_JOBS_INLINE", "false")
+    monkeypatch.setenv("LIGHTRAG_DOMAIN_MANIFEST", ".data/missing-lightrag-domains.json")
+    monkeypatch.setenv("LIGHTRAG_DOMAINS_MANIFEST", ".data/missing-lightrag-domains.json")
     get_settings.cache_clear()
 
-    def fake_upload_document(
-        self: LightRAGRemoteAdapter,
-        *,
-        file_path,
-        filename: str,
-        content_type: str,
-        metadata: dict | None = None,
-        domain: str | None = None,
-    ) -> dict:
-        del self, file_path, content_type, metadata, domain
-        return {
-            "document_id": f"external-{filename}",
-            "track_id": "track-123",
-            "status": "indexing",
-            "message": "Document accepted",
-        }
+    class FakeQueue:
+        def enqueue(self, function: object, job_id: str):
+            del function
 
-    monkeypatch.setattr(LightRAGRemoteAdapter, "upload_document", fake_upload_document)
+            class FakeQueuedJob:
+                id = f"rq-{job_id}"
+
+            return FakeQueuedJob()
+
+    monkeypatch.setattr(JobService, "_queue", lambda self: FakeQueue())
 
     with TestClient(app) as client:
         _seed_users()
@@ -227,15 +223,22 @@ def test_admin_upload_forwards_to_lightrag_when_enabled(monkeypatch: pytest.Monk
         response = client.post(
             "/admin/documents/upload",
             headers=admin_headers,
+            data={"semantic_engine": "lightrag"},
             files={"file": ("manual.txt", b"Remote document body.", "text/plain")},
         )
 
     assert response.status_code == 200
     body = response.json()
-    assert body["job_id"] is None
+    assert body["job_id"] is not None
     assert body["document"]["status"] == "indexing"
-    assert body["document"]["metadata"]["lightrag"]["track_id"] == "track-123"
-    assert body["document"]["metadata"]["lightrag"]["document_id"] == "external-manual.txt"
+    assert body["document"]["metadata"]["semantic_engine"] == "lightrag"
+    assert body["document"]["metadata"]["lightrag"]["domain_id"] == "default"
+    assert body["document"]["metadata"]["lightrag"]["status"] == "queued"
+    with SessionLocal() as session:
+        job = JobRepository(session).get(body["job_id"])
+        assert job is not None
+        assert job.kind == "lightrag_ingest_document"
+        assert job.document_id == body["document"]["id"]
 
 
 def test_admin_upload_to_selected_lightrag_domain_records_domain_metadata(
@@ -254,25 +257,21 @@ def test_admin_upload_to_selected_lightrag_domain_records_domain_metadata(
         LightRAGDomainCreateRequest(domain_id="fatigue", display_name="Fatigue Manuals")
     )
     monkeypatch.setenv("LIGHTRAG_ENABLED", "true")
+    monkeypatch.setenv("INDEX_JOBS_INLINE", "false")
     monkeypatch.setenv("LIGHTRAG_DOMAIN_MANIFEST", str(settings.manifest_path))
     monkeypatch.setenv("LIGHTRAG_DOMAINS_MANIFEST", str(settings.manifest_path))
     get_settings.cache_clear()
-    seen_domains: list[str | None] = []
 
-    def fake_upload_document(
-        self: LightRAGRemoteAdapter,
-        *,
-        file_path,
-        filename: str,
-        content_type: str,
-        metadata: dict | None = None,
-        domain: str | None = None,
-    ) -> dict:
-        del self, file_path, filename, content_type, metadata
-        seen_domains.append(domain)
-        return {"document_id": "external-doc", "track_id": "track-1", "status": "indexing"}
+    class FakeQueue:
+        def enqueue(self, function: object, job_id: str):
+            del function
 
-    monkeypatch.setattr(LightRAGRemoteAdapter, "upload_document", fake_upload_document)
+            class FakeQueuedJob:
+                id = f"rq-{job_id}"
+
+            return FakeQueuedJob()
+
+    monkeypatch.setattr(JobService, "_queue", lambda self: FakeQueue())
 
     with TestClient(app) as client:
         _seed_users()
@@ -285,10 +284,105 @@ def test_admin_upload_to_selected_lightrag_domain_records_domain_metadata(
         )
 
     assert response.status_code == 200
-    assert seen_domains == ["fatigue"]
     metadata = response.json()["document"]["metadata"]["lightrag"]
     assert metadata["domain_id"] == "fatigue"
-    assert metadata["track_id"] == "track-1"
+    assert metadata["status"] == "queued"
+
+
+def test_lightrag_ingestion_job_uploads_polls_and_marks_document_ready(tmp_path: Path) -> None:
+    create_db_and_tables()
+    upload_path = tmp_path / "manual.txt"
+    upload_path.write_text("Remote document body.", encoding="utf-8")
+
+    class FakeLock:
+        acquired = False
+        released = False
+
+        def acquire(self) -> bool:
+            self.acquired = True
+            return True
+
+        def release(self) -> None:
+            self.released = True
+
+    lock = FakeLock()
+
+    class FakeAdapter:
+        def upload_document(self, **kwargs) -> dict:
+            assert kwargs["domain"] == "fatigue"
+            return {"document_id": "remote-doc", "track_id": "track-1", "status": "indexing"}
+
+        def document_status(self, track_id: str) -> dict:
+            assert track_id == "track-1"
+            return {"document_id": "remote-doc", "track_id": "track-1", "status": "ready"}
+
+    with SessionLocal() as session:
+        document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="manual.txt",
+            content_type="text/plain",
+            storage_path=str(upload_path),
+            metadata={
+                "semantic_engine": "lightrag",
+                "lightrag": {"domain_id": "fatigue", "status": "queued"},
+            },
+            status=DocumentStatus.INDEXING,
+        )
+
+        LightRAGIngestionService(
+            session,
+            adapter_factory=lambda domain_id: FakeAdapter(),
+            lock_factory=lambda domain_id: lock,
+        ).ingest_document(document.id)
+
+        refreshed = DocumentRepository(session).get(document.id)
+
+    assert lock.acquired is True
+    assert lock.released is True
+    assert refreshed is not None
+    assert refreshed.status == DocumentStatus.READY.value
+    assert refreshed.meta["lightrag"]["document_id"] == "remote-doc"
+    assert refreshed.meta["lightrag"]["track_id"] == "track-1"
+    assert refreshed.meta["lightrag"]["status"] == "ready"
+
+
+def test_admin_refresh_lightrag_status_marks_document_ready(monkeypatch: pytest.MonkeyPatch) -> None:
+    create_db_and_tables()
+    monkeypatch.setenv("LIGHTRAG_ENABLED", "true")
+    get_settings.cache_clear()
+
+    def fake_document_status(self: LightRAGRemoteAdapter, track_id: str) -> dict:
+        del self
+        assert track_id == "track-1"
+        return {"document_id": "remote-doc", "track_id": track_id, "status": "ready"}
+
+    monkeypatch.setattr(LightRAGRemoteAdapter, "document_status", fake_document_status)
+    with SessionLocal() as session:
+        document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="manual.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/manual.txt",
+            metadata={
+                "semantic_engine": "lightrag",
+                "lightrag": {"domain_id": "default", "track_id": "track-1", "status": "indexing"},
+            },
+            status=DocumentStatus.INDEXING,
+        )
+        document_id = document.id
+
+    with TestClient(app) as client:
+        _seed_users()
+        admin_headers = _login(client, "admin@example.com")
+        response = client.post(
+            f"/admin/documents/{document_id}/refresh-lightrag-status",
+            headers=admin_headers,
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ready"
+    assert body["metadata"]["lightrag"]["document_id"] == "remote-doc"
 
 
 def test_admin_upload_to_missing_lightrag_domain_fails_before_forwarding(

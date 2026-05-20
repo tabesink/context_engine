@@ -51,7 +51,7 @@ Companion to [`ragcli_ascii_api_surface_examples.md`](ragcli_ascii_api_surface_e
 
 | § | Capability label (illustrative) | What the sample shows | Detail |
 |---|-------------------|------------------------|--------|
-| 4.1 | `context-engine admin documents upload --file …` | Upload → local job path vs LightRAG-forwarded path | [L751](ragcli_ascii_api_surface_examples.md#L751) |
+| 4.1 | `context-engine admin documents upload --file …` | Upload → queued LightRAG ingestion plus optional navigation processing | [L751](ragcli_ascii_api_surface_examples.md#L751) |
 | 4.2 | `context-engine admin documents list` | Admin listing with index backend column | [L808](ragcli_ascii_api_surface_examples.md#L808) |
 | 4.3 | `context-engine admin documents index --document-id …` | Index job accepted + job id | [L837](ragcli_ascii_api_surface_examples.md#L837) |
 | 4.4 | `context-engine admin documents reindex --document-id …` | Reindex job accepted | [L872](ragcli_ascii_api_surface_examples.md#L872) |

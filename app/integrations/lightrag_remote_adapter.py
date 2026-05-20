@@ -147,7 +147,7 @@ class LightRAGRemoteAdapter:
     def _request_json(self, method: str, path: str, **kwargs):
         headers = {}
         if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
+            headers["X-API-Key"] = self.api_key
         try:
             response = self.client.request(method, path, headers=headers, **kwargs)
             response.raise_for_status()

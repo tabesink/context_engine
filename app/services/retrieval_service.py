@@ -12,7 +12,6 @@ from app.retrieval.lightrag_remote_engine import LightRAGRemoteRetrievalEngine
 from app.retrieval.navigation_engine import NavigationRetrievalEngine
 from app.retrieval.routing_policy import RetrievalBackend, RetrievalRoutingPolicy
 from app.retrieval.router import RetrievalRouter
-from app.retrieval.semantic_engine import SemanticRetrievalEngine
 from app.retrieval.strategies import LightRAGRetrievalStrategy, LocalRetrievalStrategy, RetrievalStrategy
 from app.schemas.query import QueryRequest, QueryResponse, RetrieveResponse
 from app.storage.repositories.logs import LogRepository
@@ -32,15 +31,20 @@ class RetrievalService:
     ):
         self.session = session
         self.settings = get_settings()
+        self.navigation_engine = NavigationRetrievalEngine(session)
         self.router = RetrievalRouter(
-            semantic_engine=SemanticRetrievalEngine(session),
-            navigation_engine=NavigationRetrievalEngine(session),
+            semantic_engine=self.navigation_engine,
+            navigation_engine=self.navigation_engine,
         )
         self.remote_engine = LightRAGRemoteRetrievalEngine()
         self.routing_policy = routing_policy or RetrievalRoutingPolicy()
         self.strategies = {
             RetrievalBackend.LOCAL: local_strategy or LocalRetrievalStrategy(self.router),
-            RetrievalBackend.LIGHTRAG: remote_strategy or LightRAGRetrievalStrategy(self.remote_engine),
+            RetrievalBackend.LIGHTRAG: remote_strategy
+            or LightRAGRetrievalStrategy(
+                self.remote_engine,
+                navigation_engine=self.navigation_engine,
+            ),
         }
         self.answer_composer = answer_composer or AnswerComposer()
 

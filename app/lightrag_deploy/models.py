@@ -14,6 +14,9 @@ class LightRAGDomainCreateRequest(BaseModel):
 class LightRAGDomain(BaseModel):
     id: str
     display_name: str
+    workspace: str | None = None
+    postgres_database: str | None = None
+    postgres_user: str | None = None
     host: str = "127.0.0.1"
     host_port: int = Field(ge=1, le=65535)
     container_port: int = Field(default=9621, ge=1, le=65535)

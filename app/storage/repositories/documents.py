@@ -7,7 +7,6 @@ from app.storage.tables import (
     DocumentRow,
     NavigationIndexRow,
     ParsedDocumentRow,
-    SemanticChunkRow,
 )
 
 
@@ -110,22 +109,6 @@ class DocumentRepository:
 
     def get_navigation_index(self, document_id: str) -> NavigationIndexRow | None:
         return self.session.get(NavigationIndexRow, document_id)
-
-    def replace_semantic_chunks(self, *, document_id: str, chunks: list[SemanticChunkRow]) -> None:
-        existing = self.session.scalars(
-            select(SemanticChunkRow).where(SemanticChunkRow.document_id == document_id)
-        )
-        for chunk in existing:
-            self.session.delete(chunk)
-        for chunk in chunks:
-            self.session.add(chunk)
-        self.session.commit()
-
-    def list_semantic_chunks(self, document_ids: list[str] | None = None) -> list[SemanticChunkRow]:
-        query = select(SemanticChunkRow)
-        if document_ids:
-            query = query.where(SemanticChunkRow.document_id.in_(document_ids))
-        return list(self.session.scalars(query))
 
     def audit(self, *, actor_id: str | None, event: str, target_id: str | None, metadata: dict) -> None:
         self.session.add(

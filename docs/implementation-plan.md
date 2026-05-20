@@ -17,8 +17,7 @@ Included:
 - SQLAlchemy persistence for users, documents, jobs, logs, parsed document data, and index metadata.
 - Local parser/indexing pipeline for text, Markdown, and PDF documents.
 - Local navigation retrieval for page/section-oriented questions.
-- Local semantic retrieval with deterministic hashed embeddings for development and tests.
-- Optional remote LightRAG retrieval, upload forwarding, graph proxy routes, and admin-controlled domain deployment through generated `.data/lightrag` files.
+- LightRAG-only semantic retrieval, queued LightRAG ingestion, graph proxy routes, and admin-controlled domain deployment through generated `.data/lightrag` files.
 - Unified `Evidence` model, retrieval router, grounded answer composer, citations, and evaluation script.
 - Redis-backed worker path for indexing jobs, plus inline mode for deterministic local/dev flows.
 - Interactive terminal UI (`context-engine` / `context-tui`) that exercises supported backend flows through HTTP; planned-only backend surfaces remain visible as gaps rather than silent stubs.
@@ -30,8 +29,8 @@ Excluded or deferred:
 - Browser UI for LightRAG deployment control.
 - LLM-based query router as the primary router.
 - Hosted object storage.
-- Alembic migrations.
-- Production embedding provider and real pgvector column/type usage.
+- Alembic migrations beyond the checked-in SQL cleanup/smoke scripts.
+- Per-domain credential rotation and richer database provisioning operations.
 - Rate limiting.
 
 ## Build Philosophy
@@ -53,7 +52,7 @@ The runnable foundation includes:
 - Package layout under `app/`, `cli/`, `scripts/`, and `tests/`.
 - `pyproject.toml` with console scripts `context-engine` and `context-tui`, both resolving to `cli.launcher:main`.
 - `.env.example`.
-- `docker-compose.yml` with PostgreSQL, Redis, API, and worker services.
+- `docker-compose.yml` with PostgreSQL, Redis, API, worker, and shared-network support for generated LightRAG domain services.
 - `app/main.py` app factory and route registration.
 - `app/core/config.py`, logging, security, and error helpers.
 - Health routes.
@@ -87,7 +86,7 @@ Current acceptance:
 - Missing or invalid tokens receive auth errors.
 - Write routes use backend authorization rather than CLI-side permission inference.
 
-## Documents, Parsing, And Local Indexing
+## Documents, Parsing, And Navigation
 
 Implemented:
 
@@ -101,14 +100,13 @@ Implemented:
 - Navigation index builder.
 - PageIndex-style adapter.
 - Structure and page endpoints.
-- Local semantic chunking and deterministic embedding generation.
 
 Current acceptance:
 
 - Admins can upload supported files.
 - Normal users cannot upload.
 - Authenticated users can list and inspect ready documents.
-- Local indexing builds navigation and semantic data from `ParsedDocument`, not raw upload files.
+- Navigation processing builds page/tree data from `ParsedDocument`, not raw upload files.
 - Navigation evidence includes document, page, and section context when available.
 
 ## Retrieval And Answers
@@ -118,8 +116,8 @@ Implemented:
 - `RetrievalMode`: `semantic`, `navigation`, `hybrid`, and `auto`.
 - `RetrievalRoutingPolicy` and `RetrievalBackend` in `app/retrieval/routing_policy.py`.
 - `LocalRetrievalStrategy` and `LightRAGRetrievalStrategy` in `app/retrieval/strategies.py`.
-- Shared local `RetrievalRouter` and `RetrievalEngine` contract.
-- Deterministic query classifier for local `auto`.
+- Shared retrieval contracts for LightRAG semantic retrieval and local navigation retrieval.
+- Deterministic query classifier for legacy local navigation-only fallback paths.
 - Hybrid evidence merger.
 - `POST /query/retrieve`.
 - `POST /query/answer`.
@@ -129,10 +127,10 @@ Implemented:
 
 Current acceptance:
 
-- `mode=semantic` uses local semantic retrieval when LightRAG is disabled.
+- `mode=semantic` uses LightRAG semantic retrieval when LightRAG is enabled.
 - `mode=navigation` uses local navigation retrieval.
-- `mode=hybrid` merges local semantic and navigation evidence when LightRAG is disabled.
-- `mode=auto` selects the local route deterministically when LightRAG is disabled.
+- `mode=hybrid` combines LightRAG semantic evidence with local navigation enrichment when available.
+- Context Engine does not read or write local semantic chunks or embeddings.
 - Response evidence identifies `source_engine`.
 - Non-admin users do not receive internal debug details.
 - Answers cite evidence IDs and refuse weak evidence unless `allow_general_fallback=true`. The current deterministic composer treats evidence as weak only when every evidence item has a numeric score below `0.2`; unscored evidence is allowed.
@@ -145,7 +143,7 @@ Implemented:
 - `app/integrations/lightrag_domains.py` for optional domain manifest resolution.
 - `app/integrations/lightrag_remote_adapter.py` for HTTP-only LightRAG access.
 - Remote retrieval through `/query/data`.
-- Multipart upload forwarding through `/documents/upload`.
+- Queued LightRAG ingestion through `lightrag_ingest_document` jobs.
 - Status normalization helper for `/documents/track_status/{track_id}`.
 - Authenticated graph proxy routes:
   - `GET /graphs`
@@ -157,11 +155,10 @@ Implemented:
 
 Current behavior:
 
-- `LIGHTRAG_ENABLED=false` keeps the local path active.
-- With LightRAG enabled, `auto`, `semantic`, and `hybrid` retrieval go remote and map to LightRAG `mix`.
-- With LightRAG enabled, `navigation` stays local.
-- Admin upload stores a local mirror record/file and forwards the file to LightRAG.
-- LightRAG upload responses may return `job_id: null`; remote ingestion status is tracked through LightRAG metadata.
+- With LightRAG enabled, `auto`, `semantic`, and `hybrid` semantic retrieval go remote and map to LightRAG `mix`; `hybrid` may add local navigation evidence.
+- `navigation` stays local.
+- Admin upload stores a local mirror record/file, records `semantic_engine="lightrag"`, and enqueues `lightrag_ingest_document`.
+- LightRAG ingestion status is tracked through `documents.metadata.lightrag` and can be refreshed through the admin status endpoint.
 - Graph routes return HTTP `400` when LightRAG is disabled.
 
 ## LightRAG Domain Deployment Control
@@ -170,6 +167,7 @@ Implemented:
 
 - `LIGHTRAG_DEPLOY_*` settings and root `.env.example` documentation.
 - `app/lightrag_deploy/` control-plane module for domain models, path resolution, manifest read/write, deterministic `domain.env` generation, compose generation, Docker Compose runner boundary, and lifecycle service.
+- Per-domain LightRAG PostgreSQL database/workspace metadata and generated domain env values for `PGKVStorage`, `PGDocStatusStorage`, `PGGraphStorage`, and `PGVectorStorage`.
 - Admin API routes under `/admin/lightrag/domains` implemented in `app/api/routes/lightrag_admin.py`.
 - User-facing `GET /lightrag/domains` (safe field subset) on the same router module.
 - Domain-aware LightRAG upload/query request plumbing through `lightrag_domain_id`.
@@ -180,6 +178,7 @@ Current behavior:
 - Admin create/up/down/recreate/regenerate/remove endpoints require `LIGHTRAG_DEPLOY_ENABLED=true` (HTTP `400` when disabled).
 - `GET /lightrag/domains` returns a safe field subset for any authenticated user whenever the manifest can be read (used to populate `lightrag_domain_id` selections).
 - Domains are stored under `.data/lightrag/domains/<domain>/`.
+- Each LightRAG domain uses a LightRAG-owned PostgreSQL database such as `lightrag_manuals`; manifests record non-secret metadata only.
 - The generated compose file is `.data/lightrag/docker-compose.lightrag-domains.yml`.
 - Domain removal archives by default; permanent delete requires both explicit request and config opt-in.
 - Default tests use fake runners and temp directories, not live Docker or live LightRAG.
@@ -191,14 +190,15 @@ Implemented:
 - Job table and repository.
 - Redis `rq` enqueue path.
 - Worker entrypoint.
-- Indexing task that parses and builds local indexes.
+- Navigation processing task that parses and builds local page/tree indexes.
+- LightRAG ingestion task that serializes same-domain uploads with a Redis lock, uploads to LightRAG, and updates local LightRAG status metadata.
 - Job list/detail/retry endpoints.
 - Audit/query log repositories, admin-facing log endpoints, and read-only observability in the terminal UI.
 - Backup and retrieval evaluation scripts.
 
 Current acceptance:
 
-- Upload returns quickly with a job ID in the local indexing path.
+- Upload returns quickly with a job ID for LightRAG ingestion and may also queue navigation processing.
 - Worker-owned jobs move through queued/running/succeeded/failed states.
 - Failed indexing does not replace ready data.
 - Admins can inspect and retry jobs.
@@ -234,10 +234,9 @@ Older docs referred to discrete `ragcli …` Typer commands. The repository no l
 Add these only as scoped vertical slices:
 
 - Alembic migrations and migration tests.
-- Production-grade embedding provider and pgvector-backed semantic search.
 - Rate limiting and request-size controls.
 - Expanded retrieval evaluation datasets and quality gates.
-- Better LightRAG ingestion/status reconciliation.
+- Richer LightRAG ingestion/status reconciliation and database provisioning operations.
 - Richer TUI forms for create/start/stop/remove domain operations beyond the compact admin list and service wrappers.
 - Object storage adapter for uploaded source files.
 - Document-level ACLs.
