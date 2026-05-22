@@ -24,7 +24,6 @@ from cli.screens.retrieval import build_answer_screen, build_retrieval_screen
 from cli.tui.keys import (
     KEY_BACK,
     KEY_BACKSPACE,
-    KEY_DEBUG,
     KEY_DOWN,
     KEY_ENTER,
     KEY_INSPECT,

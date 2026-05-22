@@ -1,12 +1,15 @@
 from fastapi import APIRouter, Depends
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.errors import not_found
 from app.schemas.documents import DocumentResponse, PageResponse, StructureResponse
-from app.services.document_service import DocumentService
+from app.services.document_access_policy import DocumentAccessPolicy
+from app.services.document_asset_service import DocumentAssetService
 from app.storage.db import get_session
 from app.storage.repositories.documents import DocumentRepository
+from app.storage.repositories.document_processing import DocumentProcessingRepository
 from app.storage.tables import UserRow
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -30,8 +33,8 @@ def list_documents(
     user: UserRow = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> list[DocumentResponse]:
-    del user
-    return [document_response(document) for document in DocumentRepository(session).list_ready()]
+    policy = DocumentAccessPolicy(DocumentRepository(session))
+    return [document_response(document) for document in policy.list_readable_documents(user)]
 
 
 @router.get("/{document_id}")
@@ -40,8 +43,10 @@ def get_document(
     user: UserRow = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> DocumentResponse:
-    del user
-    document = DocumentService(session).get_ready_or_404(document_id)
+    document = DocumentAccessPolicy(DocumentRepository(session)).get_readable_document_or_404(
+        user=user,
+        document_id=document_id,
+    )
     return document_response(document)
 
 
@@ -51,12 +56,42 @@ def get_structure(
     user: UserRow = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> StructureResponse:
-    del user
-    DocumentService(session).get_ready_or_404(document_id)
+    DocumentAccessPolicy(DocumentRepository(session)).get_readable_document_or_404(
+        user=user,
+        document_id=document_id,
+    )
     navigation = DocumentRepository(session).get_navigation_index(document_id)
     if not navigation:
         raise not_found("Document structure not found")
     return StructureResponse(document_id=document_id, tree=navigation.tree)
+
+
+@router.get("/{document_id}/assets/{asset_id}")
+def get_asset(
+    document_id: str,
+    asset_id: str,
+    user: UserRow = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> FileResponse:
+    asset = DocumentAssetService(
+        access_policy=DocumentAccessPolicy(DocumentRepository(session)),
+        assets=DocumentProcessingRepository(session),
+    ).get_asset_file(user=user, document_id=document_id, asset_id=asset_id)
+    return FileResponse(asset.path, media_type=asset.media_type, filename=asset.filename)
+
+
+@router.get("/{document_id}/assets/{asset_id}/thumbnail")
+def get_asset_thumbnail(
+    document_id: str,
+    asset_id: str,
+    user: UserRow = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> FileResponse:
+    asset = DocumentAssetService(
+        access_policy=DocumentAccessPolicy(DocumentRepository(session)),
+        assets=DocumentProcessingRepository(session),
+    ).get_asset_file(user=user, document_id=document_id, asset_id=asset_id, thumbnail=True)
+    return FileResponse(asset.path, media_type=asset.media_type, filename=asset.filename)
 
 
 @router.get("/{document_id}/pages/{page_number}")
@@ -66,8 +101,10 @@ def get_page(
     user: UserRow = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> PageResponse:
-    del user
-    DocumentService(session).get_ready_or_404(document_id)
+    DocumentAccessPolicy(DocumentRepository(session)).get_readable_document_or_404(
+        user=user,
+        document_id=document_id,
+    )
     parsed = DocumentRepository(session).get_parsed(document_id)
     if not parsed:
         raise not_found("Parsed document not found")

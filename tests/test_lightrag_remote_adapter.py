@@ -5,6 +5,7 @@ import httpx
 import pytest
 
 from app.core.config import Settings
+from app.document_processing.models import SourceChunk
 from app.domain.models import RetrievalMode
 from app.integrations.lightrag_domains import resolve_lightrag_domain
 from app.integrations.lightrag_remote_adapter import (
@@ -54,6 +55,7 @@ def test_remote_adapter_normalizes_query_data_chunks_to_evidence() -> None:
                             "document_id": document_id,
                             "page_start": 4,
                             "page_end": 5,
+                            "metadata": {"source_chunk_id": "source-chunk-1"},
                         }
                     ],
                     "entities": [],
@@ -84,6 +86,7 @@ def test_remote_adapter_normalizes_query_data_chunks_to_evidence() -> None:
     assert evidence[0].text == "Retrieved remote context."
     assert evidence[0].page_ref.page_start == 4
     assert evidence[0].metadata["source_path"] == "manual.pdf"
+    assert evidence[0].metadata["source_chunk_id"] == "source-chunk-1"
 
 
 def test_remote_adapter_includes_domain_when_provided() -> None:
@@ -139,6 +142,40 @@ def test_remote_adapter_normalizes_upload_response(tmp_path: Path) -> None:
         "status": "indexing",
         "message": "accepted",
     }
+
+
+def test_remote_adapter_ingests_source_chunks_with_metadata() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/documents/ingest_chunks"
+        payload = request.read().decode()
+        assert '"domain":"manuals"' in payload
+        assert '"chunk_id":"chunk-1"' in payload
+        assert '"asset_ids":["asset-1"]' in payload
+        return httpx.Response(200, json={"status": "success", "track_id": "track-chunks"})
+
+    adapter = LightRAGRemoteAdapter(
+        base_url="http://lightrag.local",
+        client=httpx.Client(transport=httpx.MockTransport(handler), base_url="http://lightrag.local"),
+    )
+
+    response = adapter.ingest_source_chunks(
+        domain="manuals",
+        chunks=[
+            SourceChunk(
+                chunk_id="chunk-1",
+                document_id="doc-1",
+                section_id="sec-1",
+                block_ids=["block-1"],
+                text="See figure.",
+                page_start=1,
+                page_end=1,
+                asset_ids=["asset-1"],
+            )
+        ],
+    )
+
+    assert response["status"] == "indexing"
+    assert response["track_id"] == "track-chunks"
 
 
 def test_remote_adapter_normalizes_track_status() -> None:

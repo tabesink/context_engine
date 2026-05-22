@@ -58,6 +58,16 @@ Alternatively, `docker compose run --rm api python -m scripts.seed_admin` works 
 
 The `worker` service must stay up when `INDEX_JOBS_INLINE=false`. It consumes indexing jobs and moves them through `queued`, `running`, `succeeded`, or `failed`.
 
+## Database Migrations
+
+Schema changes are managed with Alembic. Existing local development still creates missing tables on startup for convenience, but durable feature work should add an Alembic revision.
+
+```bash
+alembic upgrade head
+```
+
+The baseline revision records the schema that existed before document-structure and asset tables were introduced.
+
 ## Published Ports And `.env.example`
 
 Compose maps **host** ports from your `.env` (`PUBLISH_POSTGRES_PORT`, `PUBLISH_REDIS_PORT`, `API_PORT`). The checked-in `.env.example` uses non-default values (PostgreSQL and Redis published on alternate localhost ports, and a non-`8000` API port). Set `DATABASE_URL` and `REDIS_URL` to those same localhost ports when you run tooling on the host; services **inside** the Compose network keep using hostnames `postgres` and `redis` with container ports `5432` and `6379`.

@@ -10,6 +10,7 @@ import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.core.config import get_settings  # noqa: E402
+from app.document_processing.models import DocumentAsset, DocumentStructure  # noqa: E402
 from app.domain.models import DocumentStatus, UserRole  # noqa: E402
 from app.integrations.lightrag_remote_adapter import LightRAGRemoteAdapter  # noqa: E402
 from app.lightrag_deploy.models import LightRAGDomainCreateRequest  # noqa: E402
@@ -19,6 +20,7 @@ from app.main import app  # noqa: E402
 from app.services.lightrag_ingestion_service import LightRAGIngestionService  # noqa: E402
 from app.services.job_service import JobService  # noqa: E402
 from app.storage.db import SessionLocal, create_db_and_tables  # noqa: E402
+from app.storage.repositories.document_processing import DocumentProcessingRepository  # noqa: E402
 from app.storage.repositories.jobs import JobRepository  # noqa: E402
 from app.storage.repositories.documents import DocumentRepository  # noqa: E402
 from app.storage.repositories.users import UserRepository  # noqa: E402
@@ -137,6 +139,109 @@ def test_user_document_reads_hide_non_ready_documents() -> None:
     assert detail.status_code == 404
     assert structure.status_code == 404
     assert page.status_code == 404
+
+
+def test_user_can_stream_ready_document_asset_without_path_leakage(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("STORAGE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    create_db_and_tables()
+    with SessionLocal() as session:
+        document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="manual.txt",
+            content_type="text/plain",
+            storage_path=str(tmp_path / "manual.txt"),
+            metadata={},
+            status=DocumentStatus.READY,
+        )
+        asset_path = tmp_path / "documents" / document.id / "assets" / "figure.png"
+        asset_path.parent.mkdir(parents=True)
+        asset_path.write_bytes(b"figure-bytes")
+        thumbnail_path = tmp_path / "documents" / document.id / "assets" / "figure_thumb.png"
+        thumbnail_path.write_bytes(b"thumb-bytes")
+        asset_id = f"asset-{document.id}"
+        DocumentProcessingRepository(session).save_structure(
+            DocumentStructure(
+                document_id=document.id,
+                source_file=document.storage_path,
+                assets=[
+                    DocumentAsset(
+                        asset_id=asset_id,
+                        document_id=document.id,
+                        asset_type="figure",
+                        storage_path=str(asset_path),
+                        thumbnail_path=str(thumbnail_path),
+                        content_hash="hash-1",
+                    )
+                ],
+            )
+        )
+        document_id = document.id
+
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        asset = client.get(f"/documents/{document_id}/assets/{asset_id}", headers=user_headers)
+        thumbnail = client.get(
+            f"/documents/{document_id}/assets/{asset_id}/thumbnail",
+            headers=user_headers,
+        )
+        unauthenticated = client.get(f"/documents/{document_id}/assets/{asset_id}")
+
+    assert asset.status_code == 200
+    assert asset.content == b"figure-bytes"
+    assert str(asset_path) not in asset.text
+    assert thumbnail.status_code == 200
+    assert thumbnail.content == b"thumb-bytes"
+    assert unauthenticated.status_code == 401
+
+
+def test_asset_route_hides_non_ready_documents(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("STORAGE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    create_db_and_tables()
+    with SessionLocal() as session:
+        document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="manual.txt",
+            content_type="text/plain",
+            storage_path=str(tmp_path / "manual.txt"),
+            metadata={},
+            status=DocumentStatus.INDEXING,
+        )
+        asset_path = tmp_path / "documents" / document.id / "assets" / "figure.png"
+        asset_path.parent.mkdir(parents=True)
+        asset_path.write_bytes(b"figure-bytes")
+        asset_id = f"asset-{document.id}"
+        DocumentProcessingRepository(session).save_structure(
+            DocumentStructure(
+                document_id=document.id,
+                source_file=document.storage_path,
+                assets=[
+                    DocumentAsset(
+                        asset_id=asset_id,
+                        document_id=document.id,
+                        asset_type="figure",
+                        storage_path=str(asset_path),
+                        content_hash="hash-1",
+                    )
+                ],
+            )
+        )
+        document_id = document.id
+
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        response = client.get(f"/documents/{document_id}/assets/{asset_id}", headers=user_headers)
+
+    assert response.status_code == 404
 
 
 def test_query_retrieve_uses_remote_lightrag_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:

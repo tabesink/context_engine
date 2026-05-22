@@ -16,6 +16,22 @@ _Avoid_: Target engine, indexing backend
 Local page and structure data used for document browsing, inspection, and TUI support.
 _Avoid_: Local semantic index, fallback retrieval
 
+**Document Structure**:
+The Control Plane's canonical page, section, block, source chunk, and asset map for an uploaded document.
+_Avoid_: LightRAG document state, semantic index
+
+**Source Chunk**:
+A Control Plane citation unit that links text spans to pages, sections, blocks, and assets before or after LightRAG retrieval.
+_Avoid_: Semantic chunk, embedding chunk, vector chunk
+
+**Asset**:
+An extracted image, figure, table rendering, or thumbnail stored by the Control Plane and linked from source chunks or blocks.
+_Avoid_: Image embedding, LightRAG binary payload
+
+**TOC Refiner**:
+An optional bounded LLM pass that repairs section/page ranges when deterministic document structure is weak.
+_Avoid_: Parser of record, semantic retriever
+
 **Control Plane**:
 The Context Engine responsibility for users, document metadata, domain lifecycle, jobs, status, and audit records.
 _Avoid_: Vector database, retrieval plane
@@ -29,6 +45,7 @@ _Avoid_: Control metadata, document manager
 - A **LightRAG Domain** belongs to the **Retrieval Plane**.
 - The **Control Plane** records which **LightRAG Domain** a document was sent to.
 - A **Semantic Engine** owns semantic retrieval data; **Navigation** owns local page/tree browsing data.
+- **Document Structure**, **Source Chunks**, and **Assets** belong to the **Control Plane** for citation, browsing, and enrichment; they do not make Context Engine a **Semantic Engine**.
 - **Navigation** can be ready or failed independently from **Semantic Engine** readiness.
 
 ## Example dialogue

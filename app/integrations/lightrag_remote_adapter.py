@@ -6,6 +6,7 @@ import httpx
 from fastapi import HTTPException, status
 
 from app.core.config import get_settings
+from app.document_processing.models import SourceChunk
 from app.domain.models import Evidence, PageRef, RetrievalMode
 from app.integrations.lightrag_domains import resolve_lightrag_domain
 
@@ -116,6 +117,31 @@ class LightRAGRemoteAdapter:
             "message": data.get("message"),
         }
 
+    def ingest_source_chunks(self, *, domain: str, chunks: list[SourceChunk]) -> dict[str, Any]:
+        payload = {
+            "domain": domain,
+            "chunks": [
+                {
+                    "text": chunk.text,
+                    "metadata": {
+                        "document_id": chunk.document_id,
+                        "section_id": chunk.section_id,
+                        "chunk_id": chunk.chunk_id,
+                        "page_start": chunk.page_start,
+                        "page_end": chunk.page_end,
+                        "asset_ids": chunk.asset_ids,
+                    },
+                }
+                for chunk in chunks
+            ],
+        }
+        data = self.post_json("/documents/ingest_chunks", json=payload)
+        return {
+            "track_id": data.get("track_id"),
+            "status": self._normalize_upload_status(data.get("status")),
+            "message": data.get("message"),
+        }
+
     def document_status(self, track_id: str) -> dict[str, Any]:
         data = self.get_json(f"/documents/track_status/{track_id}")
         documents = data.get("documents") if isinstance(data, dict) else None
@@ -178,6 +204,7 @@ class LightRAGRemoteAdapter:
             if not isinstance(chunk, dict):
                 continue
             reference = references.get(chunk.get("reference_id"), {})
+            metadata = chunk.get("metadata") if isinstance(chunk.get("metadata"), dict) else {}
             document_id = chunk.get("document_id") or reference.get("document_id") or chunk.get("file_path")
             evidence.append(
                 Evidence(
@@ -191,7 +218,8 @@ class LightRAGRemoteAdapter:
                         page_start=chunk.get("page_start"),
                         page_end=chunk.get("page_end"),
                     ),
-                    metadata={
+                    metadata=metadata
+                    | {
                         "source_path": chunk.get("file_path") or reference.get("file_path"),
                         "reference_id": chunk.get("reference_id"),
                         "external_document_id": document_id,

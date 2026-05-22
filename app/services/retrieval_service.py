@@ -14,6 +14,8 @@ from app.retrieval.routing_policy import RetrievalBackend, RetrievalRoutingPolic
 from app.retrieval.router import RetrievalRouter
 from app.retrieval.strategies import LightRAGRetrievalStrategy, LocalRetrievalStrategy, RetrievalStrategy
 from app.schemas.query import QueryRequest, QueryResponse, RetrieveResponse
+from app.services.retrieval_asset_resolver import RetrievalAssetResolver
+from app.storage.repositories.document_processing import DocumentProcessingRepository
 from app.storage.repositories.logs import LogRepository
 from app.storage.repositories.documents import DocumentRepository
 from app.storage.tables import UserRow
@@ -50,7 +52,11 @@ class RetrievalService:
 
     def retrieve(self, *, request: QueryRequest, user: UserRow) -> RetrieveResponse:
         result = self._retrieve_and_record(request=request, user=user)
-        return self._retrieve_response(result, include_debug=request.include_debug and user.role == "admin")
+        return self._retrieve_response(
+            result,
+            request=request,
+            include_debug=request.include_debug and user.role == "admin",
+        )
 
     def _retrieve_and_record(self, *, request: QueryRequest, user: UserRow) -> RetrievalResult:
         started = perf_counter()
@@ -92,6 +98,7 @@ class RetrievalService:
         )
         response = self._retrieve_response(
             retrieved,
+            request=request,
             include_debug=request.include_debug and user.role == "admin",
         )
         return QueryResponse(**response.model_dump(), answer=answer)
@@ -114,11 +121,25 @@ class RetrievalService:
                     ),
                 )
 
-    def _retrieve_response(self, result: RetrievalResult, *, include_debug: bool) -> RetrieveResponse:
+    def _retrieve_response(
+        self,
+        result: RetrievalResult,
+        *,
+        request: QueryRequest,
+        include_debug: bool,
+    ) -> RetrieveResponse:
+        assets = []
+        if request.include_assets:
+            assets = RetrievalAssetResolver(DocumentProcessingRepository(self.session)).resolve(
+                result.evidence,
+                include_thumbnails=request.include_thumbnails,
+                max_assets=request.max_assets,
+            )
         return RetrieveResponse(
             query=result.query,
             mode=result.mode,
             evidence=[to_evidence_response(item) for item in result.evidence],
+            assets=assets,
             debug=result.debug if include_debug else None,
         )
 

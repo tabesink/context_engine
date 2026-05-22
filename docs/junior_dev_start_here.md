@@ -8,11 +8,10 @@ The system has one API-facing response contract called `Evidence`.
 
 Evidence can come from:
 
-- Local semantic retrieval over indexed chunks.
 - Local navigation retrieval over pages, sections, and document structure.
-- Remote LightRAG retrieval when `LIGHTRAG_ENABLED=true`.
+- Remote LightRAG semantic retrieval when `LIGHTRAG_ENABLED=true`.
 
-LightRAG is optional and external. The default local path still works without a running LightRAG service.
+LightRAG is external and is the only semantic retrieval engine. Local navigation/page browsing can still work without a running LightRAG service, but semantic retrieval and graph routes return clear LightRAG-disabled errors.
 
 Admins can optionally manage same-machine LightRAG domain containers through Context Engine when `LIGHTRAG_DEPLOY_ENABLED=true`. That deployment control plane writes generated files under `.data/lightrag/`; runtime query/upload/graph traffic still goes through `LightRAGRemoteAdapter`.
 
@@ -50,6 +49,8 @@ Admins can optionally manage same-machine LightRAG domain containers through Con
 
 - `Document`: uploaded source file and metadata.
 - `ParsedDocument`: normalized page/section text extracted from a document.
+- `DocumentStructure`: canonical Control Plane structure for pages, sections, blocks, source chunks, and assets.
+- `SourceChunk`: a citation/navigation unit that links text to pages, sections, blocks, and assets. It is not a semantic chunk and does not contain embeddings.
 - `Evidence`: a retrieved piece of text the answer is allowed to use.
 - `RetrievalMode`: `semantic`, `navigation`, `hybrid`, or `auto`.
 - `RetrievalRoutingPolicy` / strategies: chooses local routing versus `LightRAGRemoteRetrievalEngine` before evidence mapping.
@@ -72,7 +73,7 @@ admin -> /admin/documents/upload -> file storage -> document row -> indexing job
 Local indexing:
 
 ```text
-worker -> parser -> navigation index -> semantic index -> document ready
+worker -> parser -> navigation index -> document navigation ready
 ```
 
 LightRAG upload:

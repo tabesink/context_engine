@@ -29,7 +29,7 @@ Excluded or deferred:
 - Browser UI for LightRAG deployment control.
 - LLM-based query router as the primary router.
 - Hosted object storage.
-- Alembic migrations beyond the checked-in SQL cleanup/smoke scripts.
+- Migration hardening beyond the Alembic baseline and feature revisions.
 - Per-domain credential rotation and richer database provisioning operations.
 - Rate limiting.
 
@@ -233,7 +233,7 @@ Older docs referred to discrete `ragcli …` Typer commands. The repository no l
 
 Add these only as scoped vertical slices:
 
-- Alembic migrations and migration tests.
+- Migration hardening beyond the Alembic baseline and feature revisions.
 - Rate limiting and request-size controls.
 - Expanded retrieval evaluation datasets and quality gates.
 - Richer LightRAG ingestion/status reconciliation and database provisioning operations.

@@ -10,6 +10,9 @@ class QueryRequest(BaseModel):
     lightrag_domain_id: str | None = None
     top_k: int = Field(default=8, ge=1, le=30)
     include_debug: bool = False
+    include_assets: bool = False
+    include_thumbnails: bool = True
+    max_assets: int = Field(default=5, ge=0, le=20)
     allow_general_fallback: bool = False
 
 
@@ -25,10 +28,21 @@ class EvidenceResponse(BaseModel):
     metadata: dict = {}
 
 
+class AssetResponse(BaseModel):
+    asset_id: str
+    document_id: str
+    asset_type: str
+    caption: str | None = None
+    page_number: int | None = None
+    url: str
+    thumbnail_url: str | None = None
+
+
 class RetrieveResponse(BaseModel):
     query: str
     mode: RetrievalMode
     evidence: list[EvidenceResponse]
+    assets: list[AssetResponse] = []
     debug: dict | None = None
 
 
