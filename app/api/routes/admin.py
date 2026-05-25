@@ -21,7 +21,6 @@ def admin_ping(admin: UserRow = Depends(require_admin)) -> dict[str, str]:
 @router.post("/documents/upload")
 def upload_document(
     file: UploadFile,
-    semantic_engine: str = Form(default="lightrag"),
     lightrag_domain_id: str | None = Form(default=None),
     admin: UserRow = Depends(require_admin),
     session: Session = Depends(get_session),
@@ -29,7 +28,6 @@ def upload_document(
     document, job_id = DocumentService(session).upload(
         actor_id=admin.id,
         file=file,
-        semantic_engine=semantic_engine,
         lightrag_domain_id=lightrag_domain_id,
     )
     return UploadResponse(document=document_response(document), job_id=job_id)

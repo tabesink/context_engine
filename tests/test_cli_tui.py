@@ -103,17 +103,6 @@ class FakeTuiClient:
                 "should_run_toc_refiner": False,
                 "reasons": [],
             })
-        if path == "/documents/doc-1/toc-refinement-report":
-            return self._record("GET", path, None, {
-                "document_id": "doc-1",
-                "enabled": True,
-                "accepted": False,
-                "reason": "low validation accuracy",
-                "validation_accuracy": 0.25,
-                "logical_to_physical_offset": 2,
-                "llm_call_count": 1,
-                "warnings": ["section start not found"],
-            })
         if path == "/graph/label/popular?limit=20":
             if self.fail_graphs:
                 raise ApiClientError("service_disabled", "LightRAG graph proxy is disabled.", 503)
@@ -152,9 +141,14 @@ class FakeTuiClient:
                 raise ApiClientError("forbidden", "admin role required", 403)
             return self._record("GET", path, None, [{"id": "doc-1", "filename": "manual.txt", "status": "ready"}])
         if path == "/jobs":
-            return self._record("GET", path, None, [{"id": "job-1", "kind": "index_document", "status": "queued"}])
+            return self._record("GET", path, None, [{"id": "job-1", "kind": "document_ingest", "status": "queued"}])
         if path == "/jobs/job-456":
-            return self._record("GET", path, None, {"id": "job-456", "kind": "index_document", "status": "queued", "document_id": "doc-2"})
+            return self._record(
+                "GET",
+                path,
+                None,
+                {"id": "job-456", "kind": "document_ingest", "status": "queued", "document_id": "doc-2"},
+            )
         if path == "/admin/query-logs":
             return self._record("GET", path, None, [{"id": "query-1", "query": "install steps", "mode": "auto"}])
         if path == "/admin/audit-logs":
@@ -633,17 +627,15 @@ def test_document_detail_shows_structure_quality(tmp_path: Path) -> None:
     output = run_with_inputs(tmp_path, ["enter", "enter", "q"], authenticated_store(tmp_path))
 
     assert "Structure Quality" in output
-    assert "TOC Refiner" in output
+    assert "TOC Refiner" in output  # quality signal only; no TOC report endpoint is used
     assert ("GET", "/documents/doc-1/structure-quality", None, "secret-token") in FakeTuiClient.calls
 
 
-def test_document_detail_shows_toc_refinement_report(tmp_path: Path) -> None:
+def test_document_detail_does_not_request_toc_refinement_report(tmp_path: Path) -> None:
     output = run_with_inputs(tmp_path, ["enter", "enter", "q"], authenticated_store(tmp_path))
 
-    assert "TOC Refinement" in output
-    assert "low validation accuracy" in output
-    assert "section start not found" in output
-    assert ("GET", "/documents/doc-1/toc-refinement-report", None, "secret-token") in FakeTuiClient.calls
+    assert "TOC Refinement" not in output
+    assert ("GET", "/documents/doc-1/toc-refinement-report", None, "secret-token") not in FakeTuiClient.calls
 
 
 def test_enter_from_document_detail_opens_structure_screen(tmp_path: Path) -> None:

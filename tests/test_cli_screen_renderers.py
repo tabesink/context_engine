@@ -75,7 +75,7 @@ def test_build_retrieval_screen_includes_evidence_and_optional_debug() -> None:
 
 def test_build_job_status_screen_shows_failure_and_retry_action() -> None:
     screen = build_job_status_screen(
-        {"id": "job_123", "kind": "index_document", "status": "failed", "error": "boom"}
+        {"id": "job_123", "kind": "document_ingest", "status": "failed", "error": "boom"}
     )
 
     fields = screen.sections[0].rows

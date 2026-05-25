@@ -1,4 +1,5 @@
 import os
+from datetime import UTC, datetime
 from pathlib import Path
 
 os.environ["DATABASE_URL"] = "sqlite:///./.data/test_context_engine.db"
@@ -22,7 +23,12 @@ from app.document_processing.models import (  # noqa: E402
 from app.document_processing.pipeline import TextDoclingParser  # noqa: E402
 from app.domain.models import DocumentStatus, UserRole  # noqa: E402
 from app.integrations.lightrag_remote_adapter import LightRAGRemoteAdapter  # noqa: E402
-from app.lightrag_deploy.models import LightRAGDomainCreateRequest  # noqa: E402
+from app.lightrag_deploy.models import (  # noqa: E402
+    LightRAGDomain,
+    LightRAGDomainCreateRequest,
+    LightRAGDomainOperationResult,
+    LightRAGDomainRemoveResponse,
+)
 from app.lightrag_deploy.service import LightRAGDomainService  # noqa: E402
 from app.lightrag_deploy.settings import LightRAGDeploySettings  # noqa: E402
 from app.main import app  # noqa: E402
@@ -926,7 +932,6 @@ def test_admin_upload_queues_lightrag_ingestion_when_enabled(
         response = client.post(
             "/admin/documents/upload",
             headers=admin_headers,
-            data={"semantic_engine": "lightrag"},
             files={"file": ("manual.txt", b"Remote document body.", "text/plain")},
         )
 
@@ -940,7 +945,7 @@ def test_admin_upload_queues_lightrag_ingestion_when_enabled(
     with SessionLocal() as session:
         job = JobRepository(session).get(body["job_id"])
         assert job is not None
-        assert job.kind == "lightrag_ingest_document"
+        assert job.kind == "document_ingest"
         assert job.document_id == body["document"]["id"]
 
 
@@ -956,7 +961,6 @@ def test_admin_upload_requires_lightrag_domain_manifest(monkeypatch: pytest.Monk
         response = client.post(
             "/admin/documents/upload",
             headers=admin_headers,
-            data={"semantic_engine": "lightrag"},
             files={"file": ("manual.txt", b"Remote document body.", "text/plain")},
         )
 
@@ -1365,6 +1369,114 @@ def test_lightrag_domain_admin_api_create_list_and_operate(
     assert regenerate.json() == {"status": "ok"}
 
 
+def test_lightrag_domain_admin_api_lifecycle_routes_remain_available() -> None:
+    from app.api.routes import lightrag_admin
+
+    now = datetime(2026, 5, 25, tzinfo=UTC)
+    domains: dict[str, LightRAGDomain] = {}
+
+    def domain_payload(domain_id: str, *, status: str = "configured") -> LightRAGDomain:
+        return LightRAGDomain(
+            id=domain_id,
+            display_name=f"{domain_id.title()} Manuals",
+            host_port=9621,
+            base_url=f"http://lightrag-{domain_id}:9621",
+            host_base_url=f"http://127.0.0.1:9621",
+            container_base_url=f"http://lightrag-{domain_id}:9621",
+            container_name=f"lightrag_{domain_id}",
+            service_name=f"lightrag_{domain_id}",
+            status=status,
+            paths={"domain_root": f".data/lightrag/domains/{domain_id}"},
+            created_at=now,
+            updated_at=now,
+        )
+
+    class FakeDomainService:
+        class _Settings:
+            enabled = True
+
+        settings = _Settings()
+
+        def list_domains(self) -> list[LightRAGDomain]:
+            return list(domains.values())
+
+        def create_domain(self, request: LightRAGDomainCreateRequest) -> LightRAGDomain:
+            domain = domain_payload(request.domain_id, status="configured")
+            domains[request.domain_id] = domain
+            return domain
+
+        def get_domain(self, domain_id: str) -> LightRAGDomain:
+            return domains[domain_id]
+
+        def up(self, domain_id: str) -> LightRAGDomainOperationResult:
+            domains[domain_id] = domain_payload(domain_id, status="running")
+            return LightRAGDomainOperationResult(
+                id=domain_id,
+                operation="up",
+                status="succeeded",
+                service_name=f"lightrag_{domain_id}",
+            )
+
+        def down(self, domain_id: str) -> LightRAGDomainOperationResult:
+            domains[domain_id] = domain_payload(domain_id, status="stopped")
+            return LightRAGDomainOperationResult(
+                id=domain_id,
+                operation="down",
+                status="succeeded",
+                service_name=f"lightrag_{domain_id}",
+            )
+
+        def recreate(self, domain_id: str) -> LightRAGDomainOperationResult:
+            domains[domain_id] = domain_payload(domain_id, status="running")
+            return LightRAGDomainOperationResult(
+                id=domain_id,
+                operation="recreate",
+                status="succeeded",
+                service_name=f"lightrag_{domain_id}",
+            )
+
+        def regenerate(self, domain_id: str) -> None:
+            domains[domain_id] = domain_payload(domain_id, status="configured")
+
+        def remove(self, domain_id: str, *, permanent: bool = False) -> LightRAGDomainRemoveResponse:
+            domains.pop(domain_id, None)
+            return LightRAGDomainRemoveResponse(
+                id=domain_id,
+                archived=not permanent,
+                permanent=permanent,
+                archive_path=None if permanent else f".data/lightrag/deleted/{domain_id}",
+            )
+
+    app.dependency_overrides[lightrag_admin.get_domain_service] = lambda: FakeDomainService()
+    try:
+        with TestClient(app) as client:
+            _seed_users()
+            admin_headers = _login(client, "admin@example.com")
+
+            create = client.post(
+                "/admin/lightrag/domains",
+                headers=admin_headers,
+                json={"domain_id": "fatigue", "display_name": "Fatigue Manuals"},
+            )
+            up = client.post("/admin/lightrag/domains/fatigue/up", headers=admin_headers)
+            down = client.post("/admin/lightrag/domains/fatigue/down", headers=admin_headers)
+            recreate = client.post("/admin/lightrag/domains/fatigue/recreate", headers=admin_headers)
+            remove = client.delete("/admin/lightrag/domains/fatigue", headers=admin_headers)
+
+        assert create.status_code == 200
+        assert create.json()["id"] == "fatigue"
+        assert up.status_code == 200
+        assert up.json()["operation"] == "up"
+        assert down.status_code == 200
+        assert down.json()["operation"] == "down"
+        assert recreate.status_code == 200
+        assert recreate.json()["operation"] == "recreate"
+        assert remove.status_code == 200
+        assert remove.json()["archived"] is True
+    finally:
+        app.dependency_overrides.pop(lightrag_admin.get_domain_service, None)
+
+
 def test_lightrag_admin_and_user_domain_responses_do_not_leak_provider_secrets(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -1464,7 +1576,7 @@ def test_lightrag_ingest_job_can_be_enqueued_without_running_inline() -> None:
             status=DocumentStatus.INDEXING,
         )
         queue = FakeQueue()
-        job_id = JobService(session, queue=queue, run_inline=False).enqueue_lightrag_ingest_document(
+        job_id = JobService(session, queue=queue, run_inline=False).enqueue_document_ingest(
             document_id=document.id
         )
         job = JobRepository(session).get(job_id)
@@ -1485,7 +1597,7 @@ def test_worker_marks_failed_lightrag_ingest_job_when_document_is_missing() -> N
             metadata={"lightrag": {"domain_id": "default", "status": "queued"}},
             status=DocumentStatus.INDEXING,
         )
-        job = JobRepository(session).create(kind="lightrag_ingest_document", document_id=document.id)
+        job = JobRepository(session).create(kind="document_ingest", document_id=document.id)
         DocumentRepository(session).mark_deleted(document)
         job_id = job.id
 

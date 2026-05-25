@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_admin
 from app.core.errors import not_found
 from app.schemas.jobs import JobResponse
-from app.services.job_service import JobService
+from app.services.job_service import JobService, is_document_ingest_job_kind
 from app.storage.db import get_session
 from app.storage.repositories.jobs import JobRepository
 from app.storage.tables import UserRow
@@ -57,9 +57,9 @@ def retry_job(
     job = JobRepository(session).get(job_id)
     if not job:
         raise not_found("Job not found")
-    if job.kind != "lightrag_ingest_document":
-        raise HTTPException(status_code=400, detail="Only lightrag_ingest_document jobs can be retried")
-    JobService(session).run_lightrag_ingest_job(job.id)
+    if not is_document_ingest_job_kind(job.kind):
+        raise HTTPException(status_code=400, detail="Only document_ingest jobs can be retried")
+    JobService(session).run_document_ingest_job(job.id)
     refreshed = JobRepository(session).get(job_id)
     return job_response(refreshed)
 

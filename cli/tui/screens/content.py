@@ -340,7 +340,6 @@ class DocumentDetailScreen:
     title: str = "Document Detail"
     document: dict[str, Any] | None = None
     structure_quality: dict[str, Any] | None = None
-    toc_refinement_report: dict[str, Any] | None = None
 
     def render(self, console: Console, state: TuiState) -> None:
         render_breadcrumb(console, "Documents", "Detail")
@@ -349,13 +348,10 @@ class DocumentDetailScreen:
                 self.document = state.document_service().get_document(self.document_id)
             if self.structure_quality is None:
                 self.structure_quality = self._load_structure_quality(state)
-            if self.toc_refinement_report is None:
-                self.toc_refinement_report = self._load_toc_refinement_report(state)
             render_screen_result(
                 build_document_detail_screen(
                     self.document,
                     structure_quality=self.structure_quality,
-                    toc_refinement_report=self.toc_refinement_report,
                 ),
                 console=console,
                 show_title=False,
@@ -370,12 +366,6 @@ class DocumentDetailScreen:
         except ApiClientError:
             return {}
 
-    def _load_toc_refinement_report(self, state: TuiState) -> dict[str, Any]:
-        try:
-            return state.document_service().get_toc_refinement_report(self.document_id)
-        except ApiClientError:
-            return {}
-
     def handle_key(self, key: str, state: TuiState) -> ScreenCommand:
         if key == KEY_QUIT:
             return ScreenCommand.quit()
@@ -384,7 +374,6 @@ class DocumentDetailScreen:
         if key == KEY_REFRESH:
             self.document = None
             self.structure_quality = None
-            self.toc_refinement_report = None
             return ScreenCommand.none()
         if key == KEY_ENTER:
             return ScreenCommand.push(
@@ -470,8 +459,8 @@ class DocumentsAdminActionsScreen:
         return (
             "Upload Document",
             "List All Documents",
-            "Index Document",
-            "Reindex Document",
+            "Rebuild Structure",
+            "Reingest LightRAG",
             "Delete Document",
             "Back",
         )
@@ -501,10 +490,14 @@ class DocumentsAdminActionsScreen:
             return ScreenCommand.push(UploadDocumentScreen())
         if selected == "List All Documents":
             return ScreenCommand.push(admin_documents_screen())
-        if selected == "Index Document":
-            return ScreenCommand.push(AdminDocumentMutationScreen("Index Document", "index_document", "Index submitted."))
-        if selected == "Reindex Document":
-            return ScreenCommand.push(AdminDocumentMutationScreen("Reindex Document", "reindex_document", "Reindex submitted."))
+        if selected == "Rebuild Structure":
+            return ScreenCommand.push(
+                AdminDocumentMutationScreen("Rebuild Structure", "rebuild_structure", "Rebuild queued.")
+            )
+        if selected == "Reingest LightRAG":
+            return ScreenCommand.push(
+                AdminDocumentMutationScreen("Reingest LightRAG", "reingest_lightrag", "Reingest queued.")
+            )
         if selected == "Delete Document":
             return ScreenCommand.push(AdminDocumentMutationScreen("Delete Document", "delete_document", "Delete submitted."))
         return ScreenCommand.pop()

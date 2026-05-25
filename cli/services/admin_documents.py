@@ -21,11 +21,8 @@ class AdminDocumentService:
         content: bytes,
         *,
         lightrag_domain_id: str | None = None,
-        enable_toc_refinement: str = "auto",
     ) -> dict[str, Any]:
         fields: dict[str, str] = {}
-        if enable_toc_refinement != "auto":
-            fields["enable_toc_refinement"] = enable_toc_refinement
         if lightrag_domain_id:
             fields["lightrag_domain_id"] = lightrag_domain_id
         kwargs = {"fields": fields} if fields else {}
@@ -38,25 +35,15 @@ class AdminDocumentService:
         )
         return payload if isinstance(payload, dict) else {}
 
-    def index_document(self, document_id: str) -> dict[str, Any]:
-        payload = self._client.post(f"/admin/documents/{document_id}/index")
-        return payload if isinstance(payload, dict) else {}
-
-    def reindex_document(self, document_id: str) -> dict[str, Any]:
-        payload = self._client.post(f"/admin/documents/{document_id}/reindex")
-        return payload if isinstance(payload, dict) else {}
-
     def rebuild_structure(
         self,
         document_id: str,
         *,
-        enable_toc_refinement: str = "auto",
         preserve_assets: bool = True,
     ) -> dict[str, Any]:
         payload = self._client.post(
             f"/admin/documents/{document_id}/rebuild-structure",
             {
-                "enable_toc_refinement": enable_toc_refinement,
                 "preserve_assets": preserve_assets,
             },
         )

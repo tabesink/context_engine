@@ -57,10 +57,6 @@ class DocumentService:
         payload = self._client.get(f"/documents/{document_id}/assets")
         return payload if isinstance(payload, list) else []
 
-    def get_toc_refinement_report(self, document_id: str) -> dict[str, Any]:
-        payload = self._client.get(f"/documents/{document_id}/toc-refinement-report")
-        return payload if isinstance(payload, dict) else {}
-
     def get_page(self, document_id: str, page_number: int) -> dict[str, Any]:
         payload = self._client.get(f"/documents/{document_id}/pages/{page_number}")
         return payload if isinstance(payload, dict) else {}

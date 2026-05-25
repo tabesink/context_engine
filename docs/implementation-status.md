@@ -32,8 +32,9 @@ This file records what the current codebase implements. For the intended build s
 - Deterministic structure quality scoring is retained; runtime TOC refinement and TOC refinement report APIs are removed from ingestion and HTTP routes.
 - Authenticated document debug APIs expose canonical structure data: `GET /documents/{document_id}/structure`, `GET /documents/{document_id}/structure-quality`, `GET /documents/{document_id}/sections/{section_id}`, `GET /documents/{document_id}/chunks/{chunk_id}`, and authenticated asset/thumbnail streaming.
 - Retrieval asset enrichment can resolve assets from LightRAG evidence using legacy `metadata.source_chunk_id`, chunk-ingest `metadata.chunk_id`, or returned `metadata.asset_ids`, then rank and limit assets using direct chunk links, block links, caption/query overlap, page proximity, and section proximity.
-- CLI service wrappers and TUI/screen renderers now cover document structure quality, canonical structure summaries, section detail, source chunk detail with metadata, document detail debug summaries, and admin wrappers/actions for structure rebuild and LightRAG reingest.
+- CLI service wrappers and TUI/screen renderers now cover document structure quality, canonical structure summaries, section detail, source chunk detail with metadata, document detail debug summaries, and admin wrappers/actions for structure rebuild, LightRAG reingest, and delete.
 - Single rich navigation is implemented end-to-end: local navigation retrieval uses `RichNavigationEngine` over canonical `DocumentStructure`, and legacy `parsed_documents`/`navigation_indexes` runtime paths have been removed.
+- Canonical ingestion job kind is `document_ingest`; legacy `lightrag_ingest_document` is accepted as a compatibility alias during migration.
 
 ## LightRAG Runtime Behavior
 
@@ -43,7 +44,7 @@ Runtime behavior:
 
 - `auto`, `semantic`, and `hybrid` semantic retrieval use `LightRAGRemoteRetrievalEngine` and `LightRAGRemoteAdapter`; `hybrid` can add local rich-navigation evidence.
 - `navigation` retrieval remains local and is powered by `RichNavigationEngine`.
-- Admin upload stores a local mirror record/file and enqueues `lightrag_ingest_document`.
+- Admin upload stores a local mirror record/file and enqueues `document_ingest`.
 - Uploads require a LightRAG domain manifest so requested domains are explicit and validated.
 - Upload responses include the LightRAG ingestion job id; LightRAG status is tracked under `documents.metadata.lightrag`.
 - `GET /graphs` and `GET /graph/label/...` proxy to the remote LightRAG service.

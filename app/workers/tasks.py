@@ -5,7 +5,7 @@ from app.storage.db import SessionLocal
 from app.storage.repositories.jobs import JobRepository
 
 
-def run_lightrag_ingest_job(job_id: str) -> None:
+def run_document_ingest_job(job_id: str) -> None:
     with SessionLocal() as session:
         jobs = JobRepository(session)
         job = jobs.get(job_id)
@@ -27,4 +27,9 @@ def run_lightrag_ingest_job(job_id: str) -> None:
 def poll_lightrag_statuses() -> None:
     with SessionLocal() as session:
         DocumentService(session).refresh_pending_lightrag_statuses()
+
+
+# Backward-compatible worker entrypoint name.
+def run_lightrag_ingest_job(job_id: str) -> None:
+    run_document_ingest_job(job_id)
 

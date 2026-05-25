@@ -30,13 +30,11 @@ class DocumentService:
         *,
         actor_id: str,
         file: UploadFile,
-        semantic_engine: str = "lightrag",
         lightrag_domain_id: str | None = None,
     ) -> tuple[DocumentRow, str | None]:
         return self._upload_remote(
             actor_id=actor_id,
             file=file,
-            semantic_engine=semantic_engine,
             lightrag_domain_id=lightrag_domain_id,
         )
 
@@ -45,14 +43,8 @@ class DocumentService:
         *,
         actor_id: str,
         file: UploadFile,
-        semantic_engine: str = "lightrag",
         lightrag_domain_id: str | None = None,
     ) -> tuple[DocumentRow, str | None]:
-        if semantic_engine != "lightrag":
-            raise HTTPException(
-                status_code=400,
-                detail="Only semantic_engine='lightrag' is supported. Local semantic indexing has been removed.",
-            )
         domain_id = lightrag_domain_id or self.settings.lightrag_domain
         self._validate_lightrag_domain(domain_id)
         path = self.storage.save_upload(file)
@@ -75,7 +67,7 @@ class DocumentService:
             status=DocumentStatus.INDEXING,
         )
         jobs = JobService(self.session)
-        job_id = jobs.enqueue_lightrag_ingest_document(document_id=document.id)
+        job_id = jobs.enqueue_document_ingest(document_id=document.id)
         self.documents.audit(
             actor_id=actor_id,
             event="document.uploaded",
@@ -197,7 +189,7 @@ class DocumentService:
             target_id=document_id,
             metadata={"preserve_assets": preserve_assets},
         )
-        return JobService(self.session).enqueue_lightrag_ingest_document(document_id=document_id)
+        return JobService(self.session).enqueue_document_ingest(document_id=document_id)
 
     def reingest_lightrag(self, *, actor_id: str, document_id: str) -> str:
         document = self.documents.get(document_id)
@@ -213,5 +205,5 @@ class DocumentService:
             target_id=document_id,
             metadata={},
         )
-        return JobService(self.session).enqueue_lightrag_ingest_document(document_id=document_id)
+        return JobService(self.session).enqueue_document_ingest(document_id=document_id)
 

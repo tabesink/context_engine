@@ -50,7 +50,6 @@ def build_document_detail_screen(
     document: dict[str, Any],
     *,
     structure_quality: dict[str, Any] | None = None,
-    toc_refinement_report: dict[str, Any] | None = None,
 ) -> ScreenResult:
     document_id = document.get("id", document.get("document_id", "<id>"))
     sections = [
@@ -80,24 +79,6 @@ def build_document_detail_screen(
                         "field": "TOC Refiner",
                         "value": str(structure_quality.get("should_run_toc_refiner", "")),
                     },
-                ],
-                columns=["field", "value"],
-            )
-        )
-    if toc_refinement_report:
-        sections.append(
-            ScreenSection(
-                title="TOC Refinement",
-                rows=[
-                    {"field": "Enabled", "value": str(toc_refinement_report.get("enabled", ""))},
-                    {"field": "Accepted", "value": str(toc_refinement_report.get("accepted", ""))},
-                    {"field": "Reason", "value": toc_refinement_report.get("reason", "")},
-                    {
-                        "field": "Validation",
-                        "value": toc_refinement_report.get("validation_accuracy", ""),
-                    },
-                    {"field": "LLM Calls", "value": toc_refinement_report.get("llm_call_count", "")},
-                    {"field": "Warnings", "value": ", ".join(toc_refinement_report.get("warnings") or [])},
                 ],
                 columns=["field", "value"],
             )
