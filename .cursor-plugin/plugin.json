@@ -1,0 +1,8 @@
+{
+    "name": "understand-anything",
+    "displayName": "Understand Anything",
+    "description": "AI-powered codebase understanding",
+    "version": "2.7.4",
+    "skills": "./.references/Understand-Anything/understand-anything-plugin/skills/",
+    "agents": "./.references/Understand-Anything/understand-anything-plugin/agents/"
+  }

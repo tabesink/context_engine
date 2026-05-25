@@ -420,6 +420,9 @@ class TocRefiner:
         sections = self.range_assigner.assign(sections)
         validation_accuracy = self.start_validator.validate(structure=structure, sections=sections)
         if validation_accuracy < self.minimum_validation_accuracy:
+            section_summary = ", ".join(
+                f"{section.title}@{section.page_start}" for section in sections if section.page_start is not None
+            )
             return TocRefinementResult(
                 structure=structure,
                 accepted=False,
@@ -427,7 +430,13 @@ class TocRefiner:
                 validation_accuracy=validation_accuracy,
                 logical_to_physical_offset=logical_to_physical_offset,
                 llm_call_count=extractor.call_count if extractor else 0,
-                warnings=["section start validation failed"],
+                warnings=[
+                    "section start validation failed "
+                    f"(validation_accuracy={validation_accuracy:.2f}, "
+                    f"required={self.minimum_validation_accuracy:.2f}, "
+                    f"offset={logical_to_physical_offset}, "
+                    f"sections={section_summary or '<none>'})"
+                ],
             )
 
         refined = self.merger.merge(structure=structure, sections=sections)

@@ -225,6 +225,9 @@ def test_toc_refiner_rejects_sections_when_title_is_not_on_start_page() -> None:
     assert result.accepted is False
     assert result.reason == "section start validation failed"
     assert result.validation_accuracy == 0.0
+    assert "validation_accuracy=0.00" in result.warnings[0]
+    assert "offset=0" in result.warnings[0]
+    assert "Safety@2" in result.warnings[0]
     assert result.structure is structure
 
 

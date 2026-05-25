@@ -33,6 +33,12 @@ class FakeProv:
         self.bbox = None
 
 
+class FakeProvOptional:
+    def __init__(self, page_no: int | None):
+        self.page_no = page_no
+        self.bbox = None
+
+
 class FakeItem:
     def __init__(
         self,
@@ -155,6 +161,63 @@ class FakeTableImageConverter:
     def convert(self, source_path: Path) -> FakeTableImageConversionResult:
         assert source_path.name == "manual.pdf"
         return FakeTableImageConversionResult()
+
+
+class FakeDetachedCaptionImageItem:
+    def __init__(self, *, page_no: int):
+        self.label = FakeLabel("IMAGE")
+        self.text = ""
+        self.prov = [FakeProv(page_no)]
+        self.image = type("ImageRef", (), {"pil_image": RealFakeImage(width=600, height=300)})()
+
+
+class FakeDetachedCaptionDoclingDocument:
+    pages = {1: FakePage()}
+
+    def iterate_items(self):
+        return iter(
+            [
+                (FakeItem(label="SECTION_HEADER", text="Hydraulics", page_no=1), 1),
+                (FakeItem(label="CAPTION", text="Figure 9. Hydraulic manifold", page_no=1), 1),
+                (FakeDetachedCaptionImageItem(page_no=1), 1),
+            ]
+        )
+
+
+class FakeDetachedCaptionConversionResult:
+    document = FakeDetachedCaptionDoclingDocument()
+
+
+class FakeDetachedCaptionConverter:
+    def convert(self, source_path: Path) -> FakeDetachedCaptionConversionResult:
+        assert source_path.name == "manual.pdf"
+        return FakeDetachedCaptionConversionResult()
+
+
+class FakeFallbackPageDoclingDocument:
+    pages = {3: FakePage()}
+
+    def iterate_items(self):
+        heading = FakeItem(label="section-header", text="Electrical", page_no=1)
+        heading.prov = [FakeProvOptional(None), FakeProvOptional(3)]
+        paragraph = FakeItem(label="TEXT", text="Disconnect battery.", page_no=1)
+        paragraph.prov = [FakeProvOptional(None), FakeProvOptional(3)]
+        return iter(
+            [
+                (heading, 1),
+                (paragraph, 1),
+            ]
+        )
+
+
+class FakeFallbackPageConversionResult:
+    document = FakeFallbackPageDoclingDocument()
+
+
+class FakeFallbackPageConverter:
+    def convert(self, source_path: Path) -> FakeFallbackPageConversionResult:
+        assert source_path.name == "manual.pdf"
+        return FakeFallbackPageConversionResult()
 
 
 def test_text_docling_parser_builds_structure_that_adapts_to_parsed_document(tmp_path: Path) -> None:
@@ -340,6 +403,45 @@ def test_docling_parser_extracts_table_snapshot_assets(tmp_path: Path) -> None:
     assert structure.assets[0].asset_type == "table_image"
     assert structure.assets[0].section_id == structure.sections[0].section_id
     assert structure.assets[0].nearby_text == "Torque Specs\nUse calibrated tools."
+
+
+def test_docling_parser_associates_detached_caption_with_following_image(tmp_path: Path) -> None:
+    source = tmp_path / "manual.pdf"
+    source.write_bytes(b"pdf")
+    document_id = "11111111-1111-4111-8111-111111111111"
+    parser = DoclingParser(
+        builder=DocumentStructureBuilder(
+            asset_extractor=AssetExtractor(storage_paths=DocumentStoragePaths(storage_root=tmp_path))
+        ),
+        converter_factory=FakeDetachedCaptionConverter,
+    )
+
+    structure = parser.parse(document_id=document_id, source_path=source)
+
+    assert structure.blocks[1].type == "caption"
+    assert structure.blocks[2].type == "image"
+    assert structure.assets[0].caption == "Figure 9. Hydraulic manifold"
+    assert structure.assets[0].block_id == structure.blocks[2].block_id
+
+
+def test_docling_parser_normalizes_hyphenated_labels_and_uses_provenance_fallback(tmp_path: Path) -> None:
+    source = tmp_path / "manual.pdf"
+    source.write_bytes(b"pdf")
+    document_id = "11111111-1111-4111-8111-111111111111"
+    parser = DoclingParser(
+        builder=DocumentStructureBuilder(
+            asset_extractor=AssetExtractor(storage_paths=DocumentStoragePaths(storage_root=tmp_path))
+        ),
+        converter_factory=FakeFallbackPageConverter,
+    )
+
+    structure = parser.parse(document_id=document_id, source_path=source)
+
+    assert structure.sections[0].title == "Electrical"
+    assert structure.sections[0].page_start == 3
+    assert structure.blocks[0].type == "heading"
+    assert structure.blocks[0].page_start == 3
+    assert structure.blocks[1].page_start == 3
 
 
 def test_structure_aware_chunk_builder_keeps_sections_and_inherits_assets() -> None:

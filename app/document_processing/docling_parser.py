@@ -5,6 +5,7 @@ from io import BytesIO
 from pathlib import Path
 from shutil import copyfile
 from hashlib import sha256
+import re
 from typing import Any
 
 from app.document_processing.models import (
@@ -214,6 +215,7 @@ class DoclingParser:
         blocks: list[DocumentBlock] = []
         assets: list[DoclingAssetPayload] = []
         page_text: dict[int, list[str]] = {}
+        detached_caption_by_page: dict[int, str] = {}
         current_section_id: str | None = None
         sections_by_level: dict[int, str] = {}
         warnings: list[str] = []
@@ -262,6 +264,9 @@ class DoclingParser:
                 sections_by_level[section_level] = section_id
             elif block_type == "unknown":
                 warnings.append(f"unknown Docling label: {label or '<empty>'}")
+            elif block_type == "caption" and text:
+                # Some Docling layouts emit caption text as a sibling block before the image.
+                detached_caption_by_page[page_number] = text
 
             asset_ids: list[str] = []
             if block_type in {"figure", "image", "table"}:
@@ -275,6 +280,7 @@ class DoclingParser:
                     index=len(assets) + 1,
                     asset_type="table_image" if block_type == "table" else block_type,
                     nearby_text=nearby_text,
+                    fallback_caption=detached_caption_by_page.get(page_number),
                 )
                 if asset_payload is not None:
                     assets.append(asset_payload)
@@ -315,7 +321,9 @@ class DoclingParser:
 
     def _label_name(self, item: Any) -> str:
         label = getattr(item, "label", None)
-        return str(getattr(label, "name", label) or "").upper()
+        label_name = str(getattr(label, "name", label) or "").strip().upper()
+        # Normalize variants like "section-header" or "section header" to SECTION_HEADER.
+        return re.sub(r"[^A-Z0-9]+", "_", label_name).strip("_")
 
     def _block_type(self, label: str) -> str:
         if label in {"SECTION_HEADER", "TITLE", "HEADING", "HEADER"}:
@@ -385,8 +393,15 @@ class DoclingParser:
         prov = getattr(item, "prov", None) or []
         if not prov:
             return None
-        page_no = getattr(prov[0], "page_no", None)
-        return int(page_no) if page_no is not None else None
+        for candidate in prov:
+            page_no = getattr(candidate, "page_no", None)
+            if page_no is None:
+                continue
+            try:
+                return int(page_no)
+            except (TypeError, ValueError):
+                continue
+        return None
 
     def _bbox(self, item: Any) -> dict | None:
         prov = getattr(item, "prov", None) or []
@@ -413,6 +428,7 @@ class DoclingParser:
         index: int,
         asset_type: str,
         nearby_text: str | None,
+        fallback_caption: str | None,
     ) -> DoclingAssetPayload | None:
         image = self._item_image(item=item, doc=doc)
         if image is None:
@@ -421,6 +437,8 @@ class DoclingParser:
         image.save(buffer, format="PNG")
         asset_id = f"{document_id}-asset-{index}"
         caption = self._caption_text(item=item, doc=doc)
+        if not caption:
+            caption = (fallback_caption or "").strip()
         return DoclingAssetPayload(
             asset_id=asset_id,
             filename=f"{asset_id}.png",
