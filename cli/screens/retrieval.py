@@ -1,4 +1,4 @@
-"""Retrieval and answer screen builders."""
+"""Retrieval screen builders."""
 
 from __future__ import annotations
 
@@ -92,32 +92,7 @@ def build_retrieval_screen(response: dict[str, Any]) -> ScreenResult:
         summary={"query": response.get("query", "")},
         sections=sections,
         actions=[
-            ScreenAction("Ask with answer", f"context-engine documents answer --query \"{response.get('query', '...')}\""),
             ScreenAction("Retrieve semantic", f"context-engine documents retrieve --query \"{response.get('query', '...')}\" --mode semantic --top-k 5"),
-        ],
-        raw=response,
-    )
-
-
-def build_answer_screen(response: dict[str, Any], *, title: str = "Answer") -> ScreenResult:
-    evidence = response.get("evidence") or response.get("sources") or []
-    return ScreenResult(
-        title=title,
-        api_group="retrieval",
-        summary={"question": response.get("query", "")},
-        sections=[
-            ScreenSection(title="Answer", text=str(response.get("answer", ""))),
-            ScreenSection(
-                title="Sources",
-                rows=_evidence_rows(evidence),
-                columns=["#", "source", "pages", "section", "score"],
-            ),
-        ],
-        actions=[
-            ScreenAction(
-                "Retrieve only",
-                f"context-engine documents retrieve --query \"{response.get('query', '...')}\"",
-            )
         ],
         raw=response,
     )

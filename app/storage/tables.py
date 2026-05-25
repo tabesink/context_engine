@@ -41,24 +41,6 @@ class DocumentRow(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
-class ParsedDocumentRow(Base):
-    __tablename__ = "parsed_documents"
-
-    document_id: Mapped[str] = mapped_column(String(36), ForeignKey("documents.id"), primary_key=True)
-    title: Mapped[str] = mapped_column(String(512))
-    pages: Mapped[list] = mapped_column(json_type(), default=list)
-    full_text: Mapped[str] = mapped_column(Text)
-    meta: Mapped[dict] = mapped_column("metadata", json_type(), default=dict)
-
-
-class NavigationIndexRow(Base):
-    __tablename__ = "navigation_indexes"
-
-    document_id: Mapped[str] = mapped_column(String(36), ForeignKey("documents.id"), primary_key=True)
-    version: Mapped[int] = mapped_column(Integer, default=1)
-    tree: Mapped[list] = mapped_column(json_type(), default=list)
-
-
 class DocumentSectionRow(Base):
     __tablename__ = "document_sections"
 
@@ -73,6 +55,18 @@ class DocumentSectionRow(Base):
     child_section_ids: Mapped[list] = mapped_column(json_type(), default=list)
     source: Mapped[str] = mapped_column(String(32), default="docling")
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
+class DocumentPageRow(Base):
+    __tablename__ = "document_pages"
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    document_id: Mapped[str] = mapped_column(String(36), ForeignKey("documents.id"), index=True)
+    page_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    width: Mapped[float | None] = mapped_column(Float, nullable=True)
+    height: Mapped[float | None] = mapped_column(Float, nullable=True)
+    text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    meta: Mapped[dict] = mapped_column("metadata", json_type(), default=dict)
 
 
 class DocumentBlockRow(Base):
@@ -123,21 +117,6 @@ class DocumentAssetRow(Base):
     bbox: Mapped[dict | None] = mapped_column(json_type(), nullable=True)
     generated_description: Mapped[str | None] = mapped_column(Text, nullable=True)
     ocr_text: Mapped[str | None] = mapped_column(Text, nullable=True)
-
-
-class TocRefinementReportRow(Base):
-    __tablename__ = "toc_refinement_reports"
-
-    id: Mapped[str] = mapped_column(String(128), primary_key=True, default=lambda: str(uuid4()))
-    document_id: Mapped[str] = mapped_column(String(36), ForeignKey("documents.id"), index=True)
-    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
-    accepted: Mapped[bool] = mapped_column(Boolean, default=False)
-    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    validation_accuracy: Mapped[float | None] = mapped_column(Float, nullable=True)
-    logical_to_physical_offset: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    llm_call_count: Mapped[int] = mapped_column(Integer, default=0)
-    warnings: Mapped[list] = mapped_column(json_type(), default=list)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
 class JobRow(Base):

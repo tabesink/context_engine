@@ -18,7 +18,6 @@ from app.document_processing.models import (  # noqa: E402
     DocumentPage,
     DocumentStructure,
 )
-from app.document_processing.refinement import TocJsonExtractor, TocRefiner  # noqa: E402
 from app.document_processing.storage_paths import DocumentStoragePaths  # noqa: E402
 from app.domain.models import DocumentStatus  # noqa: E402
 from app.services.lightrag_ingestion_service import LightRAGIngestionService  # noqa: E402
@@ -220,121 +219,7 @@ def test_lightrag_ingestion_builds_chunks_with_asset_metadata(
     assert stored_asset.thumbnail_path == f"documents/{document.id}/assets/figure_thumb.png"
 
 
-def test_lightrag_ingestion_runs_enabled_toc_refinement_and_persists_report(
-    tmp_path: Path,
-    session: Session,
-) -> None:
-    upload_path = tmp_path / "manual.txt"
-    upload_path.write_text("Table of contents\nSafety .... 1\nWear eye protection.", encoding="utf-8")
-    lock = FakeLock()
-    adapter = CapturingChunkAdapter()
-    document = DocumentRepository(session).create(
-        owner_id=None,
-        filename="manual.txt",
-        content_type="text/plain",
-        storage_path=str(upload_path),
-        metadata={
-            "semantic_engine": "lightrag",
-            "enable_toc_refinement": True,
-            "lightrag": {"domain_id": "fatigue", "status": "queued"},
-        },
-        status=DocumentStatus.INDEXING,
-    )
-
-    LightRAGIngestionService(
-        session,
-        adapter_factory=lambda domain_id: adapter,
-        lock_factory=lambda domain_id: lock,
-        artifact_store=_artifact_store(tmp_path),
-        structure_parser=FakeStructureParser(
-            DocumentStructure(
-                document_id=document.id,
-                source_file=str(upload_path),
-                pages=[DocumentPage(page_number=1, text="Table of contents\nSafety .... 1")],
-                blocks=[
-                    DocumentBlock(
-                        block_id=f"{document.id}-block-1",
-                        document_id=document.id,
-                        type="paragraph",
-                        text="Wear eye protection.",
-                        page_start=1,
-                        page_end=1,
-                    )
-                ],
-            )
-        ),
-        toc_refiner=TocRefiner(
-            extractor=TocJsonExtractor(
-                candidate_sections=[{"title": "Safety", "page_start": 1, "page_end": 1}]
-            )
-        ),
-    ).ingest_document(document.id)
-
-    report = DocumentProcessingRepository(session).get_toc_refinement_report(document.id)
-    assert report is not None
-    assert report.enabled is True
-    assert report.accepted is True
-    assert report.llm_call_count == 1
-    assert adapter.ingested_chunks[0].section_id == "toc-sec-1"
-    toc_manifest = tmp_path / "documents" / document.id / "manifest" / "toc_refinement_report.json"
-    assert json.loads(toc_manifest.read_text(encoding="utf-8"))["accepted"] is True
-
-
-def test_lightrag_ingestion_skips_toc_refinement_when_mode_is_never(
-    tmp_path: Path,
-    session: Session,
-) -> None:
-    upload_path = tmp_path / "manual.txt"
-    upload_path.write_text("Table of contents\nSafety .... 1\nWear eye protection.", encoding="utf-8")
-    lock = FakeLock()
-    adapter = CapturingChunkAdapter()
-    document = DocumentRepository(session).create(
-        owner_id=None,
-        filename="manual.txt",
-        content_type="text/plain",
-        storage_path=str(upload_path),
-        metadata={
-            "semantic_engine": "lightrag",
-            "document_processing": {"enable_toc_refinement": "never"},
-            "lightrag": {"domain_id": "fatigue", "status": "queued"},
-        },
-        status=DocumentStatus.INDEXING,
-    )
-
-    LightRAGIngestionService(
-        session,
-        adapter_factory=lambda domain_id: adapter,
-        lock_factory=lambda domain_id: lock,
-        artifact_store=_artifact_store(tmp_path),
-        structure_parser=FakeStructureParser(
-            DocumentStructure(
-                document_id=document.id,
-                source_file=str(upload_path),
-                pages=[DocumentPage(page_number=1, text="Table of contents\nSafety .... 1")],
-                blocks=[
-                    DocumentBlock(
-                        block_id=f"{document.id}-block-1",
-                        document_id=document.id,
-                        type="paragraph",
-                        text="Wear eye protection.",
-                        page_start=1,
-                        page_end=1,
-                    )
-                ],
-            )
-        ),
-        toc_refiner=TocRefiner(
-            extractor=TocJsonExtractor(
-                candidate_sections=[{"title": "Safety", "page_start": 1, "page_end": 1}]
-            )
-        ),
-    ).ingest_document(document.id)
-
-    assert DocumentProcessingRepository(session).get_toc_refinement_report(document.id) is None
-    assert adapter.ingested_chunks[0].section_id is None
-
-
-def test_lightrag_ingestion_runs_toc_refinement_when_mode_is_always(
+def test_lightrag_ingestion_does_not_refine_toc_and_ingests_chunks_directly(
     tmp_path: Path,
     session: Session,
 ) -> None:
@@ -349,7 +234,6 @@ def test_lightrag_ingestion_runs_toc_refinement_when_mode_is_always(
         storage_path=str(upload_path),
         metadata={
             "semantic_engine": "lightrag",
-            "document_processing": {"enable_toc_refinement": "always"},
             "lightrag": {"domain_id": "fatigue", "status": "queued"},
         },
         status=DocumentStatus.INDEXING,
@@ -365,21 +249,10 @@ def test_lightrag_ingestion_runs_toc_refinement_when_mode_is_always(
                 document_id=document.id,
                 source_file=str(upload_path),
                 pages=[DocumentPage(page_number=1, text="Safety")],
-                sections=[
-                    {
-                        "section_id": f"{document.id}-sec-1",
-                        "document_id": document.id,
-                        "title": "Safety",
-                        "level": 1,
-                        "page_start": 1,
-                        "page_end": 1,
-                    }
-                ],
                 blocks=[
                     DocumentBlock(
                         block_id=f"{document.id}-block-1",
                         document_id=document.id,
-                        section_id=f"{document.id}-sec-1",
                         type="paragraph",
                         text="Wear eye protection.",
                         page_start=1,
@@ -388,17 +261,9 @@ def test_lightrag_ingestion_runs_toc_refinement_when_mode_is_always(
                 ],
             )
         ),
-        toc_refiner=TocRefiner(
-            extractor=TocJsonExtractor(
-                candidate_sections=[{"title": "Safety", "page_start": 1, "page_end": 1}]
-            )
-        ),
     ).ingest_document(document.id)
 
-    report = DocumentProcessingRepository(session).get_toc_refinement_report(document.id)
-    assert report is not None
-    assert report.enabled is True
-    assert adapter.ingested_chunks[0].section_id == "toc-sec-1"
+    assert adapter.ingested_chunks[0].section_id is None
 
 
 def test_lightrag_ingestion_fails_when_pdf_structure_processing_is_unavailable(

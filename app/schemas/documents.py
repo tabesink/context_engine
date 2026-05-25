@@ -22,7 +22,6 @@ class UploadResponse(BaseModel):
 
 
 class RebuildStructureRequest(BaseModel):
-    enable_toc_refinement: str = "auto"
     preserve_assets: bool = True
 
 
@@ -37,6 +36,7 @@ class StructureResponse(BaseModel):
     document_id: str
     tree: list[dict]
     source: str = "navigation"
+    pages: list[dict] = []
     sections: list[dict] = []
     blocks: list[dict] = []
     source_chunks: list[dict] = []
@@ -77,15 +77,4 @@ class SourceChunkResponse(BaseModel):
     page_end: int | None = None
     asset_ids: list[str] = []
     metadata: dict = {}
-
-
-class TocRefinementReportResponse(BaseModel):
-    document_id: str
-    enabled: bool
-    accepted: bool
-    reason: str | None = None
-    validation_accuracy: float | None = None
-    logical_to_physical_offset: int | None = None
-    llm_call_count: int
-    warnings: list[str] = []
 

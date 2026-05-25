@@ -8,6 +8,7 @@ class DocumentPage(BaseModel):
     width: float | None = None
     height: float | None = None
     text: str | None = None
+    metadata: dict = Field(default_factory=dict)
 
 
 class DocumentSection(BaseModel):

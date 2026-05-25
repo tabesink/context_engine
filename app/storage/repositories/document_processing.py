@@ -1,10 +1,10 @@
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.document_processing.refinement import TocRefinementResult
 from app.document_processing.models import (
     DocumentAsset,
     DocumentBlock,
+    DocumentPage,
     DocumentSection,
     DocumentStructure,
     SourceChunk,
@@ -12,9 +12,9 @@ from app.document_processing.models import (
 from app.storage.tables import (
     DocumentAssetRow,
     DocumentBlockRow,
+    DocumentPageRow,
     DocumentSectionRow,
     DocumentSourceChunkRow,
-    TocRefinementReportRow,
 )
 
 
@@ -29,9 +29,12 @@ class DocumentProcessingRepository:
             DocumentSourceChunkRow,
             DocumentBlockRow,
             DocumentSectionRow,
+            DocumentPageRow,
         ):
             self.session.execute(delete(table).where(table.document_id == document_id))
 
+        for page in structure.pages:
+            self.session.add(self._page_row(document_id, page))
         for section in structure.sections:
             self.session.add(self._section_row(section))
         for block in structure.blocks:
@@ -43,6 +46,14 @@ class DocumentProcessingRepository:
         self.session.commit()
 
     def get_structure(self, document_id: str, *, source_file: str = "") -> DocumentStructure | None:
+        pages = [
+            self._page_model(row)
+            for row in self.session.scalars(
+                select(DocumentPageRow)
+                .where(DocumentPageRow.document_id == document_id)
+                .order_by(DocumentPageRow.page_number)
+            )
+        ]
         sections = [
             self._section_model(row)
             for row in self.session.scalars(
@@ -67,16 +78,26 @@ class DocumentProcessingRepository:
                 select(DocumentAssetRow).where(DocumentAssetRow.document_id == document_id)
             )
         ]
-        if not any((sections, blocks, chunks, assets)):
+        if not any((pages, sections, blocks, chunks, assets)):
             return None
         return DocumentStructure(
             document_id=document_id,
             source_file=source_file,
+            pages=pages,
             sections=sections,
             blocks=blocks,
             source_chunks=chunks,
             assets=assets,
         )
+
+    def get_page(self, document_id: str, page_number: int) -> DocumentPage | None:
+        row = self.session.scalars(
+            select(DocumentPageRow).where(
+                DocumentPageRow.document_id == document_id,
+                DocumentPageRow.page_number == page_number,
+            )
+        ).first()
+        return self._page_model(row) if row else None
 
     def get_source_chunk(self, document_id: str, chunk_id: str) -> SourceChunk | None:
         row = self.session.get(DocumentSourceChunkRow, chunk_id)
@@ -98,35 +119,6 @@ class DocumentProcessingRepository:
             return None
         return self._asset_model(row)
 
-    def get_toc_refinement_report(self, document_id: str) -> TocRefinementReportRow | None:
-        return self.session.scalars(
-            select(TocRefinementReportRow).where(TocRefinementReportRow.document_id == document_id)
-        ).first()
-
-    def save_toc_refinement_report(
-        self,
-        *,
-        document_id: str,
-        enabled: bool,
-        result: TocRefinementResult,
-    ) -> None:
-        self.session.execute(
-            delete(TocRefinementReportRow).where(TocRefinementReportRow.document_id == document_id)
-        )
-        self.session.add(
-            TocRefinementReportRow(
-                document_id=document_id,
-                enabled=enabled,
-                accepted=result.accepted,
-                reason=result.reason,
-                validation_accuracy=result.validation_accuracy,
-                logical_to_physical_offset=result.logical_to_physical_offset,
-                llm_call_count=result.llm_call_count,
-                warnings=result.warnings,
-            )
-        )
-        self.session.commit()
-
     def _section_row(self, section: DocumentSection) -> DocumentSectionRow:
         return DocumentSectionRow(
             id=section.section_id,
@@ -140,6 +132,26 @@ class DocumentProcessingRepository:
             child_section_ids=section.child_section_ids,
             source=section.source,
             confidence=section.confidence,
+        )
+
+    def _page_row(self, document_id: str, page: DocumentPage) -> DocumentPageRow:
+        return DocumentPageRow(
+            id=f"{document_id}:page:{page.page_number}",
+            document_id=document_id,
+            page_number=page.page_number,
+            width=page.width,
+            height=page.height,
+            text=page.text,
+            meta=page.metadata,
+        )
+
+    def _page_model(self, row: DocumentPageRow) -> DocumentPage:
+        return DocumentPage(
+            page_number=row.page_number,
+            width=row.width,
+            height=row.height,
+            text=row.text,
+            metadata=row.meta or {},
         )
 
     def _section_model(self, row: DocumentSectionRow) -> DocumentSection:

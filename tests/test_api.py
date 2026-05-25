@@ -14,6 +14,7 @@ from app.core.config import get_settings  # noqa: E402
 from app.document_processing.models import (  # noqa: E402
     DocumentAsset,
     DocumentBlock,
+    DocumentPage,
     DocumentSection,
     DocumentStructure,
     SourceChunk,
@@ -32,8 +33,7 @@ from app.storage.repositories.document_processing import DocumentProcessingRepos
 from app.storage.repositories.jobs import JobRepository  # noqa: E402
 from app.storage.repositories.documents import DocumentRepository  # noqa: E402
 from app.storage.repositories.users import UserRepository  # noqa: E402
-from app.storage.tables import TocRefinementReportRow  # noqa: E402
-from app.workers.tasks import run_index_job  # noqa: E402
+from app.workers.tasks import run_lightrag_ingest_job  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -76,7 +76,7 @@ def test_health_returns_ok() -> None:
         assert response.json() == {"status": "ok"}
 
 
-def test_admin_guardrails_and_document_query_flow(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_admin_guardrails_and_document_retrieve_flow(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_ingest_source_chunks(
         self: LightRAGRemoteAdapter,
         *,
@@ -111,7 +111,7 @@ def test_admin_guardrails_and_document_query_flow(monkeypatch: pytest.MonkeyPatc
         assert documents.json()[0]["id"] == document_id
 
         retrieve = client.post(
-            "/query/retrieve",
+            "/retrieve",
             headers=user_headers,
             json={"query": "where are installation steps", "mode": "navigation", "top_k": 3},
         )
@@ -119,14 +119,18 @@ def test_admin_guardrails_and_document_query_flow(monkeypatch: pytest.MonkeyPatc
         body = retrieve.json()
         assert body["mode"] == "navigation"
         assert body["evidence"][0]["source_engine"] == "navigation"
+        assert "answer" not in body
 
-        answer = client.post(
-            "/query/answer",
-            headers=user_headers,
-            json={"query": "where are installation steps", "mode": "navigation", "top_k": 3},
-        )
-        assert answer.status_code == 200
-        assert "evidence item" in answer.json()["answer"]
+
+def test_removed_query_routes_return_404() -> None:
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        payload = {"query": "where are installation steps", "mode": "navigation", "top_k": 3}
+
+        assert client.post("/query", headers=user_headers, json=payload).status_code == 404
+        assert client.post("/query/answer", headers=user_headers, json=payload).status_code == 404
+        assert client.post("/query/retrieve", headers=user_headers, json=payload).status_code == 404
 
 
 def test_lightrag_settings_default_to_remote_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -169,18 +173,6 @@ def test_user_document_reads_hide_non_ready_documents() -> None:
             storage_path=".data/uploads/draft.txt",
             metadata={},
             status=DocumentStatus.INDEXING,
-        )
-        DocumentRepository(session).save_navigation_index(
-            document_id=document.id,
-            tree=[{"title": "Draft"}],
-            version=1,
-        )
-        DocumentRepository(session).save_parsed(
-            document_id=document.id,
-            title="Draft",
-            pages=[{"number": 1, "text": "draft", "metadata": {}}],
-            full_text="draft",
-            metadata={},
         )
         document_id = document.id
 
@@ -258,6 +250,7 @@ def test_user_can_read_canonical_document_structure() -> None:
     body = response.json()
     assert body["source"] == "document_structure"
     assert body["tree"][0]["title"] == "Safety"
+    assert body["pages"] == []
     assert body["sections"][0]["section_id"] == f"{document_id}-sec-1"
     assert body["source_chunks"][0]["chunk_id"] == f"{document_id}-source-chunk-1"
     assert body["blocks"] == []
@@ -274,6 +267,45 @@ def test_user_can_read_canonical_document_structure() -> None:
     included_body = included.json()
     assert included.status_code == 200
     assert included_body["blocks"][0]["block_id"] == f"{document_id}-block-1"
+
+
+def test_user_can_read_document_page_from_rich_structure() -> None:
+    create_db_and_tables()
+    with SessionLocal() as session:
+        document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="manual.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/manual.txt",
+            metadata={},
+            status=DocumentStatus.READY,
+        )
+        DocumentProcessingRepository(session).save_structure(
+            DocumentStructure(
+                document_id=document.id,
+                source_file=document.storage_path,
+                pages=[
+                    DocumentPage(
+                        page_number=1,
+                        text="Page one content",
+                        metadata={"label": "cover"},
+                    )
+                ],
+            )
+        )
+        document_id = document.id
+
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        response = client.get(f"/documents/{document_id}/pages/1", headers=user_headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["document_id"] == document_id
+    assert body["page_number"] == 1
+    assert body["text"] == "Page one content"
+    assert body["metadata"] == {"label": "cover"}
 
 
 def test_user_can_read_document_structure_quality() -> None:
@@ -381,7 +413,7 @@ def test_structure_quality_route_hides_missing_structure_and_non_ready_documents
     assert hidden_document.status_code == 404
 
 
-def test_structure_route_falls_back_to_navigation_tree() -> None:
+def test_structure_route_returns_404_without_rich_structure() -> None:
     create_db_and_tables()
     with SessionLocal() as session:
         document = DocumentRepository(session).create(
@@ -392,11 +424,6 @@ def test_structure_route_falls_back_to_navigation_tree() -> None:
             metadata={},
             status=DocumentStatus.READY,
         )
-        DocumentRepository(session).save_navigation_index(
-            document_id=document.id,
-            tree=[{"title": "Navigation Safety"}],
-            version=1,
-        )
         document_id = document.id
 
     with TestClient(app) as client:
@@ -404,12 +431,7 @@ def test_structure_route_falls_back_to_navigation_tree() -> None:
         user_headers = _login(client, "user@example.com")
         response = client.get(f"/documents/{document_id}/structure", headers=user_headers)
 
-    assert response.status_code == 200
-    body = response.json()
-    assert body["source"] == "navigation"
-    assert body["tree"] == [{"title": "Navigation Safety"}]
-    assert body["sections"] == []
-    assert body["source_chunks"] == []
+    assert response.status_code == 404
 
 
 def test_user_can_read_source_section_detail() -> None:
@@ -606,102 +628,6 @@ def test_source_section_route_hides_missing_and_non_ready_documents() -> None:
         )
 
     assert missing_section.status_code == 404
-    assert hidden_document.status_code == 404
-
-
-def test_user_can_read_toc_refinement_report() -> None:
-    create_db_and_tables()
-    with SessionLocal() as session:
-        document = DocumentRepository(session).create(
-            owner_id=None,
-            filename="manual.txt",
-            content_type="text/plain",
-            storage_path=".data/uploads/manual.txt",
-            metadata={},
-            status=DocumentStatus.READY,
-        )
-        session.add(
-            TocRefinementReportRow(
-                id=f"{document.id}-toc-report",
-                document_id=document.id,
-                enabled=True,
-                accepted=False,
-                reason="low validation accuracy",
-                validation_accuracy=0.25,
-                logical_to_physical_offset=2,
-                llm_call_count=1,
-                warnings=["section start not found"],
-            )
-        )
-        session.commit()
-        document_id = document.id
-
-    with TestClient(app) as client:
-        _seed_users()
-        user_headers = _login(client, "user@example.com")
-        response = client.get(
-            f"/documents/{document_id}/toc-refinement-report",
-            headers=user_headers,
-        )
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["document_id"] == document_id
-    assert body["enabled"] is True
-    assert body["accepted"] is False
-    assert body["reason"] == "low validation accuracy"
-    assert body["validation_accuracy"] == 0.25
-    assert body["logical_to_physical_offset"] == 2
-    assert body["llm_call_count"] == 1
-    assert body["warnings"] == ["section start not found"]
-
-
-def test_toc_refinement_report_route_hides_missing_and_non_ready_documents() -> None:
-    create_db_and_tables()
-    with SessionLocal() as session:
-        ready_document = DocumentRepository(session).create(
-            owner_id=None,
-            filename="ready.txt",
-            content_type="text/plain",
-            storage_path=".data/uploads/ready.txt",
-            metadata={},
-            status=DocumentStatus.READY,
-        )
-        indexing_document = DocumentRepository(session).create(
-            owner_id=None,
-            filename="indexing.txt",
-            content_type="text/plain",
-            storage_path=".data/uploads/indexing.txt",
-            metadata={},
-            status=DocumentStatus.INDEXING,
-        )
-        session.add(
-            TocRefinementReportRow(
-                id=f"{indexing_document.id}-toc-report",
-                document_id=indexing_document.id,
-                enabled=True,
-                accepted=True,
-                llm_call_count=1,
-                warnings=[],
-            )
-        )
-        session.commit()
-        ready_document_id = ready_document.id
-        indexing_document_id = indexing_document.id
-
-    with TestClient(app) as client:
-        _seed_users()
-        user_headers = _login(client, "user@example.com")
-        missing_report = client.get(
-            f"/documents/{ready_document_id}/toc-refinement-report",
-            headers=user_headers,
-        )
-        hidden_document = client.get(
-            f"/documents/{indexing_document_id}/toc-refinement-report",
-            headers=user_headers,
-        )
-
-    assert missing_report.status_code == 404
     assert hidden_document.status_code == 404
 
 
@@ -911,7 +837,7 @@ def test_asset_route_hides_non_ready_documents(
     assert response.status_code == 404
 
 
-def test_query_retrieve_uses_remote_lightrag_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_retrieve_uses_remote_lightrag_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LIGHTRAG_ENABLED", "true")
     get_settings.cache_clear()
 
@@ -951,7 +877,7 @@ def test_query_retrieve_uses_remote_lightrag_when_enabled(monkeypatch: pytest.Mo
         user_headers = _login(client, "user@example.com")
 
         response = client.post(
-            "/query/retrieve",
+            "/retrieve",
             headers=user_headers,
             json={"query": "summarize remote context", "mode": "auto", "top_k": 3},
         )
@@ -1257,7 +1183,7 @@ def test_admin_upload_to_missing_lightrag_domain_fails_before_forwarding(
     assert response.json()["detail"] == "LightRAG domain 'missing' does not exist"
 
 
-def test_query_retrieve_uses_selected_lightrag_domain(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_retrieve_uses_selected_lightrag_domain(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LIGHTRAG_ENABLED", "true")
     get_settings.cache_clear()
     seen_domains: list[str | None] = []
@@ -1281,7 +1207,7 @@ def test_query_retrieve_uses_selected_lightrag_domain(monkeypatch: pytest.Monkey
         _seed_users()
         user_headers = _login(client, "user@example.com")
         response = client.post(
-            "/query/retrieve",
+            "/retrieve",
             headers=user_headers,
             json={"query": "fatigue limits", "mode": "semantic", "lightrag_domain_id": "fatigue"},
         )
@@ -1290,7 +1216,7 @@ def test_query_retrieve_uses_selected_lightrag_domain(monkeypatch: pytest.Monkey
     assert seen_domains == ["fatigue"]
 
 
-def test_query_rejects_document_ids_from_different_lightrag_domain(
+def test_retrieve_rejects_document_ids_from_different_lightrag_domain(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("LIGHTRAG_ENABLED", "true")
@@ -1310,7 +1236,7 @@ def test_query_rejects_document_ids_from_different_lightrag_domain(
         _seed_users()
         user_headers = _login(client, "user@example.com")
         response = client.post(
-            "/query/retrieve",
+            "/retrieve",
             headers=user_headers,
             json={
                 "query": "fatigue limits",
@@ -1364,7 +1290,7 @@ def test_lightrag_failures_return_stable_errors(monkeypatch: pytest.MonkeyPatch)
         _seed_users()
         user_headers = _login(client, "user@example.com")
         response = client.post(
-            "/query/retrieve",
+            "/retrieve",
             headers=user_headers,
             json={"query": "summarize remote context", "mode": "semantic"},
         )
@@ -1519,7 +1445,7 @@ def test_lightrag_domain_user_safe_list_hides_paths_and_container_details(
     assert unauthenticated.status_code == 401
 
 
-def test_index_job_can_be_enqueued_without_running_inline() -> None:
+def test_lightrag_ingest_job_can_be_enqueued_without_running_inline() -> None:
     class FakeQueue:
         def __init__(self) -> None:
             self.enqueued: list[tuple[object, str]] = []
@@ -1529,9 +1455,17 @@ def test_index_job_can_be_enqueued_without_running_inline() -> None:
             return type("QueuedJob", (), {"id": "rq-job-1"})()
 
     with SessionLocal() as session:
+        document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="missing-document.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/missing-document.txt",
+            metadata={"lightrag": {"domain_id": "default", "status": "queued"}},
+            status=DocumentStatus.INDEXING,
+        )
         queue = FakeQueue()
-        job_id = JobService(session, queue=queue, run_inline=False).enqueue_index_document(
-            document_id="missing-document"
+        job_id = JobService(session, queue=queue, run_inline=False).enqueue_lightrag_ingest_document(
+            document_id=document.id
         )
         job = JobRepository(session).get(job_id)
 
@@ -1541,16 +1475,26 @@ def test_index_job_can_be_enqueued_without_running_inline() -> None:
     assert job.meta["rq_job_id"] == "rq-job-1"
 
 
-def test_worker_marks_failed_index_job_when_document_is_missing() -> None:
+def test_worker_marks_failed_lightrag_ingest_job_when_document_is_missing() -> None:
     with SessionLocal() as session:
-        job = JobRepository(session).create(kind="index_document", document_id="missing-document")
+        document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="missing-document.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/missing-document.txt",
+            metadata={"lightrag": {"domain_id": "default", "status": "queued"}},
+            status=DocumentStatus.INDEXING,
+        )
+        job = JobRepository(session).create(kind="lightrag_ingest_document", document_id=document.id)
+        DocumentRepository(session).mark_deleted(document)
         job_id = job.id
 
-    run_index_job(job_id)
+    with pytest.raises(ValueError, match="Structure-aware ingestion failed"):
+        run_lightrag_ingest_job(job_id)
 
     with SessionLocal() as session:
         refreshed = JobRepository(session).get(job_id)
 
     assert refreshed.status == "failed"
-    assert "not found" in refreshed.error_message
+    assert "Structure-aware ingestion failed" in refreshed.error_message
 

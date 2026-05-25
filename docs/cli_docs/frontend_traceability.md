@@ -9,15 +9,15 @@ Maps **`context-engine` / `context-tui` TUI screens and flows** to future browse
 | Document Detail | Documents drill-in | `GET /documents/{id}` | Implemented | Depth depends on TUI iteration |
 | Document Structure | Documents → structure | `GET /documents/{id}/structure` | Implemented | Textual tree |
 | Document Page | Documents → page | `GET /documents/{id}/pages/{page}` | Implemented | Textual body |
-| Retrieval | Retrieval | `POST /query/retrieve` | Implemented | Default retrieval params follow screen |
-| Answer | Retrieval / answer paths | `POST /query`, `POST /query/answer` | Implemented | None |
-| Retrieval Compare | Retrieval compare flow (if enabled) | `POST /query/retrieve` per mode | Implemented | Partial failures render per mode |
-| Retrieval Domain Selector | Retrieval domain field | `GET /lightrag/domains`, `POST /query/retrieve` with `lightrag_domain_id` | Implemented | Defaults to backend/user domain list |
+| Retrieval | Retrieval | `POST /retrieve` | Implemented | Default retrieval params follow screen |
+| Retrieval Compare | Retrieval compare flow (if enabled) | `POST /retrieve` per mode | Implemented | Partial failures render per mode |
+| Retrieval Domain Selector | Retrieval domain field | `GET /lightrag/domains`, `POST /retrieve` with `lightrag_domain_id` | Implemented | Defaults to backend/user domain list |
 | LightRAG Labels | Graphs | `GET /graph/label/list`, `GET /graph/label/popular`, `GET /graph/label/search` | Implemented | Often starts with popular labels |
 | Graph Summary | Graphs | `GET /graphs` | Implemented | Summaries only in-terminal; use JSON from API for viz |
 | LightRAG Domain Admin | LightRAG Domains and lifecycle forms | `GET /admin/lightrag/domains`, `POST /admin/lightrag/domains`, `/up`, `/down`, `/recreate`, `DELETE /admin/lightrag/domains/{id}` | Implemented | Permanent delete requires backend flag and typed confirmation |
 | Documents Admin Actions | Documents -> Admin Actions | `GET /admin/documents` | Implemented | Authorization from backend responses |
 | Admin Upload Flow | Documents -> Admin Actions -> Upload | `POST /admin/documents/upload`, optional `GET /jobs/{job_id}` | Implemented | None |
+| Admin Rebuild/Reingest | Documents -> Admin Actions mutation flows | `POST /admin/documents/{id}/rebuild-structure`, `POST /admin/documents/{id}/reingest-lightrag`, `POST /admin/documents/{id}/refresh-lightrag-status` | Implemented | None |
 | Jobs | Jobs | `GET /jobs`, `GET /jobs/{id}`, `POST /jobs/{id}/retry` | Implemented | None |
 | Observability | Observability | `GET /admin/audit-logs`, `GET /admin/query-logs` | Implemented | Read-only |
 | Admin Dashboard | Composite admin views | `GET /admin/documents`, `GET /jobs`, `GET /admin/query-logs` | Implemented | Corpus lifecycle routes still backend gaps |

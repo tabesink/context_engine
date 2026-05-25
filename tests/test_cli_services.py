@@ -129,20 +129,14 @@ def test_retrieval_service_routes() -> None:
         include_debug=True,
         lightrag_domain_id="fatigue",
     )
-    service.answer(query="reset procedure", mode="auto", top_k=8)
 
-    retrieve_call = next(call for call in client.calls if call[1] == "/query/retrieve")
+    retrieve_call = next(call for call in client.calls if call[1] == "/retrieve")
     assert retrieve_call[0] == "POST"
     assert retrieve_call[2]["query"] == "reset procedure"
     assert retrieve_call[2]["mode"] == "hybrid"
     assert retrieve_call[2]["top_k"] == 5
     assert retrieve_call[2]["include_debug"] is True
     assert retrieve_call[2]["lightrag_domain_id"] == "fatigue"
-    assert (
-        "POST",
-        "/query/answer",
-        {"query": "reset procedure", "mode": "auto", "top_k": 8, "include_debug": False},
-    ) in client.calls
 
 
 def test_job_service_routes() -> None:

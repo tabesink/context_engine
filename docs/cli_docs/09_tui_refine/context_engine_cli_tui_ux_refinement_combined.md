@@ -162,7 +162,9 @@ Root
   │     └── Admin Actions
   │           ├── Upload Document
   │           ├── List All Documents
-  │           ├── Index / Reindex
+  │           ├── Rebuild Structure
+  │           ├── Reingest LightRAG
+  │           ├── Refresh LightRAG Status
   │           └── Delete Document
   │
   ├── Retrieval
@@ -265,7 +267,7 @@ Root
 Every API-backed screen should show a compact route footer:
 
 ```text
-Route: POST /query/retrieve    Status: 200    Time: 63 ms
+Route: POST /retrieve    Status: 200    Time: 63 ms
 ```
 
 For local-only screens:
@@ -332,7 +334,7 @@ Rules:
 CONTEXT ENGINE / Retrieval
 
 Loading...
-Route: POST /query/retrieve
+Route: POST /retrieve
 ```
 
 Keep loading states simple.
@@ -590,8 +592,9 @@ GET /documents/{document_id}/pages/{page_number}
 ```text
 GET    /admin/documents
 POST   /admin/documents/upload
-POST   /admin/documents/{document_id}/index
-POST   /admin/documents/{document_id}/reindex
+POST   /admin/documents/{document_id}/rebuild-structure
+POST   /admin/documents/{document_id}/reingest-lightrag
+POST   /admin/documents/{document_id}/refresh-lightrag-status
 DELETE /admin/documents/{document_id}
 ```
 
@@ -636,9 +639,7 @@ Debug requested:    false
 ### Backend routes
 
 ```text
-POST /query/retrieve
-POST /query/answer
-POST /query
+POST /retrieve
 ```
 
 ### Inspect fields
@@ -997,14 +998,13 @@ Example:
 | Document Detail | View one doc | `GET /documents/{id}` | Metadata summary | Full metadata JSON | No | No |
 | Document Structure | View outline | `GET /documents/{id}/structure` | Tree/table | Full structure JSON | No | No |
 | Document Page | View page text | `GET /documents/{id}/pages/{page}` | Page text excerpt | Full page payload | No | No |
-| Documents Admin Actions | Upload/list/index/delete | `/admin/documents...` | Admin action menu | Route/payload/status | Yes | No |
-| Retrieval | Retrieve evidence | `POST /query/retrieve` | Query form/result table | Request JSON, evidence IDs, raw response | No | No |
-| Answer | Generate answer | `POST /query/answer` or `POST /query` | Answer + sources | Request JSON, evidence, raw answer payload | No | No |
-| Retrieval Compare | Compare modes | repeated `POST /query/retrieve` | Mode comparison table | Per-mode payload/status/errors | No | No |
+| Documents Admin Actions | Upload/list/rebuild/reingest/delete | `/admin/documents...` | Admin action menu | Route/payload/status | Yes | No |
+| Retrieval | Retrieve evidence | `POST /retrieve` | Query form/result table | Request JSON, evidence IDs, raw response | No | No |
+| Retrieval Compare | Compare modes | repeated `POST /retrieve` | Mode comparison table | Per-mode payload/status/errors | No | No |
 | Graphs | Graph labels/summary | `/graphs`, `/graph/label/...` | Labels/summary table | Params, node/edge counts, raw JSON | No | No |
 | LightRAG Domains | Deploy/manage domains | `/admin/lightrag/domains...` | Domain table/actions | Manifest path, compose path, Docker status | Yes | No |
 | Domain Selector | Choose query domain | `GET /lightrag/domains` | Domain dropdown/list | User-safe domain payload | No | No |
-| Jobs | Monitor indexing | `GET /jobs` | Jobs table | Full job metadata/raw JSON | Yes | No |
+| Jobs | Monitor ingestion jobs | `GET /jobs` | Jobs table | Full job metadata/raw JSON | Yes | No |
 | Job Detail | Inspect one job | `GET /jobs/{job_id}` | Job status/error | Full metadata, retry info | Yes | No |
 | Job Retry | Retry failed job | `POST /jobs/{job_id}/retry` | Retry result | Request/status/new job ID | Yes | No |
 | Observability | Audit/query logs | `/admin/query-logs`, `/admin/audit-logs` | Recent logs | Full log metadata | Yes | No |
@@ -1334,7 +1334,7 @@ Q    Quit
 Every API-backed screen should show a compact footer:
 
 ```text
-Route: POST /query/retrieve    Status: 200    Time: 63 ms
+Route: POST /retrieve    Status: 200    Time: 63 ms
 ```
 
 ### 2. API Inspect drawer
@@ -1395,7 +1395,7 @@ Admin Actions:
 ```text
 Upload Document
 List All Documents
-Index / Reindex
+Rebuild structure / Reingest LightRAG / Refresh LightRAG status
 Delete Document
 ```
 

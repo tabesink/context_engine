@@ -1,5 +1,5 @@
 from app.domain.models import Evidence
-from app.schemas.query import AssetResponse
+from app.schemas.retrieval import AssetResponse
 from app.storage.repositories.document_processing import DocumentProcessingRepository
 from app.document_processing.models import DocumentAsset, DocumentStructure, SourceChunk
 

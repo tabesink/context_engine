@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_admin
@@ -57,7 +57,9 @@ def retry_job(
     job = JobRepository(session).get(job_id)
     if not job:
         raise not_found("Job not found")
-    JobService(session).run_index_job(job.id)
+    if job.kind != "lightrag_ingest_document":
+        raise HTTPException(status_code=400, detail="Only lightrag_ingest_document jobs can be retried")
+    JobService(session).run_lightrag_ingest_job(job.id)
     refreshed = JobRepository(session).get(job_id)
     return job_response(refreshed)
 

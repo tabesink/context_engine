@@ -80,7 +80,6 @@ The app owns these interfaces and models:
 - `Evidence`
 - `ParsedDocument`
 - `NavigationIndexBuilder`
-- `AnswerComposer`
 - `LightRAGRemoteAdapter`
 - `LightRAGDomainService`
 

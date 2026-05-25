@@ -3,7 +3,7 @@ from typing import Protocol
 from app.domain.models import RetrievalMode, RetrievalResult
 from app.retrieval.hybrid_merger import HybridMerger
 from app.retrieval.lightrag_remote_engine import LightRAGRemoteRetrievalEngine
-from app.retrieval.navigation_engine import NavigationRetrievalEngine
+from app.retrieval.rich_navigation_engine import RichNavigationEngine
 
 
 class RetrievalStrategy(Protocol):
@@ -21,7 +21,7 @@ class RetrievalStrategy(Protocol):
 
 
 class LocalRetrievalStrategy:
-    def __init__(self, navigation_engine: NavigationRetrievalEngine):
+    def __init__(self, navigation_engine: RichNavigationEngine):
         self.navigation_engine = navigation_engine
 
     def retrieve(
@@ -54,7 +54,7 @@ class LightRAGRetrievalStrategy:
         self,
         engine: LightRAGRemoteRetrievalEngine,
         *,
-        navigation_engine: NavigationRetrievalEngine | None = None,
+        navigation_engine: RichNavigationEngine | None = None,
         merger: HybridMerger | None = None,
     ):
         self.engine = engine

@@ -1,9 +1,7 @@
 import json
-from dataclasses import asdict
 from pathlib import Path
 
 from app.document_processing.models import DocumentStructure
-from app.document_processing.refinement import TocRefinementResult
 from app.document_processing.storage_paths import DocumentStoragePaths
 
 
@@ -17,23 +15,6 @@ class DocumentProcessingArtifactStore:
             filename="document_structure.json",
         )
         self._write_json(path, structure.model_dump(mode="json"))
-        return path
-
-    def save_toc_refinement_report(
-        self,
-        *,
-        document_id: str,
-        enabled: bool,
-        result: TocRefinementResult,
-    ) -> Path:
-        path = self.storage_paths.manifest_path(
-            document_id=document_id,
-            filename="toc_refinement_report.json",
-        )
-        payload = asdict(result)
-        payload["enabled"] = enabled
-        payload["structure"] = result.structure.model_dump(mode="json")
-        self._write_json(path, payload)
         return path
 
     def _write_json(self, path: Path, payload: dict) -> None:

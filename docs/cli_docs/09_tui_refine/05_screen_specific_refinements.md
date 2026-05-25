@@ -51,8 +51,9 @@ GET /documents/{document_id}/pages/{page_number}
 ```text
 > Upload document
   List all documents
-  Index selected
-  Reindex selected
+  Rebuild structure
+  Reingest LightRAG
+  Refresh LightRAG status
   Delete selected
   Back
 ```
@@ -62,8 +63,9 @@ GET /documents/{document_id}/pages/{page_number}
 ```text
 GET    /admin/documents
 POST   /admin/documents/upload
-POST   /admin/documents/{document_id}/index
-POST   /admin/documents/{document_id}/reindex
+POST   /admin/documents/{document_id}/rebuild-structure
+POST   /admin/documents/{document_id}/reingest-lightrag
+POST   /admin/documents/{document_id}/refresh-lightrag-status
 DELETE /admin/documents/{document_id}
 ```
 
@@ -108,9 +110,7 @@ Debug requested:    false
 ### Backend routes
 
 ```text
-POST /query/retrieve
-POST /query/answer
-POST /query
+POST /retrieve
 ```
 
 ### Inspect fields

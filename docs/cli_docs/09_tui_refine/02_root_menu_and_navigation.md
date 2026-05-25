@@ -65,7 +65,9 @@ Root
   │     └── Admin Actions
   │           ├── Upload Document
   │           ├── List All Documents
-  │           ├── Index / Reindex
+  │           ├── Rebuild Structure
+  │           ├── Reingest LightRAG
+  │           ├── Refresh LightRAG Status
   │           └── Delete Document
   │
   ├── Retrieval

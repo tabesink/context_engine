@@ -27,7 +27,7 @@ Example:
 ```text
 ┌─ API INSPECT ────────────────────────────────────────────────┐
 │ Method: POST                                                 │
-│ Route:  /query/retrieve                                      │
+│ Route:  /retrieve                                            │
 │ Status: 200 OK                                               │
 │ Time:   63 ms                                                │
 │                                                              │

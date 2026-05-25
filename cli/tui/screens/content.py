@@ -20,7 +20,7 @@ from cli.screens.lightrag_domains import build_lightrag_domains_screen
 from cli.screens.models import ScreenResult
 from cli.screens.observability import build_audit_logs_screen, build_query_logs_screen
 from cli.screens.planned import build_backend_gaps_screen
-from cli.screens.retrieval import build_answer_screen, build_retrieval_screen
+from cli.screens.retrieval import build_retrieval_screen
 from cli.tui.keys import (
     KEY_BACK,
     KEY_BACKSPACE,
@@ -924,7 +924,7 @@ class RetrievalResultScreen:
     full_ids: bool = False
 
     def _options(self) -> tuple[str, ...]:
-        return ("Generate answer", "Compare modes", "Back", "Quit")
+        return ("Compare modes", "Back", "Quit")
 
     def _request_payload(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -993,17 +993,6 @@ class RetrievalResultScreen:
         if key != KEY_ENTER:
             return ScreenCommand.none()
         selected = self._options()[self.selected_index]
-        if selected == "Generate answer":
-            try:
-                answer = state.retrieval_service().answer(
-                    query=self.query,
-                    mode=self.mode,  # type: ignore[arg-type]
-                    top_k=self.top_k,
-                    lightrag_domain_id=self.lightrag_domain_id,
-                )
-            except ApiClientError as exc:
-                return ScreenCommand.push(ErrorScreen(f"{exc.code}: {exc.message}"))
-            return ScreenCommand.push(AnswerResultScreen(payload=answer))
         if selected == "Compare modes":
             comparison = compare_retrieval_modes(state.get_client(), query=self.query, top_k=self.top_k)
             return ScreenCommand.push(RetrievalCompareResultScreen(payload=comparison))
@@ -1012,44 +1001,6 @@ class RetrievalResultScreen:
         if selected == "Quit":
             return ScreenCommand.quit()
         return ScreenCommand.none()
-
-
-@dataclass
-class AnswerResultScreen:
-    payload: dict[str, Any]
-
-    def render(self, console: Console, state: TuiState) -> None:
-        render_breadcrumb(console, "Retrieval", "Answer")
-        render_screen_result(build_answer_screen(self.payload), console=console, show_title=False)
-        method, route, status_code, elapsed_ms = _metadata_route(_last_request(state))
-        render_api_footer(console, method=method, route=route, status_code=status_code, elapsed_ms=elapsed_ms)
-
-    def handle_key(self, key: str, state: TuiState) -> ScreenCommand:
-        if key == KEY_QUIT:
-            return ScreenCommand.quit()
-        if key == KEY_BACK:
-            return ScreenCommand.pop()
-        if key == KEY_RAW_JSON:
-            return ScreenCommand.push(
-                PayloadViewScreen(
-                    title="Answer Raw JSON",
-                    payload=self.payload,
-                    breadcrumb_trail=("Retrieval", "Answer", "Raw JSON"),
-                    view="raw",
-                )
-            )
-        if key == KEY_INSPECT:
-            return ScreenCommand.push(
-                PayloadViewScreen(
-                    title="Answer Inspect API",
-                    payload=self.payload,
-                    breadcrumb_trail=("Retrieval", "Answer", "Inspect API"),
-                    view="inspect",
-                    metadata=_last_request(state),
-                )
-            )
-        return ScreenCommand.none()
-
 
 @dataclass
 class RetrievalCompareResultScreen:

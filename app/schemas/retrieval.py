@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from app.domain.models import RetrievalMode
 
 
-class QueryRequest(BaseModel):
+class RetrieveRequest(BaseModel):
     query: str = Field(min_length=1)
     mode: RetrievalMode = RetrievalMode.AUTO
     document_ids: list[str] | None = None
@@ -43,8 +43,3 @@ class RetrieveResponse(BaseModel):
     evidence: list[EvidenceResponse]
     assets: list[AssetResponse] = []
     debug: dict | None = None
-
-
-class QueryResponse(RetrieveResponse):
-    answer: str
-

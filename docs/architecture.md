@@ -13,13 +13,13 @@ HTTP client or `context-engine` TUI (`context-engine` / `context-tui`)
   -> response schema
 ```
 
-Retrieval has two runtime capabilities: mandatory remote LightRAG semantic retrieval and local navigation/page retrieval. `RetrievalRoutingPolicy` in `app/retrieval/routing_policy.py` selects the backend by retrieval mode, and `RetrievalService` dispatches through strategy objects in `app/retrieval/strategies.py`.
+Retrieval has two runtime capabilities: mandatory remote LightRAG semantic retrieval and local rich navigation retrieval from canonical `DocumentStructure`. `RetrievalRoutingPolicy` in `app/retrieval/routing_policy.py` selects the backend by retrieval mode, and `RetrievalService` dispatches through strategy objects in `app/retrieval/strategies.py`.
 
 ```text
 mode=navigation
   RetrievalService
     -> LocalRetrievalStrategy
-    -> NavigationRetrievalEngine
+    -> RichNavigationEngine
 
 mode in auto|semantic|hybrid
   RetrievalService
@@ -27,7 +27,7 @@ mode in auto|semantic|hybrid
     -> LightRAGRemoteRetrievalEngine
        -> LightRAGRemoteAdapter
        -> external LightRAG HTTP API
-    -> NavigationRetrievalEngine for hybrid enrichment
+    -> RichNavigationEngine for hybrid enrichment
 ```
 
 Both paths return local `Evidence` objects. API routes never expose raw LightRAG, PageIndex, or storage rows.
@@ -39,32 +39,31 @@ Both paths return local `Evidence` objects. API routes never expose raw LightRAG
 - `app/domain/`: dataclasses/enums that define the app vocabulary.
 - `app/schemas/`: Pydantic request/response models.
 - `app/services/`: use cases and orchestration.
-- `app/retrieval/`: retrieval interfaces, local navigation engine, LightRAG remote engine, router, merger, and answer composition.
-- `app/indexing/`: parsers, chunking helpers, and navigation index builder.
+- `app/retrieval/`: retrieval interfaces, rich navigation engine, LightRAG remote engine, and merger.
+- `app/indexing/`: chunking helpers.
 - `app/integrations/`: wrappers around external/reference systems, including remote LightRAG HTTP.
 - `app/lightrag_deploy/`: admin-only LightRAG domain deployment control, manifest/env/compose generation, and Docker Compose runner boundary.
 - `app/storage/`: database session and repositories.
 - `app/workers/`: Redis queue and background indexing tasks.
-- `cli/`: TUI launcher (`cli/launcher.py`), argparse-backed settings (`cli/config.py`), credential storage (`cli/credentials.py`), `ApiClient` (`cli/api_client.py`), typed HTTP helpers (`cli/services/`), optional query JSON builders (`cli/query_payload.py`). The interactive UI is Rich-based under `cli/tui/` (`app.py`, `navigation.py`, `screen.py`, `session_flow.py`, `state.py`, `styles.py`, `keys.py`, TUI-local `screens/` and `renderers/`). ASCII screen layouts and reusable tables live under `cli/screens/` and `cli/renderers/`; guided multi-step UX helpers live under `cli/flows/` and are composed into TUI stacks rather than exposing separate Typer commands. Legacy `cli/main.py` delegates to the launcher (`app()` callable for backwards-compatible imports).
+- `cli/`: TUI launcher (`cli/launcher.py`), argparse-backed settings (`cli/config.py`), credential storage (`cli/credentials.py`), `ApiClient` (`cli/api_client.py`), typed HTTP helpers (`cli/services/`), and retrieve JSON builders (`cli/retrieve_payload.py`). The interactive UI is Rich-based under `cli/tui/` (`app.py`, `navigation.py`, `screen.py`, `session_flow.py`, `state.py`, `styles.py`, `keys.py`, TUI-local `screens/` and `renderers/`). ASCII screen layouts and reusable tables live under `cli/screens/` and `cli/renderers/`; guided multi-step UX helpers live under `cli/flows/` and are composed into TUI stacks rather than exposing separate Typer commands. Legacy `cli/main.py` delegates to the launcher (`app()` callable for backwards-compatible imports).
 - `scripts/`: seed, backup, and evaluation commands.
 - `tests/`: behavior tests through API, terminal client helpers, adapter, or public service interfaces.
 
-## Request Flow: Query
+## Request Flow: Retrieve
 
 ```text
-POST /query, /query/retrieve, or /query/answer
-  -> QueryRequest (optional document filter, optional lightrag_domain_id)
+POST /retrieve
+  -> RetrieveRequest (optional document filter, optional lightrag_domain_id)
   -> auth dependency
   -> RetrievalService (routing policy + local/remote strategy)
-  -> NavigationRetrievalEngine or LightRAGRemoteAdapter
+  -> RichNavigationEngine or LightRAGRemoteAdapter
   -> EvidenceResponse list
-  -> optional AnswerComposer
-  -> response schema
+  -> RetrieveResponse
 ```
 
-`auto`, `semantic`, and `hybrid` are sent to LightRAG as `mix`; `hybrid` may add local navigation evidence. `navigation` stays local page/tree retrieval. There is no semantic fallback to local navigation when LightRAG fails.
+`auto`, `semantic`, and `hybrid` are sent to LightRAG as `mix`; `hybrid` may add local rich-navigation evidence. `navigation` stays local deterministic retrieval over pages/sections/blocks/chunks/assets. There is no semantic fallback to local navigation when LightRAG fails.
 
-`include_debug` is accepted on query requests, but debug details are returned only for admin users.
+`include_debug` is accepted on retrieve requests, but debug details are returned only for admin users.
 
 ## Request Flow: Upload and Index
 
@@ -74,16 +73,15 @@ LIGHTRAG_ENABLED=true (required)
     -> require_admin
     -> DocumentService stores a local mirror record and file
     -> JobService enqueues lightrag_ingest_document
-    -> optional navigation_process_document job updates metadata.navigation
     -> validate LightRAG domain manifest and requested domain
     -> response includes document_id, lightrag job_id, and queued lightrag metadata
 ```
 
 Admin uploads require a readable LightRAG domain manifest. Structure-aware ingestion must produce source chunks before LightRAG ingest proceeds; parse/build failures mark the document failed instead of raw-uploading to LightRAG.
 
-Navigation processing uses the worker/job system. Remote LightRAG ingestion is started by a worker job, serialized per domain with a Redis lock, and tracked through mirrored metadata such as `lightrag.track_id`.
+Remote LightRAG ingestion is started by a worker job, serialized per domain with a Redis lock, and tracked through mirrored metadata such as `lightrag.track_id`.
 
-When Docling is available for PDF parsing, ingestion normalizes label variants (for example `section-header`), falls back across provenance entries for page-number resolution, and maps detached caption blocks to nearby image/table assets when per-item caption APIs are empty. TOC refinement rejections now include validation details (accuracy, inferred offset, and section starts) in the persisted report warnings.
+When Docling is available for PDF parsing, ingestion normalizes label variants (for example `section-header`), falls back across provenance entries for page-number resolution, and maps detached caption blocks to nearby image/table assets when per-item caption APIs are empty.
 
 ## LightRAG Domain Deployment Control
 
@@ -128,7 +126,7 @@ Local development defaults are deliberately small:
 - SQLite database at `.data/context_engine.db` unless `DATABASE_URL` overrides it.
 - Local filesystem uploads under `.data/uploads` unless `STORAGE_ROOT` overrides it.
 - Redis URL defaults to `redis://localhost:6379/0`, with background jobs used when `INDEX_JOBS_INLINE=false`.
-- Context Engine stores LightRAG document IDs, track IDs, status, and navigation metadata; it does not store semantic chunks or embeddings.
+- Context Engine stores LightRAG document IDs, track IDs, status, and canonical local structure metadata; it does not store semantic chunks or embeddings.
 
 Docker Compose uses PostgreSQL, Redis, API, worker, and generated LightRAG domain services on a shared named network. Option 3 requires a validated PostgreSQL image/build with both `vector` and Apache `AGE` extensions.
 
@@ -157,11 +155,11 @@ Every retrieval engine returns:
 - optional section reference
 - metadata
 
-The internal domain model names the evidence identifier `id`. Public query responses expose the same value as `evidence_id` so clients do not confuse evidence IDs with document IDs. The answer composer consumes domain `Evidence` directly and cites evidence IDs, not raw database rows.
+The internal domain model names the evidence identifier `id`. Public retrieval responses expose the same value as `evidence_id` so clients do not confuse evidence IDs with document IDs.
 
 ## Hybrid Merge Rules
 
-Hybrid retrieval combines LightRAG semantic evidence with local navigation evidence when local navigation data exists, then:
+Hybrid retrieval combines LightRAG semantic evidence with local rich-navigation evidence when local structure data exists, then:
 
 1. Deduplicates by document, page range, and normalized text hash.
 2. Normalizes missing scores to `0.5`.
@@ -174,10 +172,8 @@ LightRAG owns semantic retrieval and ranking. Context Engine only normalizes Lig
 ## Failure Model
 
 - Upload failure returns a request error and creates no usable document record.
-- Navigation processing failure marks the navigation job failed and records `metadata.navigation.status="failed"` without changing semantic readiness.
 - LightRAG ingestion failure marks the ingestion job failed and updates the document's LightRAG status metadata.
 - LightRAG timeout/connect failures become service-unavailable responses.
 - LightRAG auth/upstream/invalid-response failures become bad-gateway style responses.
-- Query failure returns a structured API error.
-- Weak evidence produces a refusal unless the request explicitly allows fallback. In the deterministic composer, evidence is weak only when every evidence item has a numeric score below `0.2`; unscored evidence is not treated as weak.
+- Retrieve failure returns a structured API error.
 

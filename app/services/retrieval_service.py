@@ -5,17 +5,16 @@ from sqlalchemy.orm import Session
 
 from app.domain.models import RetrievalResult
 from app.integrations.lightrag_remote_adapter import LightRAGAdapterError, lightrag_http_exception
-from app.retrieval.answer_composer import AnswerComposer
 from app.retrieval.evidence_mapper import to_evidence_response
 from app.retrieval.lightrag_remote_engine import LightRAGRemoteRetrievalEngine
-from app.retrieval.navigation_engine import NavigationRetrievalEngine
+from app.retrieval.rich_navigation_engine import RichNavigationEngine
 from app.retrieval.routing_policy import RetrievalBackend, RetrievalRoutingPolicy
 from app.retrieval.strategies import LightRAGRetrievalStrategy, LocalRetrievalStrategy, RetrievalStrategy
-from app.schemas.query import QueryRequest, QueryResponse, RetrieveResponse
+from app.schemas.retrieval import RetrieveRequest, RetrieveResponse
 from app.services.retrieval_asset_resolver import RetrievalAssetResolver
 from app.storage.repositories.document_processing import DocumentProcessingRepository
-from app.storage.repositories.logs import LogRepository
 from app.storage.repositories.documents import DocumentRepository
+from app.storage.repositories.logs import LogRepository
 from app.storage.tables import UserRow
 
 
@@ -27,10 +26,9 @@ class RetrievalService:
         routing_policy: RetrievalRoutingPolicy | None = None,
         local_strategy: RetrievalStrategy | None = None,
         remote_strategy: RetrievalStrategy | None = None,
-        answer_composer: AnswerComposer | None = None,
     ):
         self.session = session
-        self.navigation_engine = NavigationRetrievalEngine(session)
+        self.navigation_engine = RichNavigationEngine(session)
         self.remote_engine = LightRAGRemoteRetrievalEngine()
         self.routing_policy = routing_policy or RetrievalRoutingPolicy()
         self.strategies = {
@@ -41,9 +39,8 @@ class RetrievalService:
                 navigation_engine=self.navigation_engine,
             ),
         }
-        self.answer_composer = answer_composer or AnswerComposer()
 
-    def retrieve(self, *, request: QueryRequest, user: UserRow) -> RetrieveResponse:
+    def retrieve(self, *, request: RetrieveRequest, user: UserRow) -> RetrieveResponse:
         result = self._retrieve_and_record(request=request, user=user)
         return self._retrieve_response(
             result,
@@ -51,7 +48,7 @@ class RetrievalService:
             include_debug=request.include_debug and user.role == "admin",
         )
 
-    def _retrieve_and_record(self, *, request: QueryRequest, user: UserRow) -> RetrievalResult:
+    def _retrieve_and_record(self, *, request: RetrieveRequest, user: UserRow) -> RetrievalResult:
         started = perf_counter()
         try:
             result = self._retrieve_result(request=request, user=user)
@@ -67,7 +64,7 @@ class RetrievalService:
         )
         return result
 
-    def _retrieve_result(self, *, request: QueryRequest, user: UserRow) -> RetrievalResult:
+    def _retrieve_result(self, *, request: RetrieveRequest, user: UserRow) -> RetrievalResult:
         self._validate_lightrag_document_filter(request)
         route = self.routing_policy.resolve(mode=request.mode)
         return self.strategies[route.backend].retrieve(
@@ -79,20 +76,7 @@ class RetrievalService:
             lightrag_domain_id=request.lightrag_domain_id,
         )
 
-    def answer(self, *, request: QueryRequest, user: UserRow) -> QueryResponse:
-        retrieved = self._retrieve_and_record(request=request, user=user)
-        answer = self.answer_composer.compose(
-            query=request.query,
-            evidence=retrieved.evidence,
-        )
-        response = self._retrieve_response(
-            retrieved,
-            request=request,
-            include_debug=request.include_debug and user.role == "admin",
-        )
-        return QueryResponse(**response.model_dump(), answer=answer)
-
-    def _validate_lightrag_document_filter(self, request: QueryRequest) -> None:
+    def _validate_lightrag_document_filter(self, request: RetrieveRequest) -> None:
         if not request.lightrag_domain_id or not request.document_ids:
             return
         documents = DocumentRepository(self.session)
@@ -114,7 +98,7 @@ class RetrievalService:
         self,
         result: RetrievalResult,
         *,
-        request: QueryRequest,
+        request: RetrieveRequest,
         include_debug: bool,
     ) -> RetrieveResponse:
         assets = []

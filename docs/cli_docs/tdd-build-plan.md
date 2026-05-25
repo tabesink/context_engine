@@ -27,12 +27,10 @@ Behavior covered:
 - `documents show` calls `GET /documents/{document_id}`.
 - `documents structure` calls `GET /documents/{document_id}/structure`.
 - `documents page` calls `GET /documents/{document_id}/pages/{page_number}`.
-- `documents retrieve` calls `POST /query/retrieve`.
-- `documents answer` calls `POST /query/answer`.
-- `query` calls `POST /query`.
+- `documents retrieve` calls `POST /retrieve`.
 - Query payloads include `query`, `mode`, `top_k`, `include_debug`, and optional `document_ids` / `lightrag_domain_id`.
 - Repeated `--document-id` values become a JSON array.
-- Query payload construction is concentrated in `cli/query_payload.py` and validated through the backend `QueryRequest` schema so CLI field drift is caught close to the command layer.
+- Query payload construction is concentrated in `cli/retrieve_payload.py` and validated through the backend `RetrieveRequest` schema so CLI field drift is caught close to the command layer.
 
 Acceptance:
 
@@ -46,7 +44,7 @@ Acceptance:
 Behavior covered:
 
 - `admin documents upload` sends multipart field `file` to `/admin/documents/upload`.
-- `admin documents index` and `reindex` call current admin routes.
+- `admin documents rebuild-structure`, `reingest-lightrag`, and `refresh-lightrag-status` call current admin routes.
 - `admin documents delete` renders the deleted document response.
 - `admin documents list` calls `GET /admin/documents`.
 - `admin audit-logs list` calls `GET /admin/audit-logs`.

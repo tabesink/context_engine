@@ -88,7 +88,7 @@ Q    Quit
 Every API-backed screen should show a compact footer:
 
 ```text
-Route: POST /query/retrieve    Status: 200    Time: 63 ms
+Route: POST /retrieve    Status: 200    Time: 63 ms
 ```
 
 ### 2. API Inspect drawer
@@ -149,7 +149,7 @@ Admin Actions:
 ```text
 Upload Document
 List All Documents
-Index / Reindex
+Rebuild structure / Reingest LightRAG / Refresh LightRAG status
 Delete Document
 ```
 

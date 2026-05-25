@@ -189,17 +189,11 @@ class FakeTuiClient:
                 "service_name": f"lightrag-{domain_id}",
                 "message": None,
             })
-        if path == "/query/retrieve":
+        if path == "/retrieve":
             return self._record("POST", path, payload, {
                 "query": payload["query"],
                 "mode": payload["mode"],
                 "evidence": [{"document_id": "doc-1", "text": "reset procedure evidence"}],
-            })
-        if path == "/query/answer":
-            return self._record("POST", path, payload, {
-                "query": payload["query"],
-                "answer": "Use the reset command from settings.",
-                "evidence": [{"document_id": "doc-1", "section": "Reset", "score": 0.93}],
             })
         raise AssertionError(f"unexpected POST {path}")
 
@@ -795,7 +789,6 @@ def test_tui_retrieval_screen_accepts_query_and_shows_evidence(tmp_path: Path) -
 
     assert "reset procedure" in output
     assert "reset procedure evidence" in output
-    assert "Generate answer" in output
     assert "Compare modes" in output
 
 
@@ -808,7 +801,7 @@ def test_tui_retrieval_result_inspect_shows_request_payload(tmp_path: Path) -> N
 
     assert "RETRIEVAL / CONTEXT / INSPECT API" in output
     assert "Route" in output
-    assert "/query/retrieve" in output
+    assert "/retrieve" in output
     assert "Request JSON" in output
     assert '"query": "reset procedure"' in output
     assert '"top_k": 8' in output
@@ -840,7 +833,7 @@ def test_tui_retrieval_prompt_can_select_lightrag_domain(tmp_path: Path) -> None
         authenticated_store(tmp_path),
     )
 
-    retrieval_calls = [call for call in FakeTuiClient.calls if call[0] == "POST" and call[1] == "/query/retrieve"]
+    retrieval_calls = [call for call in FakeTuiClient.calls if call[0] == "POST" and call[1] == "/retrieve"]
     assert retrieval_calls[-1][2]["lightrag_domain_id"] == "abaqus"
 
 
@@ -849,32 +842,15 @@ def test_tui_retrieval_screen_preserves_spaces_when_typing_character_by_characte
     output = run_with_inputs(tmp_path, keys, authenticated_store(tmp_path))
 
     assert "reset procedure" in output
-    retrieval_calls = [call for call in FakeTuiClient.calls if call[0] == "POST" and call[1] == "/query/retrieve"]
+    retrieval_calls = [call for call in FakeTuiClient.calls if call[0] == "POST" and call[1] == "/retrieve"]
     assert retrieval_calls
     assert retrieval_calls[-1][2]["query"] == "reset procedure"
-
-
-def test_tui_retrieval_result_generate_answer_opens_answer_screen(tmp_path: Path) -> None:
-    output = run_with_inputs(
-        tmp_path,
-        ["down", "enter", "reset procedure", "enter", "enter", "q"],
-        authenticated_store(tmp_path),
-    )
-
-    assert "RETRIEVAL / ANSWER" in output
-    assert "Use the reset command from settings." in output
-    answer_calls = [call for call in FakeTuiClient.calls if call[0] == "POST" and call[1] == "/query/answer"]
-    assert answer_calls
-    payload = answer_calls[-1][2]
-    assert payload["query"] == "reset procedure"
-    assert payload["mode"] == "auto"
-    assert payload["top_k"] == 8
 
 
 def test_tui_retrieval_result_compare_modes_opens_comparison_screen(tmp_path: Path) -> None:
     output = run_with_inputs(
         tmp_path,
-        ["down", "enter", "reset procedure", "enter", "down", "enter", "q"],
+        ["down", "enter", "reset procedure", "enter", "enter", "q"],
         authenticated_store(tmp_path),
     )
 
@@ -883,6 +859,8 @@ def test_tui_retrieval_result_compare_modes_opens_comparison_screen(tmp_path: Pa
     assert "semantic" in output
     assert "navigation" in output
     assert "hybrid" in output
+    compare_calls = [call for call in FakeTuiClient.calls if call[0] == "POST" and call[1] == "/retrieve"]
+    assert len(compare_calls) == 5
 
 
 def test_tui_health_screen_reads_health_and_readiness(tmp_path: Path) -> None:

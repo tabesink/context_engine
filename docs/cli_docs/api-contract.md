@@ -22,10 +22,8 @@ Older Typer-era subcommands were named **`ragcli …`**; shipping entrypoints ar
 | Document detail | `GET /documents/{document_id}` | authenticated | supported |
 | Structure/outline | `GET /documents/{document_id}/structure` | authenticated | supported |
 | Parsed page preview | `GET /documents/{document_id}/pages/{page_number}` | authenticated | supported |
-| Retrieval preview | `POST /query/retrieve` | authenticated | supported |
-| Citation answer | `POST /query/answer` | authenticated | supported |
-| Top-level Q&A shortcut | `POST /query` | authenticated | supported |
-| Scoped retrieval (doc filters) | Same routes with `document_ids` in JSON body | authenticated | supported |
+| Retrieval preview | `POST /retrieve` | authenticated | supported |
+| Scoped retrieval (doc filters) | Same route with `document_ids` in JSON body | authenticated | supported |
 | Multi-page `content` helper | no range endpoint | authenticated | documented gap |
 | Dedicated search endpoint | no separate search route | authenticated | documented gap |
 
@@ -41,7 +39,7 @@ Sample retrieve body:
 }
 ```
 
-`include_debug` is accepted on retrieve/answer/query requests, but **only admins** receive debug payloads from the backend.
+`include_debug` is accepted on retrieve requests, but **only admins** receive debug payloads from the backend.
 
 ## LightRAG graphs
 
@@ -87,8 +85,9 @@ Admin domain routes require **`LIGHTRAG_DEPLOY_ENABLED=true`**. Runtime graph/re
 | TUI capability | Backend | Role | Status |
 | --- | --- | --- | --- |
 | Upload | `POST /admin/documents/upload` (`multipart/form-data`, field `file`) | admin | supported |
-| Index | `POST /admin/documents/{document_id}/index` | admin | supported |
-| Reindex | `POST /admin/documents/{document_id}/reindex` | admin | supported |
+| Rebuild structure | `POST /admin/documents/{document_id}/rebuild-structure` | admin | supported |
+| Reingest LightRAG | `POST /admin/documents/{document_id}/reingest-lightrag` | admin | supported |
+| Refresh LightRAG status | `POST /admin/documents/{document_id}/refresh-lightrag-status` | admin | supported |
 | Delete | `DELETE /admin/documents/{document_id}` | admin | supported |
 | Admin listing | `GET /admin/documents` | admin | supported |
 | Corpus publish/rollback/cleanup | no matching endpoints | admin | documented gap |

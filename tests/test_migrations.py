@@ -45,7 +45,10 @@ def test_alembic_document_processing_revision_upgrades_existing_baseline(
     tables = set(inspect(engine).get_table_names())
 
     assert "document_sections" in tables
+    assert "document_pages" in tables
     assert "document_blocks" in tables
     assert "document_source_chunks" in tables
     assert "document_assets" in tables
-    assert "toc_refinement_reports" in tables
+    assert "parsed_documents" not in tables
+    assert "navigation_indexes" not in tables
+    assert "toc_refinement_reports" not in tables

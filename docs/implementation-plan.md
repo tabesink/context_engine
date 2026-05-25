@@ -18,7 +18,7 @@ Included:
 - Local parser/indexing pipeline for text, Markdown, and PDF documents.
 - Local navigation retrieval for page/section-oriented questions.
 - LightRAG-only semantic retrieval, queued LightRAG ingestion, graph proxy routes, and admin-controlled domain deployment through generated `.data/lightrag` files.
-- Unified `Evidence` model, retrieval router, grounded answer composer, citations, and evaluation script.
+- Unified `Evidence` model, retrieval router, and evaluation script.
 - Redis-backed worker path for indexing jobs, plus inline mode for deterministic local/dev flows.
 - Interactive terminal UI (`context-engine` / `context-tui`) that exercises supported backend flows through HTTP; planned-only backend surfaces remain visible as gaps rather than silent stubs.
 
@@ -110,7 +110,7 @@ Current acceptance:
 - Navigation processing builds page/tree data from `ParsedDocument`, not raw upload files.
 - Navigation evidence includes document, page, and section context when available.
 
-## Retrieval And Answers
+## Retrieval
 
 Implemented:
 
@@ -119,11 +119,8 @@ Implemented:
 - `LocalRetrievalStrategy` and `LightRAGRetrievalStrategy` in `app/retrieval/strategies.py`.
 - Shared retrieval contracts for mandatory LightRAG semantic retrieval and local navigation retrieval.
 - Hybrid evidence merger.
-- `POST /query/retrieve`.
-- `POST /query/answer`.
-- `POST /query`.
+- `POST /retrieve`.
 - Admin-only debug details through `include_debug`.
-- Deterministic citation-focused answer composer.
 
 Current acceptance:
 
@@ -134,7 +131,6 @@ Current acceptance:
 - Context Engine does not read or write local semantic chunks or embeddings.
 - Response evidence identifies `source_engine`.
 - Non-admin users do not receive internal debug details.
-- Answers are evidence-bound: if no evidence is available, the service returns a no-evidence response and does not synthesize unsupported content.
 
 ## Remote LightRAG Integration
 
@@ -218,10 +214,10 @@ Implemented:
 - Launcher `cli/launcher.py` builds `ApiClient`, `CredentialStore`, and enters the Rich loop in `cli/tui/app.py`.
 - Optional launcher flags via `cli/config.py`: `--api-base-url`, `--config-dir`, `--keyring`, `--no-keyring`; `--api-base-url` falls back to `CONTEXT_ENGINE_API_BASE_URL` or `http://127.0.0.1:8000`.
 - HTTP surface wrapped by `cli/api_client.py`; call patterns grouped in `cli/services/` (auth, documents, retrieval, admin documents, jobs, LightRAG, LightRAG domains, observability, health).
-- Payload shaping for queries in `cli/query_payload.py` where the TUI needs explicit JSON bodies.
+- Payload shaping for retrieval in `cli/retrieve_payload.py` where the TUI needs explicit JSON bodies.
 - TUI framework under `cli/tui/`: `navigation.py` (screen stack), `screen.py` (`TuiScreen`, `ScreenCommand`), `session_flow.py` (startup session / login vs menu), `state.py`, `keys.py`, `styles.py`, TUI `screens/` entry points, and `renderers/` for JSON and inspect views.
 - Reusable ASCII/table renderers in `cli/screens/` and `cli/renderers/` (imported by `cli/tui/screens/content.py`); optional guided flows in `cli/flows/` (for example retrieval comparison).
-- Main menu routes: documents, retrieval (including answer path), LightRAG graphs/labels, admin-only LightRAG domains / jobs / observability, health/readiness, login/logout—placeholders remain for backend gaps where applicable.
+- Main menu routes: documents, retrieval, LightRAG graphs/labels, admin-only LightRAG domains / jobs / observability, health/readiness, login/logout—placeholders remain for backend gaps where applicable.
 - Legacy `cli/main.py`: thin delegate to the launcher kept for backwards-compatible imports (`app` callable).
 
 Current acceptance:

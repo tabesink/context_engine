@@ -12,7 +12,6 @@ from app.schemas.documents import (
     SourceChunkResponse,
     StructureQualityResponse,
     StructureResponse,
-    TocRefinementReportResponse,
 )
 from app.services.document_access_policy import DocumentAccessPolicy
 from app.services.document_asset_service import DocumentAssetService
@@ -78,16 +77,13 @@ def get_structure(
             document_id=document_id,
             tree=_section_tree(canonical.sections),
             source="document_structure",
+            pages=[page.model_dump() for page in canonical.pages],
             sections=[section.model_dump() for section in canonical.sections],
             blocks=[block.model_dump() for block in canonical.blocks] if include_blocks else [],
             source_chunks=[chunk.model_dump() for chunk in canonical.source_chunks],
             assets=[asset.model_dump() for asset in canonical.assets] if include_assets else [],
         )
-
-    navigation = DocumentRepository(session).get_navigation_index(document_id)
-    if not navigation:
-        raise not_found("Document structure not found")
-    return StructureResponse(document_id=document_id, tree=navigation.tree)
+    raise not_found("Document structure not found")
 
 
 def _section_tree(sections) -> list[dict]:
@@ -276,31 +272,6 @@ def get_source_chunk(
     return SourceChunkResponse(**chunk.model_dump())
 
 
-@router.get("/{document_id}/toc-refinement-report")
-def get_toc_refinement_report(
-    document_id: str,
-    user: UserRow = Depends(get_current_user),
-    session: Session = Depends(get_session),
-) -> TocRefinementReportResponse:
-    DocumentAccessPolicy(DocumentRepository(session)).get_readable_document_or_404(
-        user=user,
-        document_id=document_id,
-    )
-    report = DocumentProcessingRepository(session).get_toc_refinement_report(document_id)
-    if not report:
-        raise not_found("TOC refinement report not found")
-    return TocRefinementReportResponse(
-        document_id=report.document_id,
-        enabled=report.enabled,
-        accepted=report.accepted,
-        reason=report.reason,
-        validation_accuracy=report.validation_accuracy,
-        logical_to_physical_offset=report.logical_to_physical_offset,
-        llm_call_count=report.llm_call_count,
-        warnings=report.warnings,
-    )
-
-
 @router.get("/{document_id}/pages/{page_number}")
 def get_page(
     document_id: str,
@@ -312,16 +283,13 @@ def get_page(
         user=user,
         document_id=document_id,
     )
-    parsed = DocumentRepository(session).get_parsed(document_id)
-    if not parsed:
-        raise not_found("Parsed document not found")
-    for page in parsed.pages:
-        if page.get("number") == page_number:
-            return PageResponse(
-                document_id=document_id,
-                page_number=page_number,
-                text=page.get("text", ""),
-                metadata=page.get("metadata", {}),
-            )
-    raise not_found("Page not found")
+    page = DocumentProcessingRepository(session).get_page(document_id, page_number)
+    if not page:
+        raise not_found("Page not found")
+    return PageResponse(
+        document_id=document_id,
+        page_number=page_number,
+        text=page.text or "",
+        metadata=page.metadata,
+    )
 

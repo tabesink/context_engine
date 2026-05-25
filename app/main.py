@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import admin, auth, documents, health, jobs, lightrag, lightrag_admin, query
+from app.api.routes import admin, auth, documents, health, jobs, lightrag, lightrag_admin, retrieve
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.storage.db import create_db_and_tables
@@ -32,7 +32,7 @@ def create_app() -> FastAPI:
     app.include_router(auth.router)
     app.include_router(documents.router)
     app.include_router(admin.router)
-    app.include_router(query.router)
+    app.include_router(retrieve.router)
     app.include_router(lightrag.router)
     app.include_router(lightrag_admin.router)
     app.include_router(jobs.router)

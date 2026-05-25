@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from cli.api_client import ApiClientError
-from cli.query_payload import build_query_payload
+from cli.retrieve_payload import build_retrieve_payload
 from cli.screens.models import ScreenResult, ScreenSection
 
 MODES = ["auto", "semantic", "navigation", "hybrid"]
@@ -16,8 +16,8 @@ def compare_retrieval_modes(client: Any, *, query: str, top_k: int) -> dict[str,
     for mode in MODES:
         try:
             response = client.post(
-                "/query/retrieve",
-                build_query_payload(
+                "/retrieve",
+                build_retrieve_payload(
                     query=query,
                     mode=mode,  # type: ignore[arg-type]
                     top_k=top_k,

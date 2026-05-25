@@ -5,7 +5,6 @@ from app.api.deps import require_admin
 from app.api.routes.documents import document_response
 from app.schemas.documents import DocumentResponse, RebuildStructureRequest, UploadResponse
 from app.services.document_service import DocumentService
-from app.services.job_service import JobService
 from app.storage.db import get_session
 from app.storage.repositories.documents import DocumentRepository
 from app.storage.repositories.logs import LogRepository
@@ -24,8 +23,6 @@ def upload_document(
     file: UploadFile,
     semantic_engine: str = Form(default="lightrag"),
     lightrag_domain_id: str | None = Form(default=None),
-    process_navigation: bool = Form(default=True),
-    enable_toc_refinement: str = Form(default="auto"),
     admin: UserRow = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> UploadResponse:
@@ -34,32 +31,8 @@ def upload_document(
         file=file,
         semantic_engine=semantic_engine,
         lightrag_domain_id=lightrag_domain_id,
-        process_navigation=process_navigation,
-        enable_toc_refinement=enable_toc_refinement,
     )
     return UploadResponse(document=document_response(document), job_id=job_id)
-
-
-@router.post("/documents/{document_id}/index")
-def index_document(
-    document_id: str,
-    admin: UserRow = Depends(require_admin),
-    session: Session = Depends(get_session),
-) -> dict[str, str]:
-    del admin
-    job_id = JobService(session).enqueue_index_document(document_id=document_id)
-    return {"job_id": job_id}
-
-
-@router.post("/documents/{document_id}/reindex")
-def reindex_document(
-    document_id: str,
-    admin: UserRow = Depends(require_admin),
-    session: Session = Depends(get_session),
-) -> dict[str, str]:
-    del admin
-    job_id = JobService(session).enqueue_index_document(document_id=document_id)
-    return {"job_id": job_id}
 
 
 @router.post("/documents/{document_id}/refresh-lightrag-status")
@@ -84,7 +57,6 @@ def rebuild_structure(
     job_id = DocumentService(session).rebuild_structure(
         actor_id=admin.id,
         document_id=document_id,
-        enable_toc_refinement=request.enable_toc_refinement,
         preserve_assets=request.preserve_assets,
     )
     return {"job_id": job_id}

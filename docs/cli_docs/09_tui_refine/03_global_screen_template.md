@@ -43,7 +43,7 @@
 Every API-backed screen should show a compact route footer:
 
 ```text
-Route: POST /query/retrieve    Status: 200    Time: 63 ms
+Route: POST /retrieve    Status: 200    Time: 63 ms
 ```
 
 For local-only screens:
@@ -110,7 +110,7 @@ Rules:
 CONTEXT ENGINE / Retrieval
 
 Loading...
-Route: POST /query/retrieve
+Route: POST /retrieve
 ```
 
 Keep loading states simple.

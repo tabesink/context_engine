@@ -1,11 +1,11 @@
 import pytest
 from pydantic import ValidationError
 
-from cli.query_payload import build_query_payload
+from cli.retrieve_payload import build_retrieve_payload
 
 
-def test_build_query_payload_uses_backend_query_schema_fields() -> None:
-    payload = build_query_payload(
+def test_build_retrieve_payload_uses_backend_retrieve_schema_fields() -> None:
+    payload = build_retrieve_payload(
         query="install steps",
         mode="auto",
         top_k=8,
@@ -24,8 +24,8 @@ def test_build_query_payload_uses_backend_query_schema_fields() -> None:
     }
 
 
-def test_build_query_payload_omits_empty_document_filter() -> None:
-    payload = build_query_payload(
+def test_build_retrieve_payload_omits_empty_document_filter() -> None:
+    payload = build_retrieve_payload(
         query="install steps",
         mode="auto",
         top_k=8,
@@ -36,9 +36,9 @@ def test_build_query_payload_omits_empty_document_filter() -> None:
     assert "lightrag_domain_id" not in payload
 
 
-def test_build_query_payload_validates_backend_constraints() -> None:
+def test_build_retrieve_payload_validates_backend_constraints() -> None:
     with pytest.raises(ValidationError):
-        build_query_payload(
+        build_retrieve_payload(
             query="install steps",
             mode="auto",
             top_k=31,

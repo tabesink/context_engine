@@ -1,9 +1,9 @@
 from typing import Any
 
-from app.schemas.query import QueryRequest
+from app.schemas.retrieval import RetrieveRequest
 
 
-def build_query_payload(
+def build_retrieve_payload(
     *,
     query: str,
     mode: str,
@@ -30,7 +30,7 @@ def build_query_payload(
     if max_assets is not None:
         data["max_assets"] = max_assets
 
-    request = QueryRequest(**data)
+    request = RetrieveRequest(**data)
     payload = request.model_dump(mode="json")
     if payload.get("document_ids") is None:
         payload.pop("document_ids")

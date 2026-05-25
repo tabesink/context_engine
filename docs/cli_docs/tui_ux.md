@@ -25,7 +25,7 @@ Session: saved
 
 - Clean exit with **`q`** (and standard interrupt handling outside raw modes).
 - Screens are reachable via simple keystrokes/menu entries.
-- Retrieval accepts a prompt and renders evidence from **`POST /query/retrieve`**.
+- Retrieval accepts a prompt and renders evidence from **`POST /retrieve`**.
 - LightRAG domain forms collect only inputs needed by the backend and show API success/errors directly.
 - API-backed screens expose progressive disclosure keys: **`I`** Inspect API, **`J`** Raw JSON, **`F`** toggle full IDs, **`R`** refresh, **`B`** back, and **`Q`** quit.
 - Inspect views show method, route, status, latency, request payload, response summary, and selected IDs when available.
@@ -37,7 +37,7 @@ Session: saved
 
 - Session shows backend/session summaries without leaking tokens.
 - Documents mirrors the **`GET /documents`** document library payload, and shows nested **Admin Actions** only for admin users.
-- Retrieval mirrors **`POST /query/retrieve`** / answer routes.
+- Retrieval mirrors **`POST /retrieve`** only.
 - Graphs screens consume backend proxy JSON only—no direct LightRAG SDK.
 - LightRAG Domains lists configured domains and exposes nested admin lifecycle actions (create/show/start/stop/recreate/regenerate/archive/permanent delete).
 - Recreate and remove flows require typed confirmations; permanent delete is explicit and depends on backend configuration.

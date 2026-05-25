@@ -118,10 +118,10 @@ def test_tui_api_footer_renders_route_status_latency_and_global_keys() -> None:
     stream = StringIO()
     console = Console(file=stream, force_terminal=False, width=120)
 
-    render_api_footer(console, method="POST", route="/query/retrieve", status_code=200, elapsed_ms=63)
+    render_api_footer(console, method="POST", route="/retrieve", status_code=200, elapsed_ms=63)
 
     output = stream.getvalue()
-    assert "Route: POST /query/retrieve" in output
+    assert "Route: POST /retrieve" in output
     assert "Status: 200" in output
     assert "Time: 63 ms" in output
     assert "I Inspect API" in output

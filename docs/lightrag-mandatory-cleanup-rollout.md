@@ -49,13 +49,13 @@ Hybrid retrieval = remote LightRAG semantic evidence + local navigation enrichme
 
 **Primary files:** `app/services/lightrag_ingestion_service.py`, `app/services/document_service.py`, ingestion/upload tests
 
-### Slice 5 — Status mapping + answer fallback cleanup
+### Slice 5 — Status mapping + retrieve-only API cleanup
 
 - Unknown LightRAG upload/track statuses raise integration errors instead of silently becoming `indexing`.
-- Removed `allow_general_fallback` from API schema, answer composer, and CLI payload builders.
-- `/query/answer` is evidence-bound: no evidence or weak evidence returns an explicit no-evidence response.
+- Removed `allow_general_fallback` and `QueryResponse` from API schema and CLI payload builders.
+- Removed answer-generation route/service surface and kept evidence-only retrieval at `POST /retrieve`.
 
-**Primary files:** `app/integrations/lightrag_remote_adapter.py`, `app/schemas/query.py`, `app/retrieval/answer_composer.py`, CLI query helpers/tests
+**Primary files:** `app/integrations/lightrag_remote_adapter.py`, `app/schemas/retrieval.py`, `app/services/retrieval_service.py`, CLI retrieve helpers/tests
 
 ### Slice 6 — Documentation alignment
 
@@ -84,8 +84,8 @@ Use six small commits (or six PRs) in dependency order:
 4. **LightRAG status hardening**
    - `app/integrations/lightrag_remote_adapter.py`, status refresh behavior, adapter/API tests
 
-5. **Answers: remove general fallback ambiguity**
-   - `app/schemas/query.py`, `app/retrieval/answer_composer.py`, CLI query payload/services/screens
+5. **API simplification: retrieve-only contract**
+   - `app/schemas/retrieval.py`, `app/services/retrieval_service.py`, CLI retrieve payload/services/screens
 
 6. **Docs: canonical architecture alignment**
    - README + docs listed above, including this rollout note

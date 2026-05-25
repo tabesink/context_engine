@@ -39,10 +39,9 @@ Scripts should call **REST endpoints** directly—not launch the TUI with fake �
 | Document detail | **`GET /documents/{document_id}`** |
 | Document structure/outline | **`GET /documents/{document_id}/structure`** |
 | Parsed page body | **`GET /documents/{document_id}/pages/{page_number}`** |
-| Retrieval-only answers | **`POST /query/retrieve`** |
-| Composed citation answer | **`POST /query/answer`** or **`POST /query`** shortcut |
+| Retrieval-only answers | **`POST /retrieve`** |
 
-Representative **`POST /query/retrieve`** body:
+Representative **`POST /retrieve`** body:
 
 ```json
 {
@@ -109,10 +108,10 @@ Domain deploy screens are admin-only through backend authorization. **`LIGHTRAG_
 | --- | --- |
 | Upload | **`POST /admin/documents/upload`** (`multipart/form-data`; fields **`file`**, optional **`semantic_engine=lightrag`**, optional **`lightrag_domain_id`**) |
 | List all docs (admin lens) | **`GET /admin/documents`** |
-| Index · reindex · delete | **`POST /admin/documents/{id}/index`** · **`/reindex`** · **`DELETE /admin/documents/{id}`** |
+| Rebuild structure · reingest LightRAG · refresh status · delete | **`POST /admin/documents/{id}/rebuild-structure`** · **`POST /admin/documents/{id}/reingest-lightrag`** · **`POST /admin/documents/{id}/refresh-lightrag-status`** · **`DELETE /admin/documents/{id}`** |
 | Planned corpus lifecycle knobs | Backend routes **missing** (`publish`, `rollback`, …) |
 
-LightRAG uploads enqueue a **`lightrag_ingest_document`** job and return queued **`lightrag.*`** metadata. Optional navigation processing is tracked separately under **`metadata.navigation`**.
+LightRAG uploads enqueue a **`lightrag_ingest_document`** job and return queued **`lightrag.*`** metadata.
 
 In the TUI, these operations are nested under **`Documents -> Admin Actions`** (not a separate root menu item).
 
@@ -131,7 +130,7 @@ In the TUI, these operations are nested under **`Documents -> Admin Actions`** (
 | Job detail | **`GET /jobs/{job_id}`** |
 | Retry failed job | **`POST /jobs/{job_id}/retry`** |
 
-Jobs track local worker-owned indexing pipelines.
+Jobs track local worker-owned LightRAG ingestion pipelines.
 
 ## Planned-only backend surface
 

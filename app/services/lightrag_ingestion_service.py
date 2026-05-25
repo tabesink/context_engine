@@ -11,7 +11,7 @@ from app.document_processing.artifacts import DocumentProcessingArtifactStore
 from app.document_processing.chunk_builder import StructureAwareChunkBuilder
 from app.document_processing.docling_parser import DoclingParser
 from app.document_processing.pipeline import TextDoclingParser
-from app.document_processing.refinement import StructureQualityScorer, TocRefiner
+from app.document_processing.refinement import StructureQualityScorer
 from app.domain.models import DocumentStatus
 from app.integrations.lightrag_remote_adapter import LightRAGRemoteAdapter
 from app.storage.repositories.document_processing import DocumentProcessingRepository
@@ -60,7 +60,6 @@ class LightRAGIngestionService:
         structure_parser: TextDoclingParser | None = None,
         chunk_builder: StructureAwareChunkBuilder | None = None,
         quality_scorer: StructureQualityScorer | None = None,
-        toc_refiner: TocRefiner | None = None,
         artifact_store: DocumentProcessingArtifactStore | None = None,
         now: Callable[[], datetime] | None = None,
     ):
@@ -71,7 +70,6 @@ class LightRAGIngestionService:
         self.docling_parser = DoclingParser()
         self.chunk_builder = chunk_builder or StructureAwareChunkBuilder()
         self.quality_scorer = quality_scorer or StructureQualityScorer()
-        self.toc_refiner = toc_refiner or TocRefiner()
         self.artifact_store = artifact_store or DocumentProcessingArtifactStore()
         self.adapter_factory = adapter_factory or LightRAGRemoteAdapter.for_domain
         self.lock_factory = lock_factory or (lambda domain_id: RedisIngestLock(domain_id=domain_id))
@@ -124,23 +122,6 @@ class LightRAGIngestionService:
             ) from exc
 
         structure = structure.model_copy(update={"quality": self.quality_scorer.score(structure)})
-        toc_refinement_mode = self._toc_refinement_mode(document)
-        should_refine = toc_refinement_mode == "always" or (
-            toc_refinement_mode == "auto" and structure.quality.should_run_toc_refiner
-        )
-        if should_refine:
-            refinement = self.toc_refiner.refine(structure)
-            self.document_processing.save_toc_refinement_report(
-                document_id=document.id,
-                enabled=True,
-                result=refinement,
-            )
-            self.artifact_store.save_toc_refinement_report(
-                document_id=document.id,
-                enabled=True,
-                result=refinement,
-            )
-            structure = refinement.structure
 
         structure = self.chunk_builder.build(structure)
         if not structure.source_chunks:
@@ -173,23 +154,6 @@ class LightRAGIngestionService:
         if content_type.startswith("text/") or suffix in {".md", ".markdown", ".txt"}:
             return self.text_parser
         return self.docling_parser
-
-    def _toc_refinement_mode(self, document: DocumentRow) -> str:
-        metadata = document.meta if isinstance(document.meta, dict) else {}
-        processing = metadata.get("document_processing")
-        if isinstance(processing, dict) and "enable_toc_refinement" in processing:
-            return self._normalize_toc_refinement_mode(processing["enable_toc_refinement"])
-        if "enable_toc_refinement" in metadata:
-            return self._normalize_toc_refinement_mode(metadata["enable_toc_refinement"])
-        return "auto"
-
-    def _normalize_toc_refinement_mode(self, value: object) -> str:
-        if isinstance(value, bool):
-            return "always" if value else "never"
-        mode = str(value or "auto").strip().lower()
-        if mode in {"always", "auto", "never"}:
-            return mode
-        return "auto"
 
     def _apply_remote_status(
         self,

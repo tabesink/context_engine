@@ -8,14 +8,13 @@
 | Document Detail | View one doc | `GET /documents/{id}` | Metadata summary | Full metadata JSON | No | No |
 | Document Structure | View outline | `GET /documents/{id}/structure` | Tree/table | Full structure JSON | No | No |
 | Document Page | View page text | `GET /documents/{id}/pages/{page}` | Page text excerpt | Full page payload | No | No |
-| Documents Admin Actions | Upload/list/index/delete | `/admin/documents...` | Admin action menu | Route/payload/status | Yes | No |
-| Retrieval | Retrieve evidence | `POST /query/retrieve` | Query form/result table | Request JSON, evidence IDs, raw response | No | No |
-| Answer | Generate answer | `POST /query/answer` or `POST /query` | Answer + sources | Request JSON, evidence, raw answer payload | No | No |
-| Retrieval Compare | Compare modes | repeated `POST /query/retrieve` | Mode comparison table | Per-mode payload/status/errors | No | No |
+| Documents Admin Actions | Upload/list/rebuild/reingest/delete | `/admin/documents...` | Admin action menu | Route/payload/status | Yes | No |
+| Retrieval | Retrieve evidence | `POST /retrieve` | Query form/result table | Request JSON, evidence IDs, raw response | No | No |
+| Retrieval Compare | Compare modes | repeated `POST /retrieve` | Mode comparison table | Per-mode payload/status/errors | No | No |
 | Graphs | Graph labels/summary | `/graphs`, `/graph/label/...` | Labels/summary table | Params, node/edge counts, raw JSON | No | No |
 | LightRAG Domains | Deploy/manage domains | `/admin/lightrag/domains...` | Domain table/actions | Manifest path, compose path, Docker status | Yes | No |
 | Domain Selector | Choose query domain | `GET /lightrag/domains` | Domain dropdown/list | User-safe domain payload | No | No |
-| Jobs | Monitor indexing | `GET /jobs` | Jobs table | Full job metadata/raw JSON | Yes | No |
+| Jobs | Monitor ingestion jobs | `GET /jobs` | Jobs table | Full job metadata/raw JSON | Yes | No |
 | Job Detail | Inspect one job | `GET /jobs/{job_id}` | Job status/error | Full metadata, retry info | Yes | No |
 | Job Retry | Retry failed job | `POST /jobs/{job_id}/retry` | Retry result | Request/status/new job ID | Yes | No |
 | Observability | Audit/query logs | `/admin/query-logs`, `/admin/audit-logs` | Recent logs | Full log metadata | Yes | No |

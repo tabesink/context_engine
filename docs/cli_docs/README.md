@@ -4,7 +4,7 @@ The **`context-engine`** and **`context-tui`** commands (same implementation, `c
 
 Automation and CI should prefer **calling the REST API directly** (`curl`, HTTP libraries). The launcher is geared toward guided human operation.
 
-Examples use backend paths such as `/auth/login`, `/documents`, `/query/retrieve`, `/admin/documents/upload`, `/jobs/{job_id}`, `/graphs`, `/graph/label/…`, `/lightrag/domains`, and `/admin/lightrag/domains`.
+Examples use backend paths such as `/auth/login`, `/documents`, `/retrieve`, `/admin/documents/upload`, `/jobs/{job_id}`, `/graphs`, `/graph/label/…`, `/lightrag/domains`, and `/admin/lightrag/domains`.
 
 ## Install For Local Development
 
@@ -47,7 +47,7 @@ Rough map to menus in the UI (exact labels follow `cli/tui/`):
 - Session: stored session summary · `GET /auth/me`
 - Documents: browse document library, structure/page views
 - Documents Admin Actions: nested under Documents for admin users (upload/list/index/reindex/delete)
-- Retrieval: `POST /query/retrieve`; optional answer flows via `/query`, `/query/answer`
+- Retrieval: `POST /retrieve` only
 - Graphs: graph/label summaries via backend proxies when configured
 - LightRAG Domains: admin lifecycle screens for list, create, start, stop, recreate, archive remove, and permanent delete
 - Jobs: list/detail/retry for admin-visible jobs
@@ -55,7 +55,7 @@ Rough map to menus in the UI (exact labels follow `cli/tui/`):
 - Health / readiness shortcuts where wired
 - Backend gaps: documented in `docs/cli_docs/backend_gaps.md`; not exposed as a root TUI screen
 
-LightRAG domain administration is TUI-first for human operators and REST-first for automation. Domain deployment requires backend settings such as **`LIGHTRAG_DEPLOY_ENABLED=true`** plus the Docker/image/storage variables documented in **`.env.example`**. Runtime LightRAG is mandatory: **`LIGHTRAG_ENABLED=true`**, plus **`LIGHTRAG_BASE_URL`** or a readable domain manifest, and optional **`LIGHTRAG_API_KEY`**. Query answers are evidence-bound; there is no general fallback answer mode.
+LightRAG domain administration is TUI-first for human operators and REST-first for automation. Domain deployment requires backend settings such as **`LIGHTRAG_DEPLOY_ENABLED=true`** plus the Docker/image/storage variables documented in **`.env.example`**. Runtime LightRAG is mandatory: **`LIGHTRAG_ENABLED=true`**, plus **`LIGHTRAG_BASE_URL`** or a readable domain manifest, and optional **`LIGHTRAG_API_KEY`**.
 
 API-backed screens keep default views clean. Use **`I`** for Inspect API, **`J`** for Raw JSON, **`F`** for full IDs, and **`R`** to refresh. Inspect/raw views redact secrets and never show multipart file bytes.
 
@@ -69,7 +69,7 @@ flowchart TD
     client --> backend[FastAPIBackend]
     backend --> auth[AuthRoutes]
     backend --> docs[DocumentRoutes]
-    backend --> query[QueryRoutes]
+    backend --> retrieve[RetrieveRoute]
     backend --> admin[AdminRoutes]
     backend --> jobs[JobRoutes]
     backend --> lightrag[LightRAGRoutes]

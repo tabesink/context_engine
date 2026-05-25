@@ -1,5 +1,5 @@
 from app.domain.models import Evidence
-from app.schemas.query import EvidenceResponse
+from app.schemas.retrieval import EvidenceResponse
 
 
 def to_evidence_response(evidence: Evidence) -> EvidenceResponse:

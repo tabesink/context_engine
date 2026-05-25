@@ -5,8 +5,6 @@ from app.domain.models import DocumentStatus, utc_now
 from app.storage.tables import (
     AuditLogRow,
     DocumentRow,
-    NavigationIndexRow,
-    ParsedDocumentRow,
 )
 
 
@@ -88,40 +86,6 @@ class DocumentRepository:
 
     def mark_deleted(self, document: DocumentRow) -> DocumentRow:
         return self.update_status(document, DocumentStatus.DELETED)
-
-    def save_parsed(self, *, document_id: str, title: str, pages: list, full_text: str, metadata: dict) -> None:
-        existing = self.session.get(ParsedDocumentRow, document_id)
-        if existing:
-            existing.title = title
-            existing.pages = pages
-            existing.full_text = full_text
-            existing.meta = metadata
-        else:
-            self.session.add(
-                ParsedDocumentRow(
-                    document_id=document_id,
-                    title=title,
-                    pages=pages,
-                    full_text=full_text,
-                    meta=metadata,
-                )
-            )
-        self.session.commit()
-
-    def get_parsed(self, document_id: str) -> ParsedDocumentRow | None:
-        return self.session.get(ParsedDocumentRow, document_id)
-
-    def save_navigation_index(self, *, document_id: str, tree: list, version: int) -> None:
-        existing = self.session.get(NavigationIndexRow, document_id)
-        if existing:
-            existing.tree = tree
-            existing.version = version
-        else:
-            self.session.add(NavigationIndexRow(document_id=document_id, tree=tree, version=version))
-        self.session.commit()
-
-    def get_navigation_index(self, document_id: str) -> NavigationIndexRow | None:
-        return self.session.get(NavigationIndexRow, document_id)
 
     def audit(self, *, actor_id: str | None, event: str, target_id: str | None, metadata: dict) -> None:
         self.session.add(

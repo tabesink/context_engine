@@ -5,7 +5,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.document_processing.models import DocumentAsset, DocumentStructure, SourceChunk
 from app.domain.models import Evidence, RetrievalMode, RetrievalResult, UserRole
-from app.schemas.query import QueryRequest
+from app.schemas.retrieval import RetrieveRequest
 from app.services.retrieval_service import RetrievalService
 from app.storage import tables  # noqa: F401
 from app.storage.db import Base
@@ -111,7 +111,7 @@ def test_retrieval_response_can_include_assets_linked_to_source_chunks() -> None
         )
         user = tables.UserRow(id="user-1", email="u@example.com", password_hash="x", role=UserRole.USER.value)
         response = _retrieval_service(session, FakeStrategy()).retrieve(
-            request=QueryRequest(
+            request=RetrieveRequest(
                 query="show diagram",
                 mode=RetrievalMode.SEMANTIC,
                 include_assets=True,
@@ -155,7 +155,7 @@ def test_retrieval_response_resolves_assets_from_lightrag_chunk_metadata() -> No
         )
         user = tables.UserRow(id="user-1", email="u@example.com", password_hash="x", role=UserRole.USER.value)
         response = _retrieval_service(session, FakeChunkMetadataStrategy()).retrieve(
-            request=QueryRequest(
+            request=RetrieveRequest(
                 query="show diagram",
                 mode=RetrievalMode.SEMANTIC,
                 include_assets=True,
@@ -209,7 +209,7 @@ def test_retrieval_asset_enrichment_ranks_metadata_assets_and_applies_limit() ->
         )
         user = tables.UserRow(id="user-1", email="u@example.com", password_hash="x", role=UserRole.USER.value)
         response = _retrieval_service(session, FakeAssetMetadataStrategy()).retrieve(
-            request=QueryRequest(
+            request=RetrieveRequest(
                 query="show hydraulic diagram",
                 mode=RetrievalMode.SEMANTIC,
                 include_assets=True,
@@ -228,7 +228,7 @@ def test_retrieval_asset_enrichment_is_opt_in() -> None:
     with session_factory() as session:
         user = tables.UserRow(id="user-1", email="u@example.com", password_hash="x", role=UserRole.USER.value)
         response = _retrieval_service(session, FakeStrategy()).retrieve(
-            request=QueryRequest(
+            request=RetrieveRequest(
                 query="show diagram",
                 mode=RetrievalMode.SEMANTIC,
                 include_assets=False,
