@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     index_jobs_inline: bool = False
     storage_root: Path = Path(".data/uploads")
     allowed_origins: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["*"])
-    seed_admin_email: str = "admin@example.com"
+    seed_admin_username: str = "admin"
     seed_admin_password: str = "admin-password"
     lightrag_enabled: bool = False
     lightrag_base_url: str = "http://localhost:9621"

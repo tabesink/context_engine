@@ -1,6 +1,7 @@
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from app.document_processing.refinement import TocRefinementResult
 from app.document_processing.models import (
     DocumentAsset,
     DocumentBlock,
@@ -13,6 +14,7 @@ from app.storage.tables import (
     DocumentBlockRow,
     DocumentSectionRow,
     DocumentSourceChunkRow,
+    TocRefinementReportRow,
 )
 
 
@@ -40,6 +42,42 @@ class DocumentProcessingRepository:
             self.session.add(self._asset_row(asset))
         self.session.commit()
 
+    def get_structure(self, document_id: str, *, source_file: str = "") -> DocumentStructure | None:
+        sections = [
+            self._section_model(row)
+            for row in self.session.scalars(
+                select(DocumentSectionRow).where(DocumentSectionRow.document_id == document_id)
+            )
+        ]
+        blocks = [
+            self._block_model(row)
+            for row in self.session.scalars(
+                select(DocumentBlockRow).where(DocumentBlockRow.document_id == document_id)
+            )
+        ]
+        chunks = [
+            self._chunk_model(row)
+            for row in self.session.scalars(
+                select(DocumentSourceChunkRow).where(DocumentSourceChunkRow.document_id == document_id)
+            )
+        ]
+        assets = [
+            self._asset_model(row)
+            for row in self.session.scalars(
+                select(DocumentAssetRow).where(DocumentAssetRow.document_id == document_id)
+            )
+        ]
+        if not any((sections, blocks, chunks, assets)):
+            return None
+        return DocumentStructure(
+            document_id=document_id,
+            source_file=source_file,
+            sections=sections,
+            blocks=blocks,
+            source_chunks=chunks,
+            assets=assets,
+        )
+
     def get_source_chunk(self, document_id: str, chunk_id: str) -> SourceChunk | None:
         row = self.session.get(DocumentSourceChunkRow, chunk_id)
         if not row or row.document_id != document_id:
@@ -60,6 +98,35 @@ class DocumentProcessingRepository:
             return None
         return self._asset_model(row)
 
+    def get_toc_refinement_report(self, document_id: str) -> TocRefinementReportRow | None:
+        return self.session.scalars(
+            select(TocRefinementReportRow).where(TocRefinementReportRow.document_id == document_id)
+        ).first()
+
+    def save_toc_refinement_report(
+        self,
+        *,
+        document_id: str,
+        enabled: bool,
+        result: TocRefinementResult,
+    ) -> None:
+        self.session.execute(
+            delete(TocRefinementReportRow).where(TocRefinementReportRow.document_id == document_id)
+        )
+        self.session.add(
+            TocRefinementReportRow(
+                document_id=document_id,
+                enabled=enabled,
+                accepted=result.accepted,
+                reason=result.reason,
+                validation_accuracy=result.validation_accuracy,
+                logical_to_physical_offset=result.logical_to_physical_offset,
+                llm_call_count=result.llm_call_count,
+                warnings=result.warnings,
+            )
+        )
+        self.session.commit()
+
     def _section_row(self, section: DocumentSection) -> DocumentSectionRow:
         return DocumentSectionRow(
             id=section.section_id,
@@ -75,6 +142,21 @@ class DocumentProcessingRepository:
             confidence=section.confidence,
         )
 
+    def _section_model(self, row: DocumentSectionRow) -> DocumentSection:
+        return DocumentSection(
+            section_id=row.id,
+            document_id=row.document_id,
+            parent_section_id=row.parent_section_id,
+            title=row.title,
+            level=row.level,
+            page_start=row.page_start,
+            page_end=row.page_end,
+            block_ids=row.block_ids,
+            child_section_ids=row.child_section_ids,
+            source=row.source,
+            confidence=row.confidence,
+        )
+
     def _block_row(self, block: DocumentBlock) -> DocumentBlockRow:
         return DocumentBlockRow(
             id=block.block_id,
@@ -87,6 +169,20 @@ class DocumentProcessingRepository:
             bbox=block.bbox,
             reading_order=block.reading_order,
             asset_ids=block.asset_ids,
+        )
+
+    def _block_model(self, row: DocumentBlockRow) -> DocumentBlock:
+        return DocumentBlock(
+            block_id=row.id,
+            document_id=row.document_id,
+            section_id=row.section_id,
+            type=row.type,
+            text=row.text,
+            page_start=row.page_start,
+            page_end=row.page_end,
+            bbox=row.bbox,
+            reading_order=row.reading_order,
+            asset_ids=row.asset_ids,
         )
 
     def _chunk_row(self, chunk: SourceChunk) -> DocumentSourceChunkRow:

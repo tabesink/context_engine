@@ -89,6 +89,87 @@ def test_remote_adapter_normalizes_query_data_chunks_to_evidence() -> None:
     assert evidence[0].metadata["source_chunk_id"] == "source-chunk-1"
 
 
+def test_remote_adapter_preserves_ingested_chunk_metadata() -> None:
+    document_id = "22222222-2222-4222-8222-222222222222"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/query/data"
+        return httpx.Response(
+            200,
+            json={
+                "data": {
+                    "chunks": [
+                        {
+                            "content": "Retrieved remote context.",
+                            "chunk_id": "remote-result-1",
+                            "document_id": document_id,
+                            "metadata": {"chunk_id": "source-chunk-1", "asset_ids": ["asset-1"]},
+                        }
+                    ],
+                    "references": [],
+                },
+            },
+        )
+
+    adapter = LightRAGRemoteAdapter(
+        base_url="http://lightrag.local",
+        client=httpx.Client(transport=httpx.MockTransport(handler), base_url="http://lightrag.local"),
+    )
+
+    evidence = adapter.retrieve(
+        query="remote",
+        mode=RetrievalMode.SEMANTIC,
+        top_k=3,
+        document_ids=None,
+    )
+
+    assert evidence[0].metadata["chunk_id"] == "source-chunk-1"
+    assert evidence[0].metadata["asset_ids"] == ["asset-1"]
+
+
+def test_remote_adapter_uses_metadata_when_chunk_fields_are_partial() -> None:
+    document_id = "22222222-2222-4222-8222-222222222222"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/query/data"
+        return httpx.Response(
+            200,
+            json={
+                "data": {
+                    "chunks": [
+                        {
+                            "content": "Retrieved remote context.",
+                            "chunk_id": "remote-result-1",
+                            "metadata": {
+                                "document_id": document_id,
+                                "chunk_id": "source-chunk-1",
+                                "page_start": 3,
+                                "page_end": 4,
+                            },
+                        }
+                    ],
+                    "references": [],
+                },
+            },
+        )
+
+    adapter = LightRAGRemoteAdapter(
+        base_url="http://lightrag.local",
+        client=httpx.Client(transport=httpx.MockTransport(handler), base_url="http://lightrag.local"),
+    )
+
+    evidence = adapter.retrieve(
+        query="remote",
+        mode=RetrievalMode.SEMANTIC,
+        top_k=3,
+        document_ids=None,
+    )
+
+    assert evidence[0].document_id == UUID(document_id)
+    assert evidence[0].page_ref.page_start == 3
+    assert evidence[0].metadata["chunk_id"] == "source-chunk-1"
+
+
 def test_remote_adapter_includes_domain_when_provided() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/query/data"
@@ -150,7 +231,11 @@ def test_remote_adapter_ingests_source_chunks_with_metadata() -> None:
         payload = request.read().decode()
         assert '"domain":"manuals"' in payload
         assert '"chunk_id":"chunk-1"' in payload
+        assert '"block_ids":["block-1"]' in payload
         assert '"asset_ids":["asset-1"]' in payload
+        assert '"semantic_owner":"lightrag"' in payload
+        assert '"section_title":"Safety"' in payload
+        assert '"section_path":["Manual","Safety"]' in payload
         return httpx.Response(200, json={"status": "success", "track_id": "track-chunks"})
 
     adapter = LightRAGRemoteAdapter(
@@ -170,6 +255,11 @@ def test_remote_adapter_ingests_source_chunks_with_metadata() -> None:
                 page_start=1,
                 page_end=1,
                 asset_ids=["asset-1"],
+                metadata={
+                    "semantic_owner": "lightrag",
+                    "section_title": "Safety",
+                    "section_path": ["Manual", "Safety"],
+                },
             )
         ],
     )

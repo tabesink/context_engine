@@ -4,7 +4,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.domain.models import RetrievalResult
+from app.domain.models import RetrievalMode, RetrievalResult
 from app.integrations.lightrag_remote_adapter import LightRAGAdapterError, lightrag_http_exception
 from app.retrieval.answer_composer import AnswerComposer
 from app.retrieval.evidence_mapper import to_evidence_response
@@ -76,6 +76,8 @@ class RetrievalService:
 
     def _retrieve_result(self, *, request: QueryRequest, user: UserRow) -> RetrievalResult:
         self._validate_lightrag_document_filter(request)
+        if not self.settings.lightrag_enabled and request.mode != RetrievalMode.NAVIGATION:
+            raise HTTPException(status_code=400, detail="LightRAG is required for semantic retrieval")
         route = self.routing_policy.resolve(
             lightrag_enabled=self.settings.lightrag_enabled,
             mode=request.mode,
@@ -132,6 +134,7 @@ class RetrievalService:
         if request.include_assets:
             assets = RetrievalAssetResolver(DocumentProcessingRepository(self.session)).resolve(
                 result.evidence,
+                query=request.query,
                 include_thumbnails=request.include_thumbnails,
                 max_assets=request.max_assets,
             )

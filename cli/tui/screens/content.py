@@ -13,7 +13,7 @@ from cli.flows.retrieval_compare import build_retrieval_compare_screen, compare_
 from cli.renderers.tables import render_ascii_table
 from cli.renderers.base import render_screen_result
 from cli.screens.admin_documents import build_admin_documents_screen
-from cli.screens.documents import build_document_detail_screen
+from cli.screens.documents import build_document_detail_screen, build_document_structure_screen
 from cli.screens.jobs import build_job_status_screen, build_jobs_screen
 from cli.screens.lightrag import build_labels_screen
 from cli.screens.lightrag_domains import build_lightrag_domains_screen
@@ -339,16 +339,42 @@ class DocumentDetailScreen:
     document_id: str
     title: str = "Document Detail"
     document: dict[str, Any] | None = None
+    structure_quality: dict[str, Any] | None = None
+    toc_refinement_report: dict[str, Any] | None = None
 
     def render(self, console: Console, state: TuiState) -> None:
         render_breadcrumb(console, "Documents", "Detail")
         try:
             if self.document is None:
                 self.document = state.document_service().get_document(self.document_id)
-            render_screen_result(build_document_detail_screen(self.document), console=console, show_title=False)
+            if self.structure_quality is None:
+                self.structure_quality = self._load_structure_quality(state)
+            if self.toc_refinement_report is None:
+                self.toc_refinement_report = self._load_toc_refinement_report(state)
+            render_screen_result(
+                build_document_detail_screen(
+                    self.document,
+                    structure_quality=self.structure_quality,
+                    toc_refinement_report=self.toc_refinement_report,
+                ),
+                console=console,
+                show_title=False,
+            )
         except ApiClientError as exc:
             render_status_line(console, "error", f"{exc.code}: {exc.message}")
         render_key_footer(console, ["Ctrl+R Refresh", "B Back", "Q Quit"])
+
+    def _load_structure_quality(self, state: TuiState) -> dict[str, Any]:
+        try:
+            return state.document_service().get_structure_quality(self.document_id)
+        except ApiClientError:
+            return {}
+
+    def _load_toc_refinement_report(self, state: TuiState) -> dict[str, Any]:
+        try:
+            return state.document_service().get_toc_refinement_report(self.document_id)
+        except ApiClientError:
+            return {}
 
     def handle_key(self, key: str, state: TuiState) -> ScreenCommand:
         if key == KEY_QUIT:
@@ -357,7 +383,22 @@ class DocumentDetailScreen:
             return ScreenCommand.pop()
         if key == KEY_REFRESH:
             self.document = None
+            self.structure_quality = None
+            self.toc_refinement_report = None
             return ScreenCommand.none()
+        if key == KEY_ENTER:
+            return ScreenCommand.push(
+                ApiResultScreen(
+                    "Document Structure",
+                    build_document_structure_screen,
+                    lambda s: s.document_service().get_structure(
+                        self.document_id,
+                        include_blocks=True,
+                        include_assets=True,
+                    ),
+                    breadcrumb_trail=("Documents", "Detail", "Structure"),
+                )
+            )
         return ScreenCommand.none()
 
 

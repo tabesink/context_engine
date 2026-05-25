@@ -1,11 +1,20 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, Field, model_validator
 
 from app.domain.models import UserRole
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    username: str | None = Field(default=None, min_length=1, max_length=128)
+    email: str | None = Field(default=None, exclude=True)
     password: str
+
+    @model_validator(mode="after")
+    def normalize_legacy_email(self) -> "LoginRequest":
+        if self.username is None and self.email:
+            self.username = self.email
+        if self.username is None:
+            raise ValueError("username is required")
+        return self
 
 
 class TokenResponse(BaseModel):
@@ -15,7 +24,7 @@ class TokenResponse(BaseModel):
 
 class UserResponse(BaseModel):
     id: str
-    email: EmailStr
+    username: str
     role: UserRole
     is_active: bool
 

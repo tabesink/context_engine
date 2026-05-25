@@ -19,9 +19,9 @@ from cli.tui.styles import render_breadcrumb, render_key_footer, render_status_l
 class LoginScreen:
     message: str | None = None
     title: str = "Context Engine Login"
-    email: str = ""
+    username: str = ""
     password: str = ""
-    active_field: str = "email"
+    active_field: str = "username"
 
     def render(self, console: Console, state: TuiState) -> None:
         render_breadcrumb(console, "Session", "Login")
@@ -29,9 +29,9 @@ class LoginScreen:
             render_status_line(console, "warn", self.message)
         console.print(f"Backend: {state.api_base_url}")
         console.print("")
-        email_marker = ">" if self.active_field == "email" else " "
+        username_marker = ">" if self.active_field == "username" else " "
         password_marker = ">" if self.active_field == "password" else " "
-        console.print(f"{email_marker} Email:    [{self.email}]")
+        console.print(f"{username_marker} Username: [{self.username}]")
         console.print(f"{password_marker} Password: [{'*' * len(self.password)}]")
         render_key_footer(console, ["Tab/Up/Down Next field", "Enter Submit", "Q Quit"])
 
@@ -39,24 +39,24 @@ class LoginScreen:
         if key == KEY_QUIT:
             return ScreenCommand.quit()
         if key in {KEY_TAB, KEY_UP, KEY_DOWN}:
-            self.active_field = "password" if self.active_field == "email" else "email"
+            self.active_field = "password" if self.active_field == "username" else "username"
             return ScreenCommand.none()
         if key == KEY_ENTER:
-            if self.active_field == "email" and self.email and not self.password:
+            if self.active_field == "username" and self.username and not self.password:
                 self.active_field = "password"
                 return ScreenCommand.none()
-            if not self.email or not self.password:
-                self.message = "Email and password are required."
+            if not self.username or not self.password:
+                self.message = "Username and password are required."
                 return ScreenCommand.none()
             return self._submit(state)
         if key == KEY_BACKSPACE:
-            if self.active_field == "email":
-                self.email = self.email[:-1]
+            if self.active_field == "username":
+                self.username = self.username[:-1]
             else:
                 self.password = self.password[:-1]
             return ScreenCommand.none()
-        if self.active_field == "email":
-            self.email += text_input_key(key)
+        if self.active_field == "username":
+            self.username += text_input_key(key)
         else:
             self.password += text_input_key(key)
         return ScreenCommand.none()
@@ -66,14 +66,14 @@ class LoginScreen:
 
         state.reset_anonymous_client()
         try:
-            result = state.auth_service().login(self.email, self.password)
+            result = state.auth_service().login(self.username, self.password)
         except ApiClientError as exc:
             return ScreenCommand.reset(LoginFailedScreen(f"{exc.code}: {exc.message}"))
 
         token = str(result["access_token"])
         state.credential_store.save(StoredCredentials(base_url=state.api_base_url, access_token=token))
         state.client = state.client_factory(state.api_base_url, token)
-        state.user_email = self.email
+        state.username = self.username
         state.user_role = None
         try:
             current_user = state.auth_service().current_user()

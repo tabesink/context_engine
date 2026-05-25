@@ -33,6 +33,7 @@ class DocumentService:
         semantic_engine: str = "lightrag",
         lightrag_domain_id: str | None = None,
         process_navigation: bool = True,
+        enable_toc_refinement: str = "auto",
     ) -> tuple[DocumentRow, str | None]:
         if self.settings.lightrag_enabled:
             return self._upload_remote(
@@ -41,6 +42,7 @@ class DocumentService:
                 semantic_engine=semantic_engine,
                 lightrag_domain_id=lightrag_domain_id,
                 process_navigation=process_navigation,
+                enable_toc_refinement=enable_toc_refinement,
             )
 
         path = self.storage.save_upload(file)
@@ -68,6 +70,7 @@ class DocumentService:
         semantic_engine: str = "lightrag",
         lightrag_domain_id: str | None = None,
         process_navigation: bool = True,
+        enable_toc_refinement: str = "auto",
     ) -> tuple[DocumentRow, str | None]:
         if semantic_engine != "lightrag":
             raise HTTPException(
@@ -76,10 +79,14 @@ class DocumentService:
             )
         domain_id = lightrag_domain_id or self.settings.lightrag_domain
         self._validate_lightrag_domain(domain_id)
+        toc_refinement_mode = self._normalize_toc_refinement_mode(enable_toc_refinement)
         path = self.storage.save_upload(file)
         metadata = {
             "original_filename": file.filename,
             "semantic_engine": "lightrag",
+            "document_processing": {
+                "enable_toc_refinement": toc_refinement_mode,
+            },
             "lightrag": {
                 "enabled": True,
                 "domain": domain_id,
@@ -112,6 +119,15 @@ class DocumentService:
             metadata={"filename": document.filename, "engine": "lightrag"},
         )
         return document, job_id
+
+    def _normalize_toc_refinement_mode(self, value: str) -> str:
+        mode = str(value or "auto").strip().lower()
+        if mode not in {"auto", "always", "never"}:
+            raise HTTPException(
+                status_code=400,
+                detail="enable_toc_refinement must be one of: auto, always, never",
+            )
+        return mode
 
     def _validate_lightrag_domain(self, domain_id: str) -> None:
         path = self.settings.lightrag_domain_manifest or self.settings.lightrag_domains_manifest
@@ -191,4 +207,54 @@ class DocumentService:
                 error_message=updated_lightrag.get("message"),
             )
         return document
+
+    def refresh_pending_lightrag_statuses(self) -> list[DocumentRow]:
+        refreshed: list[DocumentRow] = []
+        for document in self.documents.list_lightrag_indexing():
+            refreshed.append(self.refresh_lightrag_status(document_id=document.id))
+        return refreshed
+
+    def rebuild_structure(
+        self,
+        *,
+        actor_id: str,
+        document_id: str,
+        enable_toc_refinement: str = "auto",
+        preserve_assets: bool = True,
+    ) -> str:
+        document = self.documents.get(document_id)
+        if not document:
+            raise not_found("Document not found")
+        toc_refinement_mode = self._normalize_toc_refinement_mode(enable_toc_refinement)
+        metadata = dict(document.meta or {})
+        metadata["document_processing"] = dict(metadata.get("document_processing") or {}) | {
+            "enable_toc_refinement": toc_refinement_mode,
+            "preserve_assets": preserve_assets,
+        }
+        metadata["lightrag"] = dict(metadata.get("lightrag") or {}) | {"status": "queued"}
+        document = self.documents.update_metadata(document, metadata)
+        self.documents.update_status(document, DocumentStatus.INDEXING)
+        self.documents.audit(
+            actor_id=actor_id,
+            event="document.structure_rebuild_queued",
+            target_id=document_id,
+            metadata={"enable_toc_refinement": toc_refinement_mode},
+        )
+        return JobService(self.session).enqueue_lightrag_ingest_document(document_id=document_id)
+
+    def reingest_lightrag(self, *, actor_id: str, document_id: str) -> str:
+        document = self.documents.get(document_id)
+        if not document:
+            raise not_found("Document not found")
+        metadata = dict(document.meta or {})
+        metadata["lightrag"] = dict(metadata.get("lightrag") or {}) | {"status": "queued"}
+        document = self.documents.update_metadata(document, metadata)
+        self.documents.update_status(document, DocumentStatus.INDEXING)
+        self.documents.audit(
+            actor_id=actor_id,
+            event="document.lightrag_reingest_queued",
+            target_id=document_id,
+            metadata={},
+        )
+        return JobService(self.session).enqueue_lightrag_ingest_document(document_id=document_id)
 

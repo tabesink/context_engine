@@ -19,7 +19,7 @@ Important settings:
 - `CONTEXT_ENGINE_API_BASE_URL` (optional): default base URL the `context-engine` terminal client uses when `--api-base-url` is omitted. This is independent of `API_PORT`: if the API listens on host port `8010` (as in `.env.example`), set this to `http://127.0.0.1:8010` or pass `--api-base-url` accordingly—the CLI launcher default remains `http://127.0.0.1:8000` when the variable is unset.
 - `INDEX_JOBS_INLINE`: `false` for worker-backed indexing; `true` only for deterministic local tests/dev flows.
 - `STORAGE_ROOT`: persistent mounted upload directory.
-- `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD`: first admin credentials for `scripts.seed_admin`.
+- `SEED_ADMIN_USERNAME` and `SEED_ADMIN_PASSWORD`: first admin credentials for `scripts.seed_admin`.
 - `ALLOWED_ORIGINS`: comma-separated CORS origins, or `*` for local development.
 - `LIGHTRAG_ENABLED`: enables LightRAG semantic retrieval, ingestion, and graph proxying. Runtime semantic retrieval has no local fallback.
 - `LIGHTRAG_BASE_URL`: base URL of the external LightRAG service, default `http://localhost:9621`.

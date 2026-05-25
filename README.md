@@ -13,7 +13,7 @@ First-time setup for both options:
 copy .env.example .env
 ```
 
-Edit `.env` if your database or Redis URLs differ. Admin login is configured with `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD`.
+Edit `.env` if your database or Redis URLs differ. Admin login is configured with `SEED_ADMIN_USERNAME` and `SEED_ADMIN_PASSWORD`.
 
 ---
 

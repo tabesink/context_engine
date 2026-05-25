@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_admin
 from app.api.routes.documents import document_response
-from app.schemas.documents import DocumentResponse, UploadResponse
+from app.schemas.documents import DocumentResponse, RebuildStructureRequest, UploadResponse
 from app.services.document_service import DocumentService
 from app.services.job_service import JobService
 from app.storage.db import get_session
@@ -25,6 +25,7 @@ def upload_document(
     semantic_engine: str = Form(default="lightrag"),
     lightrag_domain_id: str | None = Form(default=None),
     process_navigation: bool = Form(default=True),
+    enable_toc_refinement: str = Form(default="auto"),
     admin: UserRow = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> UploadResponse:
@@ -34,6 +35,7 @@ def upload_document(
         semantic_engine=semantic_engine,
         lightrag_domain_id=lightrag_domain_id,
         process_navigation=process_navigation,
+        enable_toc_refinement=enable_toc_refinement,
     )
     return UploadResponse(document=document_response(document), job_id=job_id)
 
@@ -69,6 +71,33 @@ def refresh_lightrag_status(
     del admin
     document = DocumentService(session).refresh_lightrag_status(document_id=document_id)
     return document_response(document)
+
+
+@router.post("/documents/{document_id}/rebuild-structure")
+def rebuild_structure(
+    document_id: str,
+    request: RebuildStructureRequest | None = None,
+    admin: UserRow = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> dict[str, str]:
+    request = request or RebuildStructureRequest()
+    job_id = DocumentService(session).rebuild_structure(
+        actor_id=admin.id,
+        document_id=document_id,
+        enable_toc_refinement=request.enable_toc_refinement,
+        preserve_assets=request.preserve_assets,
+    )
+    return {"job_id": job_id}
+
+
+@router.post("/documents/{document_id}/reingest-lightrag")
+def reingest_lightrag(
+    document_id: str,
+    admin: UserRow = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> dict[str, str]:
+    job_id = DocumentService(session).reingest_lightrag(actor_id=admin.id, document_id=document_id)
+    return {"job_id": job_id}
 
 
 @router.delete("/documents/{document_id}")

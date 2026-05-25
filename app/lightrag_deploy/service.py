@@ -96,16 +96,22 @@ class LightRAGDomainService:
     def up(self, domain_id: str) -> LightRAGDomainOperationResult:
         domain = self.get_domain(domain_id)
         self.compose.write(self.list_domains())
-        return self._operation_result(domain, "up", self.runner.up(domain.service_name))
+        result = self._operation_result(domain, "up", self.runner.up(domain.service_name))
+        self._persist_domain_status(domain, command_succeeded=result.status == "succeeded", running=True)
+        return result
 
     def down(self, domain_id: str) -> LightRAGDomainOperationResult:
         domain = self.get_domain(domain_id)
-        return self._operation_result(domain, "down", self.runner.stop(domain.service_name))
+        result = self._operation_result(domain, "down", self.runner.stop(domain.service_name))
+        self._persist_domain_status(domain, command_succeeded=result.status == "succeeded", running=False)
+        return result
 
     def recreate(self, domain_id: str) -> LightRAGDomainOperationResult:
         domain = self.get_domain(domain_id)
         self.compose.write(self.list_domains())
-        return self._operation_result(domain, "recreate", self.runner.recreate(domain.service_name))
+        result = self._operation_result(domain, "recreate", self.runner.recreate(domain.service_name))
+        self._persist_domain_status(domain, command_succeeded=result.status == "succeeded", running=True)
+        return result
 
     def remove(self, domain_id: str, *, permanent: bool = False) -> LightRAGDomainRemoveResponse:
         domain = self.get_domain(domain_id)
@@ -160,3 +166,43 @@ class LightRAGDomainService:
             service_name=domain.service_name,
             message=command.stderr or command.stdout or None,
         )
+
+    def _persist_domain_status(
+        self,
+        domain: LightRAGDomain,
+        *,
+        command_succeeded: bool,
+        running: bool,
+    ) -> LightRAGDomain:
+        if not command_succeeded:
+            updated = domain.model_copy(
+                update={"status": "error", "is_healthy": False, "updated_at": self.now()}
+            )
+        else:
+            updated = domain.model_copy(
+                update={
+                    "status": "running" if running else "stopped",
+                    "is_healthy": True if running else False,
+                    "updated_at": self.now(),
+                }
+            )
+        self.manifest.update_domain(updated)
+        return updated
+
+    def _sync_runtime_status(self, domain: LightRAGDomain) -> LightRAGDomain:
+        ps = self.runner.ps()
+        if ps.exit_code != 0:
+            return domain
+        text = ps.stdout.lower()
+        service_name = domain.service_name.lower()
+        if service_name not in text:
+            return domain
+        running = "running" in text or "up" in text
+        status = "running" if running else "stopped"
+        if domain.status == status and domain.is_healthy is running:
+            return domain
+        updated = domain.model_copy(
+            update={"status": status, "is_healthy": running, "updated_at": self.now()}
+        )
+        self.manifest.update_domain(updated)
+        return updated

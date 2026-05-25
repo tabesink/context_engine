@@ -16,7 +16,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 def user_response(user: UserRow) -> UserResponse:
     return UserResponse(
         id=user.id,
-        email=user.email,
+        username=user.email,
         role=UserRole(user.role),
         is_active=user.is_active,
     )
@@ -24,10 +24,10 @@ def user_response(user: UserRow) -> UserResponse:
 
 @router.post("/login")
 def login(request: LoginRequest, session: Session = Depends(get_session)) -> TokenResponse:
-    user = UserRepository(session).get_by_email(request.email)
+    user = UserRepository(session).get_by_username(request.username)
     if not user or not verify_password(request.password, user.password_hash):
-        raise unauthorized("Invalid email or password")
-    token = create_access_token(user_id=user.id, email=user.email, role=UserRole(user.role))
+        raise unauthorized("Invalid username or password")
+    token = create_access_token(user_id=user.id, username=user.email, role=UserRole(user.role))
     return TokenResponse(access_token=token)
 
 

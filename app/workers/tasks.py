@@ -1,6 +1,7 @@
 from app.domain.models import JobStatus
 from app.services.lightrag_ingestion_service import DomainIngestBusy, LightRAGIngestionService
 from app.services.indexing_service import IndexingService
+from app.services.document_service import DocumentService
 from app.storage.db import SessionLocal
 from app.storage.repositories.jobs import JobRepository
 
@@ -58,4 +59,9 @@ def run_navigation_process_job(job_id: str) -> None:
         except Exception as exc:
             jobs.set_status(job, JobStatus.FAILED, error_message=str(exc))
             raise
+
+
+def poll_lightrag_statuses() -> None:
+    with SessionLocal() as session:
+        DocumentService(session).refresh_pending_lightrag_statuses()
 

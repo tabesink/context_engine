@@ -10,7 +10,13 @@ import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.core.config import get_settings  # noqa: E402
-from app.document_processing.models import DocumentAsset, DocumentStructure  # noqa: E402
+from app.document_processing.models import (  # noqa: E402
+    DocumentAsset,
+    DocumentBlock,
+    DocumentSection,
+    DocumentStructure,
+    SourceChunk,
+)
 from app.domain.models import DocumentStatus, UserRole  # noqa: E402
 from app.integrations.lightrag_remote_adapter import LightRAGRemoteAdapter  # noqa: E402
 from app.lightrag_deploy.models import LightRAGDomainCreateRequest  # noqa: E402
@@ -24,6 +30,7 @@ from app.storage.repositories.document_processing import DocumentProcessingRepos
 from app.storage.repositories.jobs import JobRepository  # noqa: E402
 from app.storage.repositories.documents import DocumentRepository  # noqa: E402
 from app.storage.repositories.users import UserRepository  # noqa: E402
+from app.storage.tables import TocRefinementReportRow  # noqa: E402
 from app.workers.tasks import run_index_job  # noqa: E402
 
 
@@ -81,7 +88,7 @@ def test_admin_guardrails_and_document_query_flow() -> None:
         retrieve = client.post(
             "/query/retrieve",
             headers=user_headers,
-            json={"query": "where are installation steps", "mode": "auto", "top_k": 3},
+            json={"query": "where are installation steps", "mode": "navigation", "top_k": 3},
         )
         assert retrieve.status_code == 200
         body = retrieve.json()
@@ -91,7 +98,7 @@ def test_admin_guardrails_and_document_query_flow() -> None:
         answer = client.post(
             "/query/answer",
             headers=user_headers,
-            json={"query": "where are installation steps", "mode": "hybrid", "top_k": 3},
+            json={"query": "where are installation steps", "mode": "navigation", "top_k": 3},
         )
         assert answer.status_code == 200
         assert "evidence item" in answer.json()["answer"]
@@ -139,6 +146,617 @@ def test_user_document_reads_hide_non_ready_documents() -> None:
     assert detail.status_code == 404
     assert structure.status_code == 404
     assert page.status_code == 404
+
+
+def test_user_can_read_canonical_document_structure() -> None:
+    create_db_and_tables()
+    with SessionLocal() as session:
+        document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="manual.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/manual.txt",
+            metadata={},
+            status=DocumentStatus.READY,
+        )
+        DocumentProcessingRepository(session).save_structure(
+            DocumentStructure(
+                document_id=document.id,
+                source_file=document.storage_path,
+                sections=[
+                    DocumentSection(
+                        section_id=f"{document.id}-sec-1",
+                        document_id=document.id,
+                        title="Safety",
+                        level=1,
+                        page_start=1,
+                        page_end=1,
+                        block_ids=[f"{document.id}-block-1"],
+                    )
+                ],
+                blocks=[
+                    DocumentBlock(
+                        block_id=f"{document.id}-block-1",
+                        document_id=document.id,
+                        section_id=f"{document.id}-sec-1",
+                        type="paragraph",
+                        text="Wear eye protection.",
+                        page_start=1,
+                        page_end=1,
+                    )
+                ],
+                source_chunks=[
+                    SourceChunk(
+                        chunk_id=f"{document.id}-source-chunk-1",
+                        document_id=document.id,
+                        section_id=f"{document.id}-sec-1",
+                        block_ids=[f"{document.id}-block-1"],
+                        text="Wear eye protection.",
+                        page_start=1,
+                        page_end=1,
+                    )
+                ],
+            )
+        )
+        document_id = document.id
+
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        response = client.get(f"/documents/{document_id}/structure", headers=user_headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["source"] == "document_structure"
+    assert body["tree"][0]["title"] == "Safety"
+    assert body["sections"][0]["section_id"] == f"{document_id}-sec-1"
+    assert body["source_chunks"][0]["chunk_id"] == f"{document_id}-source-chunk-1"
+    assert body["blocks"] == []
+    assert body["assets"] == []
+
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        included = client.get(
+            f"/documents/{document_id}/structure?include_blocks=true&include_assets=true",
+            headers=user_headers,
+        )
+
+    included_body = included.json()
+    assert included.status_code == 200
+    assert included_body["blocks"][0]["block_id"] == f"{document_id}-block-1"
+
+
+def test_user_can_read_document_structure_quality() -> None:
+    create_db_and_tables()
+    with SessionLocal() as session:
+        document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="manual.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/manual.txt",
+            metadata={},
+            status=DocumentStatus.READY,
+        )
+        DocumentProcessingRepository(session).save_structure(
+            DocumentStructure(
+                document_id=document.id,
+                source_file=document.storage_path,
+                sections=[
+                    DocumentSection(
+                        section_id=f"{document.id}-sec-1",
+                        document_id=document.id,
+                        title="Safety",
+                        level=1,
+                        page_start=1,
+                        page_end=1,
+                    )
+                ],
+                blocks=[
+                    DocumentBlock(
+                        block_id=f"{document.id}-block-1",
+                        document_id=document.id,
+                        section_id=f"{document.id}-sec-1",
+                        type="paragraph",
+                        text="Wear eye protection.",
+                    )
+                ],
+            )
+        )
+        document_id = document.id
+
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        response = client.get(f"/documents/{document_id}/structure-quality", headers=user_headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["document_id"] == document_id
+    assert body["heading_count"] == 0
+    assert body["section_count"] == 1
+    assert body["block_count"] == 1
+    assert body["has_page_ranges"] is True
+    assert body["should_run_toc_refiner"] is False
+
+
+def test_structure_quality_route_hides_missing_structure_and_non_ready_documents() -> None:
+    create_db_and_tables()
+    with SessionLocal() as session:
+        ready_document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="ready.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/ready.txt",
+            metadata={},
+            status=DocumentStatus.READY,
+        )
+        indexing_document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="indexing.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/indexing.txt",
+            metadata={},
+            status=DocumentStatus.INDEXING,
+        )
+        DocumentProcessingRepository(session).save_structure(
+            DocumentStructure(
+                document_id=indexing_document.id,
+                source_file=indexing_document.storage_path,
+                blocks=[
+                    DocumentBlock(
+                        block_id=f"{indexing_document.id}-block-1",
+                        document_id=indexing_document.id,
+                        type="paragraph",
+                        text="Hidden.",
+                    )
+                ],
+            )
+        )
+        ready_document_id = ready_document.id
+        indexing_document_id = indexing_document.id
+
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        missing_structure = client.get(
+            f"/documents/{ready_document_id}/structure-quality",
+            headers=user_headers,
+        )
+        hidden_document = client.get(
+            f"/documents/{indexing_document_id}/structure-quality",
+            headers=user_headers,
+        )
+
+    assert missing_structure.status_code == 404
+    assert hidden_document.status_code == 404
+
+
+def test_structure_route_falls_back_to_navigation_tree() -> None:
+    create_db_and_tables()
+    with SessionLocal() as session:
+        document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="manual.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/manual.txt",
+            metadata={},
+            status=DocumentStatus.READY,
+        )
+        DocumentRepository(session).save_navigation_index(
+            document_id=document.id,
+            tree=[{"title": "Navigation Safety"}],
+            version=1,
+        )
+        document_id = document.id
+
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        response = client.get(f"/documents/{document_id}/structure", headers=user_headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["source"] == "navigation"
+    assert body["tree"] == [{"title": "Navigation Safety"}]
+    assert body["sections"] == []
+    assert body["source_chunks"] == []
+
+
+def test_user_can_read_source_section_detail() -> None:
+    create_db_and_tables()
+    with SessionLocal() as session:
+        document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="manual.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/manual.txt",
+            metadata={},
+            status=DocumentStatus.READY,
+        )
+        section_id = f"{document.id}-sec-1"
+        block_id = f"{document.id}-block-1"
+        chunk_id = f"{document.id}-source-chunk-1"
+        asset_id = f"{document.id}-asset-1"
+        DocumentProcessingRepository(session).save_structure(
+            DocumentStructure(
+                document_id=document.id,
+                source_file=document.storage_path,
+                sections=[
+                    DocumentSection(
+                        section_id=section_id,
+                        document_id=document.id,
+                        title="Safety",
+                        level=1,
+                        page_start=1,
+                        page_end=2,
+                        block_ids=[block_id],
+                    )
+                ],
+                blocks=[
+                    DocumentBlock(
+                        block_id=block_id,
+                        document_id=document.id,
+                        section_id=section_id,
+                        type="paragraph",
+                        text="Wear eye protection.",
+                        page_start=1,
+                        page_end=1,
+                        asset_ids=[asset_id],
+                    )
+                ],
+                source_chunks=[
+                    SourceChunk(
+                        chunk_id=chunk_id,
+                        document_id=document.id,
+                        section_id=section_id,
+                        block_ids=[block_id],
+                        text="Wear eye protection.",
+                        page_start=1,
+                        page_end=1,
+                        asset_ids=[asset_id],
+                    )
+                ],
+                assets=[
+                    DocumentAsset(
+                        asset_id=asset_id,
+                        document_id=document.id,
+                        section_id=section_id,
+                        block_id=block_id,
+                        chunk_id=chunk_id,
+                        asset_type="figure",
+                        storage_path=f"documents/{document.id}/assets/figure.png",
+                        content_hash="hash-1",
+                    )
+                ],
+            )
+        )
+        document_id = document.id
+
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        response = client.get(
+            f"/documents/{document_id}/sections/{document_id}-sec-1",
+            headers=user_headers,
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["section"]["section_id"] == f"{document_id}-sec-1"
+    assert body["blocks"][0]["block_id"] == f"{document_id}-block-1"
+    assert body["source_chunks"][0]["chunk_id"] == f"{document_id}-source-chunk-1"
+    assert body["assets"][0]["asset_id"] == f"{document_id}-asset-1"
+
+
+def test_user_can_list_document_chunks_assets_and_ingestion_status() -> None:
+    create_db_and_tables()
+    with SessionLocal() as session:
+        document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="manual.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/manual.txt",
+            metadata={
+                "lightrag": {"domain_id": "fatigue", "status": "ready", "track_id": "track-1"},
+                "navigation": {"status": "ready"},
+            },
+            status=DocumentStatus.READY,
+        )
+        chunk_id = f"{document.id}-source-chunk-1"
+        asset_id = f"{document.id}-asset-1"
+        DocumentProcessingRepository(session).save_structure(
+            DocumentStructure(
+                document_id=document.id,
+                source_file=document.storage_path,
+                source_chunks=[
+                    SourceChunk(
+                        chunk_id=chunk_id,
+                        document_id=document.id,
+                        block_ids=[f"{document.id}-block-1"],
+                        text="See figure.",
+                        asset_ids=[asset_id],
+                    )
+                ],
+                assets=[
+                    DocumentAsset(
+                        asset_id=asset_id,
+                        document_id=document.id,
+                        asset_type="figure",
+                        storage_path=f"documents/{document.id}/assets/figure.png",
+                        content_hash="hash-1",
+                        chunk_id=chunk_id,
+                    )
+                ],
+            )
+        )
+        document_id = document.id
+
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        chunks = client.get(f"/documents/{document_id}/chunks", headers=user_headers)
+        assets = client.get(f"/documents/{document_id}/assets", headers=user_headers)
+        status = client.get(f"/documents/{document_id}/ingestion-status", headers=user_headers)
+
+    assert chunks.status_code == 200
+    assert chunks.json()[0]["chunk_id"] == chunk_id
+    assert assets.status_code == 200
+    assert assets.json()[0]["asset_id"] == asset_id
+    assert status.status_code == 200
+    assert status.json()["lightrag"]["track_id"] == "track-1"
+    assert status.json()["navigation"]["status"] == "ready"
+
+
+def test_source_section_route_hides_missing_and_non_ready_documents() -> None:
+    create_db_and_tables()
+    with SessionLocal() as session:
+        ready_document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="ready.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/ready.txt",
+            metadata={},
+            status=DocumentStatus.READY,
+        )
+        indexing_document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="indexing.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/indexing.txt",
+            metadata={},
+            status=DocumentStatus.INDEXING,
+        )
+        DocumentProcessingRepository(session).save_structure(
+            DocumentStructure(
+                document_id=indexing_document.id,
+                source_file=indexing_document.storage_path,
+                sections=[
+                    DocumentSection(
+                        section_id=f"{indexing_document.id}-hidden-sec",
+                        document_id=indexing_document.id,
+                        title="Hidden",
+                        level=1,
+                    )
+                ],
+            )
+        )
+        ready_document_id = ready_document.id
+        indexing_document_id = indexing_document.id
+
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        missing_section = client.get(
+            f"/documents/{ready_document_id}/sections/missing-sec",
+            headers=user_headers,
+        )
+        hidden_document = client.get(
+            f"/documents/{indexing_document_id}/sections/{indexing_document_id}-hidden-sec",
+            headers=user_headers,
+        )
+
+    assert missing_section.status_code == 404
+    assert hidden_document.status_code == 404
+
+
+def test_user_can_read_toc_refinement_report() -> None:
+    create_db_and_tables()
+    with SessionLocal() as session:
+        document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="manual.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/manual.txt",
+            metadata={},
+            status=DocumentStatus.READY,
+        )
+        session.add(
+            TocRefinementReportRow(
+                id=f"{document.id}-toc-report",
+                document_id=document.id,
+                enabled=True,
+                accepted=False,
+                reason="low validation accuracy",
+                validation_accuracy=0.25,
+                logical_to_physical_offset=2,
+                llm_call_count=1,
+                warnings=["section start not found"],
+            )
+        )
+        session.commit()
+        document_id = document.id
+
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        response = client.get(
+            f"/documents/{document_id}/toc-refinement-report",
+            headers=user_headers,
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["document_id"] == document_id
+    assert body["enabled"] is True
+    assert body["accepted"] is False
+    assert body["reason"] == "low validation accuracy"
+    assert body["validation_accuracy"] == 0.25
+    assert body["logical_to_physical_offset"] == 2
+    assert body["llm_call_count"] == 1
+    assert body["warnings"] == ["section start not found"]
+
+
+def test_toc_refinement_report_route_hides_missing_and_non_ready_documents() -> None:
+    create_db_and_tables()
+    with SessionLocal() as session:
+        ready_document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="ready.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/ready.txt",
+            metadata={},
+            status=DocumentStatus.READY,
+        )
+        indexing_document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="indexing.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/indexing.txt",
+            metadata={},
+            status=DocumentStatus.INDEXING,
+        )
+        session.add(
+            TocRefinementReportRow(
+                id=f"{indexing_document.id}-toc-report",
+                document_id=indexing_document.id,
+                enabled=True,
+                accepted=True,
+                llm_call_count=1,
+                warnings=[],
+            )
+        )
+        session.commit()
+        ready_document_id = ready_document.id
+        indexing_document_id = indexing_document.id
+
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        missing_report = client.get(
+            f"/documents/{ready_document_id}/toc-refinement-report",
+            headers=user_headers,
+        )
+        hidden_document = client.get(
+            f"/documents/{indexing_document_id}/toc-refinement-report",
+            headers=user_headers,
+        )
+
+    assert missing_report.status_code == 404
+    assert hidden_document.status_code == 404
+
+
+def test_user_can_read_source_chunk_detail() -> None:
+    create_db_and_tables()
+    with SessionLocal() as session:
+        document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="manual.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/manual.txt",
+            metadata={},
+            status=DocumentStatus.READY,
+        )
+        DocumentProcessingRepository(session).save_structure(
+            DocumentStructure(
+                document_id=document.id,
+                source_file=document.storage_path,
+                source_chunks=[
+                    SourceChunk(
+                        chunk_id=f"{document.id}-source-chunk-1",
+                        document_id=document.id,
+                        section_id=f"{document.id}-sec-1",
+                        block_ids=[f"{document.id}-block-1"],
+                        text="Wear eye protection.",
+                        page_start=1,
+                        page_end=2,
+                        asset_ids=["asset-1"],
+                    )
+                ],
+            )
+        )
+        document_id = document.id
+
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        response = client.get(
+            f"/documents/{document_id}/chunks/{document_id}-source-chunk-1",
+            headers=user_headers,
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["chunk_id"] == f"{document_id}-source-chunk-1"
+    assert body["document_id"] == document_id
+    assert body["section_id"] == f"{document_id}-sec-1"
+    assert body["block_ids"] == [f"{document_id}-block-1"]
+    assert body["page_start"] == 1
+    assert body["page_end"] == 2
+    assert body["asset_ids"] == ["asset-1"]
+    assert body["text"] == "Wear eye protection."
+
+
+def test_source_chunk_route_hides_missing_and_non_ready_documents() -> None:
+    create_db_and_tables()
+    with SessionLocal() as session:
+        ready_document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="ready.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/ready.txt",
+            metadata={},
+            status=DocumentStatus.READY,
+        )
+        indexing_document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="indexing.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/indexing.txt",
+            metadata={},
+            status=DocumentStatus.INDEXING,
+        )
+        DocumentProcessingRepository(session).save_structure(
+            DocumentStructure(
+                document_id=indexing_document.id,
+                source_file=indexing_document.storage_path,
+                source_chunks=[
+                    SourceChunk(
+                        chunk_id=f"{indexing_document.id}-hidden-chunk",
+                        document_id=indexing_document.id,
+                        block_ids=[f"{indexing_document.id}-block-1"],
+                        text="Hidden.",
+                    )
+                ],
+            )
+        )
+        ready_document_id = ready_document.id
+        indexing_document_id = indexing_document.id
+
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        missing_chunk = client.get(
+            f"/documents/{ready_document_id}/chunks/missing-chunk",
+            headers=user_headers,
+        )
+        hidden_document = client.get(
+            f"/documents/{indexing_document_id}/chunks/{indexing_document_id}-hidden-chunk",
+            headers=user_headers,
+        )
+
+    assert missing_chunk.status_code == 404
+    assert hidden_document.status_code == 404
 
 
 def test_user_can_stream_ready_document_asset_without_path_leakage(
@@ -396,8 +1014,8 @@ def test_admin_upload_to_selected_lightrag_domain_records_domain_metadata(
 
 def test_lightrag_ingestion_job_uploads_polls_and_marks_document_ready(tmp_path: Path) -> None:
     create_db_and_tables()
-    upload_path = tmp_path / "manual.txt"
-    upload_path.write_text("Remote document body.", encoding="utf-8")
+    upload_path = tmp_path / "manual.pdf"
+    upload_path.write_bytes(b"%PDF-1.7 fake pdf bytes")
 
     class FakeLock:
         acquired = False
@@ -424,8 +1042,8 @@ def test_lightrag_ingestion_job_uploads_polls_and_marks_document_ready(tmp_path:
     with SessionLocal() as session:
         document = DocumentRepository(session).create(
             owner_id=None,
-            filename="manual.txt",
-            content_type="text/plain",
+            filename="manual.pdf",
+            content_type="application/pdf",
             storage_path=str(upload_path),
             metadata={
                 "semantic_engine": "lightrag",

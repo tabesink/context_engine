@@ -33,6 +33,12 @@ class DomainManifestStore:
         self.write_domains([domain for domain in domains if domain.id != domain_id])
         return removed
 
+    def update_domain(self, domain: LightRAGDomain) -> None:
+        domains = self._read_domains()
+        if not any(existing.id == domain.id for existing in domains):
+            raise ValueError(f"LightRAG domain '{domain.id}' does not exist")
+        self.write_domains([domain if existing.id == domain.id else existing for existing in domains])
+
     def write_domains(self, domains: list[LightRAGDomain]) -> None:
         payload = {
             "domains": [domain.to_manifest_dict() for domain in domains],

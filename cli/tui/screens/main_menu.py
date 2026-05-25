@@ -39,7 +39,7 @@ def _push(screen_factory: Callable[[], TuiScreen]) -> Callable[[TuiState], Scree
 
 def _logout(state: TuiState) -> ScreenCommand:
     state.credential_store.clear()
-    state.user_email = None
+    state.username = None
     state.user_role = None
     state.reset_anonymous_client()
     return ScreenCommand.reset(LoggedOutScreen())
@@ -87,7 +87,7 @@ class MainMenuScreen:
             self.selected_index = max(0, len(menu_items) - 1)
         render_breadcrumb(console, "Context Engine")
         console.print(f"Backend: {state.api_base_url}")
-        console.print(f"Session: {state.user_email or 'saved'}")
+        console.print(f"Session: {state.username or 'saved'}")
         console.print("")
         for index, item in enumerate(menu_items):
             marker = ">" if index == self.selected_index else " "

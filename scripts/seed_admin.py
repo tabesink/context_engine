@@ -8,7 +8,7 @@ def main() -> None:
     create_db_and_tables()
     with SessionLocal() as session:
         user = UserRepository(session).ensure_admin(
-            email=settings.seed_admin_email,
+            username=settings.seed_admin_username,
             password=settings.seed_admin_password,
         )
         print(f"Seed admin ready: {user.email}")

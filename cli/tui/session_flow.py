@@ -26,10 +26,10 @@ def choose_start_screen(state: TuiState) -> TuiScreen:
         return LoginScreen(message="Previous session expired. Please log in again.")
 
     if isinstance(user, dict):
-        state.user_email = str(user.get("email", "saved session"))
+        state.username = str(user.get("username") or user.get("email", "saved session"))
         role = user.get("role")
         state.user_role = str(role).lower() if role else None
     else:
-        state.user_email = "saved session"
+        state.username = "saved session"
         state.user_role = None
     return MainMenuScreen()

@@ -49,10 +49,10 @@ def test_auth_service_routes() -> None:
     client = FakeClient()
     service = AuthService(client)  # type: ignore[arg-type]
 
-    service.login("admin@example.com", "secret")
+    service.login("admin", "secret")
     service.current_user()
 
-    assert ("POST", "/auth/login", {"email": "admin@example.com", "password": "secret"}) in client.calls
+    assert ("POST", "/auth/login", {"username": "admin", "password": "secret"}) in client.calls
     assert ("GET", "/auth/me", None) in client.calls
 
 
@@ -62,12 +62,30 @@ def test_document_service_routes() -> None:
 
     service.list_documents()
     service.get_document("doc-1")
-    service.get_structure("doc-1")
+    service.get_structure("doc-1", include_blocks=True, include_assets=True)
+    service.get_ingestion_status("doc-1")
+    service.get_structure_quality("doc-1")
+    service.get_section("doc-1", "sec-1")
+    service.get_chunk("doc-1", "chunk-1")
+    service.list_chunks("doc-1")
+    service.list_assets("doc-1")
+    service.get_toc_refinement_report("doc-1")
     service.get_page("doc-1", 3)
 
     assert ("GET", "/documents", None) in client.calls
     assert ("GET", "/documents/doc-1", None) in client.calls
-    assert ("GET", "/documents/doc-1/structure", None) in client.calls
+    assert (
+        "GET",
+        "/documents/doc-1/structure?include_blocks=true&include_assets=true",
+        None,
+    ) in client.calls
+    assert ("GET", "/documents/doc-1/ingestion-status", None) in client.calls
+    assert ("GET", "/documents/doc-1/structure-quality", None) in client.calls
+    assert ("GET", "/documents/doc-1/sections/sec-1", None) in client.calls
+    assert ("GET", "/documents/doc-1/chunks/chunk-1", None) in client.calls
+    assert ("GET", "/documents/doc-1/chunks", None) in client.calls
+    assert ("GET", "/documents/doc-1/assets", None) in client.calls
+    assert ("GET", "/documents/doc-1/toc-refinement-report", None) in client.calls
     assert ("GET", "/documents/doc-1/pages/3", None) in client.calls
 
 
@@ -79,6 +97,8 @@ def test_admin_document_service_routes() -> None:
     service.upload_document("manual.pdf", b"pdf-bytes")
     service.index_document("doc-1")
     service.reindex_document("doc-1")
+    service.rebuild_structure("doc-1", enable_toc_refinement="always", preserve_assets=False)
+    service.reingest_lightrag("doc-1")
     service.delete_document("doc-1")
 
     assert ("GET", "/admin/documents", None) in client.calls
@@ -89,6 +109,12 @@ def test_admin_document_service_routes() -> None:
     ) in client.calls
     assert ("POST", "/admin/documents/doc-1/index", None) in client.calls
     assert ("POST", "/admin/documents/doc-1/reindex", None) in client.calls
+    assert (
+        "POST",
+        "/admin/documents/doc-1/rebuild-structure",
+        {"enable_toc_refinement": "always", "preserve_assets": False},
+    ) in client.calls
+    assert ("POST", "/admin/documents/doc-1/reingest-lightrag", None) in client.calls
     assert ("DELETE", "/admin/documents/doc-1", None) in client.calls
 
 

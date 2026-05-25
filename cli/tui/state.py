@@ -16,7 +16,7 @@ class TuiState:
     credential_store: CredentialStore
     client_factory: ClientFactory
     client: Any | None = None
-    user_email: str | None = None
+    username: str | None = None
     user_role: str | None = None
     last_error: str | None = None
 

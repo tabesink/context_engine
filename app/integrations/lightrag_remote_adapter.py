@@ -123,10 +123,12 @@ class LightRAGRemoteAdapter:
             "chunks": [
                 {
                     "text": chunk.text,
-                    "metadata": {
+                    "metadata": chunk.metadata
+                    | {
                         "document_id": chunk.document_id,
                         "section_id": chunk.section_id,
                         "chunk_id": chunk.chunk_id,
+                        "block_ids": chunk.block_ids,
                         "page_start": chunk.page_start,
                         "page_end": chunk.page_end,
                         "asset_ids": chunk.asset_ids,
@@ -205,7 +207,15 @@ class LightRAGRemoteAdapter:
                 continue
             reference = references.get(chunk.get("reference_id"), {})
             metadata = chunk.get("metadata") if isinstance(chunk.get("metadata"), dict) else {}
-            document_id = chunk.get("document_id") or reference.get("document_id") or chunk.get("file_path")
+            document_id = (
+                chunk.get("document_id")
+                or metadata.get("document_id")
+                or metadata.get("local_document_id")
+                or reference.get("document_id")
+                or chunk.get("file_path")
+            )
+            page_start = chunk.get("page_start") or metadata.get("page_start")
+            page_end = chunk.get("page_end") or metadata.get("page_end")
             evidence.append(
                 Evidence(
                     id=str(chunk.get("chunk_id") or chunk.get("reference_id") or f"lightrag-{index}"),
@@ -215,8 +225,8 @@ class LightRAGRemoteAdapter:
                     score=chunk.get("score"),
                     page_ref=PageRef(
                         document_id=self._document_uuid(document_id),
-                        page_start=chunk.get("page_start"),
-                        page_end=chunk.get("page_end"),
+                        page_start=page_start,
+                        page_end=page_end,
                     ),
                     metadata=metadata
                     | {

@@ -7,9 +7,16 @@ from redis import Redis
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.document_processing.artifacts import DocumentProcessingArtifactStore
+from app.document_processing.chunk_builder import StructureAwareChunkBuilder
+from app.document_processing.docling_parser import DoclingParser
+from app.document_processing.pipeline import TextDoclingParser
+from app.document_processing.refinement import StructureQualityScorer, TocRefiner
 from app.domain.models import DocumentStatus
 from app.integrations.lightrag_remote_adapter import LightRAGRemoteAdapter
+from app.storage.repositories.document_processing import DocumentProcessingRepository
 from app.storage.repositories.documents import DocumentRepository
+from app.storage.tables import DocumentRow
 
 
 class DomainIngestBusy(Exception):
@@ -50,9 +57,22 @@ class LightRAGIngestionService:
         *,
         adapter_factory: Callable[[str], LightRAGRemoteAdapter] | None = None,
         lock_factory: Callable[[str], IngestLock] | None = None,
+        structure_parser: TextDoclingParser | None = None,
+        chunk_builder: StructureAwareChunkBuilder | None = None,
+        quality_scorer: StructureQualityScorer | None = None,
+        toc_refiner: TocRefiner | None = None,
+        artifact_store: DocumentProcessingArtifactStore | None = None,
         now: Callable[[], datetime] | None = None,
     ):
         self.documents = DocumentRepository(session)
+        self.document_processing = DocumentProcessingRepository(session)
+        self.structure_parser = structure_parser
+        self.text_parser = TextDoclingParser()
+        self.docling_parser = DoclingParser()
+        self.chunk_builder = chunk_builder or StructureAwareChunkBuilder()
+        self.quality_scorer = quality_scorer or StructureQualityScorer()
+        self.toc_refiner = toc_refiner or TocRefiner()
+        self.artifact_store = artifact_store or DocumentProcessingArtifactStore()
         self.adapter_factory = adapter_factory or LightRAGRemoteAdapter.for_domain
         self.lock_factory = lock_factory or (lambda domain_id: RedisIngestLock(domain_id=domain_id))
         self.now = now or (lambda: datetime.now(UTC))
@@ -72,38 +92,126 @@ class LightRAGIngestionService:
 
         try:
             adapter = self.adapter_factory(str(domain_id))
-            remote = adapter.upload_document(
-                file_path=Path(document.storage_path),
-                filename=document.filename,
-                content_type=document.content_type,
-                metadata={"local_document_id": document.id},
-                domain=str(domain_id),
-            )
-            status = str(remote.get("status") or "indexing")
-            track_id = remote.get("track_id")
-            if status == "indexing" and track_id:
-                status_payload = adapter.document_status(str(track_id))
-                status = str(status_payload.get("status") or status)
-                remote = remote | status_payload
-
-            updated_lightrag = lightrag | {
-                "document_id": remote.get("document_id"),
-                "track_id": remote.get("track_id", track_id),
-                "status": status,
-                "message": remote.get("message") or remote.get("error"),
-                "last_status_check_at": self.now().isoformat().replace("+00:00", "Z"),
-            }
-            document = self.documents.update_metadata(
-                document,
-                document.meta | {"lightrag": updated_lightrag},
-            )
-            if status == "ready":
-                self.documents.update_status(document, DocumentStatus.READY)
-            elif status == "failed":
-                self.documents.update_status(
-                    document,
-                    DocumentStatus.FAILED,
-                    error_message=updated_lightrag.get("message"),
+            remote = self._ingest_source_chunks(document=document, adapter=adapter, domain_id=str(domain_id))
+            if remote is None:
+                remote = adapter.upload_document(
+                    file_path=Path(document.storage_path),
+                    filename=document.filename,
+                    content_type=document.content_type,
+                    metadata={"local_document_id": document.id},
+                    domain=str(domain_id),
                 )
+            self._apply_remote_status(document=document, lightrag=lightrag, remote=remote, adapter=adapter)
         finally:
             lock.release()
+
+    def _ingest_source_chunks(
+        self,
+        *,
+        document: DocumentRow,
+        adapter: LightRAGRemoteAdapter,
+        domain_id: str,
+    ) -> dict | None:
+        if not self._can_build_document_structure(document):
+            return None
+
+        try:
+            parser = self.structure_parser or self._parser_for_document(document)
+            structure = parser.parse(
+                document_id=document.id,
+                source_path=Path(document.storage_path),
+            )
+        except Exception:
+            return None
+
+        structure = structure.model_copy(update={"quality": self.quality_scorer.score(structure)})
+        toc_refinement_mode = self._toc_refinement_mode(document)
+        should_refine = toc_refinement_mode == "always" or (
+            toc_refinement_mode == "auto" and structure.quality.should_run_toc_refiner
+        )
+        if should_refine:
+            refinement = self.toc_refiner.refine(structure)
+            self.document_processing.save_toc_refinement_report(
+                document_id=document.id,
+                enabled=True,
+                result=refinement,
+            )
+            self.artifact_store.save_toc_refinement_report(
+                document_id=document.id,
+                enabled=True,
+                result=refinement,
+            )
+            structure = refinement.structure
+
+        structure = self.chunk_builder.build(structure)
+        if not structure.source_chunks:
+            return None
+
+        self.document_processing.save_structure(structure)
+        self.artifact_store.save_structure(structure)
+        return adapter.ingest_source_chunks(domain=domain_id, chunks=structure.source_chunks)
+
+    def _can_build_document_structure(self, document: DocumentRow) -> bool:
+        content_type = (document.content_type or "").split(";")[0].strip().lower()
+        if content_type.startswith("text/"):
+            return True
+        return Path(document.filename).suffix.lower() in {".md", ".markdown", ".txt", ".pdf"}
+
+    def _parser_for_document(self, document: DocumentRow):
+        content_type = (document.content_type or "").split(";")[0].strip().lower()
+        suffix = Path(document.filename).suffix.lower()
+        if content_type.startswith("text/") or suffix in {".md", ".markdown", ".txt"}:
+            return self.text_parser
+        return self.docling_parser
+
+    def _toc_refinement_mode(self, document: DocumentRow) -> str:
+        metadata = document.meta if isinstance(document.meta, dict) else {}
+        processing = metadata.get("document_processing")
+        if isinstance(processing, dict) and "enable_toc_refinement" in processing:
+            return self._normalize_toc_refinement_mode(processing["enable_toc_refinement"])
+        if "enable_toc_refinement" in metadata:
+            return self._normalize_toc_refinement_mode(metadata["enable_toc_refinement"])
+        return "auto"
+
+    def _normalize_toc_refinement_mode(self, value: object) -> str:
+        if isinstance(value, bool):
+            return "always" if value else "never"
+        mode = str(value or "auto").strip().lower()
+        if mode in {"always", "auto", "never"}:
+            return mode
+        return "auto"
+
+    def _apply_remote_status(
+        self,
+        *,
+        document: DocumentRow,
+        lightrag: dict,
+        remote: dict,
+        adapter: LightRAGRemoteAdapter,
+    ) -> None:
+        status = str(remote.get("status") or "indexing")
+        track_id = remote.get("track_id")
+        if status == "indexing" and track_id:
+            status_payload = adapter.document_status(str(track_id))
+            status = str(status_payload.get("status") or status)
+            remote = remote | status_payload
+
+        updated_lightrag = lightrag | {
+            "document_id": remote.get("document_id"),
+            "track_id": remote.get("track_id", track_id),
+            "status": status,
+            "message": remote.get("message") or remote.get("error"),
+            "last_status_check_at": self.now().isoformat().replace("+00:00", "Z"),
+        }
+        document = self.documents.update_metadata(
+            document,
+            document.meta | {"lightrag": updated_lightrag},
+        )
+        if status == "ready":
+            self.documents.update_status(document, DocumentStatus.READY)
+        elif status == "failed":
+            self.documents.update_status(
+                document,
+                DocumentStatus.FAILED,
+                error_message=updated_lightrag.get("message"),
+            )

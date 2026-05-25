@@ -17,6 +17,7 @@ class TextDoclingParser:
 
     def parse(self, *, document_id: str, source_path: Path) -> DocumentStructure:
         text = source_path.read_text(encoding="utf-8")
+        id_prefix = document_id
         sections: list[DocumentSection] = []
         blocks: list[DocumentBlock] = []
         chunks: list[SourceChunk] = []
@@ -26,7 +27,7 @@ class TextDoclingParser:
 
         for line in [item.strip() for item in text.splitlines() if item.strip()]:
             if line.startswith("#"):
-                section_id = f"sec-{len(sections) + 1}"
+                section_id = f"{id_prefix}-sec-{len(sections) + 1}"
                 current_section_id = section_id
                 current_title = line.lstrip("#").strip() or current_title
                 sections.append(
@@ -42,8 +43,8 @@ class TextDoclingParser:
                 continue
 
             block_index += 1
-            block_id = f"block-{block_index}"
-            chunk_id = f"source-chunk-{block_index}"
+            block_id = f"{id_prefix}-block-{block_index}"
+            chunk_id = f"{id_prefix}-source-chunk-{block_index}"
             block = DocumentBlock(
                 block_id=block_id,
                 document_id=document_id,

@@ -59,6 +59,19 @@ class DocumentRepository:
     def list_all(self) -> list[DocumentRow]:
         return list(self.session.scalars(select(DocumentRow).order_by(DocumentRow.created_at.desc())))
 
+    def list_lightrag_indexing(self) -> list[DocumentRow]:
+        documents = self.list_all()
+        pending: list[DocumentRow] = []
+        for document in documents:
+            lightrag = document.meta.get("lightrag", {}) if isinstance(document.meta, dict) else {}
+            if (
+                document.status == DocumentStatus.INDEXING.value
+                and lightrag.get("track_id")
+                and lightrag.get("status") == "indexing"
+            ):
+                pending.append(document)
+        return pending
+
     def update_status(
         self,
         document: DocumentRow,

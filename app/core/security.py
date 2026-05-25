@@ -20,12 +20,12 @@ def verify_password(password: str, password_hash: str) -> bool:
     return pwd_context.verify(password, password_hash)
 
 
-def create_access_token(*, user_id: str, email: str, role: UserRole) -> str:
+def create_access_token(*, user_id: str, username: str, role: UserRole) -> str:
     settings = get_settings()
     expires_at = datetime.now(UTC) + timedelta(minutes=settings.access_token_minutes)
     payload: dict[str, Any] = {
         "sub": user_id,
-        "email": email,
+        "username": username,
         "role": role.value,
         "exp": expires_at,
     }

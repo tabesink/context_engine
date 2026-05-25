@@ -166,6 +166,22 @@ def test_docker_operations_call_runner_with_domain_service_name(tmp_path: Path) 
     ]
 
 
+def test_docker_operations_update_manifest_runtime_status(tmp_path: Path) -> None:
+    service = _service(tmp_path, FakeRunner())
+    service.create_domain(LightRAGDomainCreateRequest(domain_id="fatigue"))
+
+    service.up("fatigue")
+    running = service.get_domain("fatigue")
+
+    service.down("fatigue")
+    stopped = service.get_domain("fatigue")
+
+    assert running.status == "running"
+    assert running.is_healthy is True
+    assert stopped.status == "stopped"
+    assert stopped.is_healthy is False
+
+
 def test_docker_error_returns_failed_operation_result(tmp_path: Path) -> None:
     service = _service(tmp_path, FakeRunner(fail=True))
     service.create_domain(LightRAGDomainCreateRequest(domain_id="fatigue"))

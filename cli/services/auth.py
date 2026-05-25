@@ -11,9 +11,9 @@ class AuthService:
     def __init__(self, client: ApiClient):
         self._client = client
 
-    def login(self, email: str, password: str) -> dict[str, Any]:
-        return self._client.post("/auth/login", {"email": email, "password": password})
+    def login(self, username: str, password: str) -> dict[str, Any]:
+        return self._client.post("/auth/login", {"username": username, "password": password})
 
     def current_user(self) -> dict[str, Any]:
         payload = self._client.get("/auth/me")
-        return payload if isinstance(payload, dict) else {"email": "unknown"}
+        return payload if isinstance(payload, dict) else {"username": "unknown"}

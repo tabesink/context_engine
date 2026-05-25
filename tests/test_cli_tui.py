@@ -32,7 +32,7 @@ class FakeTuiClient:
     fail_upload_connection = False
     fail_graphs = False
     fail_domains = False
-    current_user_email = "admin@example.com"
+    current_username = "admin"
     current_user_role = "admin"
     documents: list[dict[str, Any]] = [{"id": "doc-1", "filename": "manual.txt", "status": "ready"}]
     upload_response: dict[str, Any] = {
@@ -66,7 +66,7 @@ class FakeTuiClient:
         cls.fail_upload_connection = False
         cls.fail_graphs = False
         cls.fail_domains = False
-        cls.current_user_email = "admin@example.com"
+        cls.current_username = "admin"
         cls.current_user_role = "admin"
         cls.documents = [{"id": "doc-1", "filename": "manual.txt", "status": "ready"}]
         cls.upload_response = {
@@ -79,11 +79,41 @@ class FakeTuiClient:
         if path == "/auth/me":
             if self.fail_me:
                 raise ApiClientError("auth_expired", "session expired", 401)
-            return self._record("GET", path, None, {"email": self.current_user_email, "role": self.current_user_role})
+            return self._record("GET", path, None, {"username": self.current_username, "role": self.current_user_role})
         if path == "/documents":
             return self._record("GET", path, None, self.documents)
         if path == "/documents/doc-1":
             return self._record("GET", path, None, {"id": "doc-1", "filename": "manual.txt", "status": "ready"})
+        if path == "/documents/doc-1/structure?include_blocks=true&include_assets=true":
+            return self._record("GET", path, None, {
+                "document_id": "doc-1",
+                "source": "document_structure",
+                "tree": [{"title": "Safety", "level": 1, "page_start": 1, "page_end": 2}],
+                "sections": [{"section_id": "doc-1-sec-1"}],
+                "source_chunks": [{"chunk_id": "doc-1-source-chunk-1"}],
+                "assets": [],
+            })
+        if path == "/documents/doc-1/structure-quality":
+            return self._record("GET", path, None, {
+                "document_id": "doc-1",
+                "score": 1.0,
+                "section_count": 2,
+                "block_count": 8,
+                "asset_count": 1,
+                "should_run_toc_refiner": False,
+                "reasons": [],
+            })
+        if path == "/documents/doc-1/toc-refinement-report":
+            return self._record("GET", path, None, {
+                "document_id": "doc-1",
+                "enabled": True,
+                "accepted": False,
+                "reason": "low validation accuracy",
+                "validation_accuracy": 0.25,
+                "logical_to_physical_offset": 2,
+                "llm_call_count": 1,
+                "warnings": ["section start not found"],
+            })
         if path == "/graph/label/popular?limit=20":
             if self.fail_graphs:
                 raise ApiClientError("service_disabled", "LightRAG graph proxy is disabled.", 503)
@@ -139,7 +169,7 @@ class FakeTuiClient:
         self.calls.append(("POST", path, payload, self.token))
         if path == "/auth/login":
             if self.fail_login:
-                raise ApiClientError("auth_failed", "Invalid email or password.", 401)
+                raise ApiClientError("auth_failed", "Invalid username or password.", 401)
             return self._record("POST", path, payload, {"access_token": "secret-token", "token_type": "bearer"})
         if path == "/admin/lightrag/domains":
             return self._record("POST", path, payload, {
@@ -283,13 +313,13 @@ def test_tui_starts_at_login_when_no_session_exists(tmp_path: Path) -> None:
     output = run_with_inputs(tmp_path, ["q"])
 
     assert "SESSION / LOGIN" in output
-    assert "Email" in output
+    assert "Username" in output
     assert "Password" in output
     assert "Admin Documents" not in output
 
 
 def test_tui_replaces_previous_frame_in_non_terminal_mode(tmp_path: Path) -> None:
-    output = run_with_inputs(tmp_path, ["admin@example.com", "tab", "password123", "enter", "q"])
+    output = run_with_inputs(tmp_path, ["admin", "tab", "password123", "enter", "q"])
 
     assert "CONTEXT ENGINE" in output
     assert "CONTEXT ENGINE LOGIN" not in output
@@ -300,9 +330,9 @@ def test_tui_balances_cursor_visibility_on_exit(tmp_path: Path) -> None:
 
 
 def test_user_can_login_from_tui_and_reaches_main_menu(tmp_path: Path) -> None:
-    output = run_with_inputs(tmp_path, ["admin@example.com", "tab", "password123", "enter", "q"])
+    output = run_with_inputs(tmp_path, ["admin", "tab", "password123", "enter", "q"])
 
-    assert ("POST", "/auth/login", {"email": "admin@example.com", "password": "password123"}, None) in FakeTuiClient.calls
+    assert ("POST", "/auth/login", {"username": "admin", "password": "password123"}, None) in FakeTuiClient.calls
     assert (tmp_path / "credentials.json").exists()
     assert "CONTEXT ENGINE" in output
     assert "Documents" in output
@@ -313,12 +343,12 @@ def test_user_can_login_from_tui_and_reaches_main_menu(tmp_path: Path) -> None:
 def test_user_can_navigate_login_fields_with_down_and_up_keys(tmp_path: Path) -> None:
     output = run_with_inputs(
         tmp_path,
-        ["admin@example.com", "down", "password123", "up", "down", "enter", "q"],
+        ["admin", "down", "password123", "up", "down", "enter", "q"],
     )
 
-    assert ("POST", "/auth/login", {"email": "admin@example.com", "password": "password123"}, None) in FakeTuiClient.calls
+    assert ("POST", "/auth/login", {"username": "admin", "password": "password123"}, None) in FakeTuiClient.calls
     assert "CONTEXT ENGINE" in output
-    assert "down" not in FakeTuiClient.calls[0][2]["email"]
+    assert "down" not in FakeTuiClient.calls[0][2]["username"]
     assert "up" not in FakeTuiClient.calls[0][2]["password"]
 
 
@@ -333,13 +363,13 @@ def test_failed_tui_login_shows_retry_without_leaking_password(tmp_path: Path) -
         credential_store=CredentialStore(tmp_path, keyring_enabled=False),
         client_factory=FakeTuiClient,
         console=console,
-        input_func=input_sequence(["admin@example.com", "tab", "bad-password", "enter", "q"]),
+        input_func=input_sequence(["admin", "tab", "bad-password", "enter", "q"]),
     )
     output = stream.getvalue()
 
     assert "SESSION / LOGIN FAILED" in output
     assert "[ERROR]" in output
-    assert "Invalid email or password" in output
+    assert "Invalid username or password" in output
     assert "bad-password" not in output
     assert "secret-token" not in output
 
@@ -348,7 +378,7 @@ def test_existing_valid_session_opens_main_menu(tmp_path: Path) -> None:
     output = run_with_inputs(tmp_path, ["q"], authenticated_store(tmp_path))
 
     assert ("GET", "/auth/me", None, "secret-token") in FakeTuiClient.calls
-    assert "Session: admin@example.com" in output
+    assert "Session: admin" in output
     assert "Graphs" in output
     assert output.count("LightRAG Domains") == 1
     assert "LightRAG Graphs" not in output
@@ -367,12 +397,12 @@ def test_non_admin_session_hides_admin_only_root_menu_items(tmp_path: Path) -> N
         ["q"],
         authenticated_store(tmp_path),
         client_setup=lambda: (
-            setattr(FakeTuiClient, "current_user_email", "user@example.com"),
+            setattr(FakeTuiClient, "current_username", "user"),
             setattr(FakeTuiClient, "current_user_role", "user"),
         ),
     )
 
-    assert "Session: user@example.com" in output
+    assert "Session: user" in output
     assert "LightRAG Domains" not in output
     assert "Jobs" not in output
     assert "Observability" not in output
@@ -603,6 +633,37 @@ def test_back_from_document_detail_returns_to_documents_screen(tmp_path: Path) -
 
     assert "DOCUMENTS / DETAIL" in output
     assert ("GET", "/documents/doc-1", None, "secret-token") in FakeTuiClient.calls
+
+
+def test_document_detail_shows_structure_quality(tmp_path: Path) -> None:
+    output = run_with_inputs(tmp_path, ["enter", "enter", "q"], authenticated_store(tmp_path))
+
+    assert "Structure Quality" in output
+    assert "TOC Refiner" in output
+    assert ("GET", "/documents/doc-1/structure-quality", None, "secret-token") in FakeTuiClient.calls
+
+
+def test_document_detail_shows_toc_refinement_report(tmp_path: Path) -> None:
+    output = run_with_inputs(tmp_path, ["enter", "enter", "q"], authenticated_store(tmp_path))
+
+    assert "TOC Refinement" in output
+    assert "low validation accuracy" in output
+    assert "section start not found" in output
+    assert ("GET", "/documents/doc-1/toc-refinement-report", None, "secret-token") in FakeTuiClient.calls
+
+
+def test_enter_from_document_detail_opens_structure_screen(tmp_path: Path) -> None:
+    output = run_with_inputs(tmp_path, ["enter", "enter", "enter", "q"], authenticated_store(tmp_path))
+
+    assert "DOCUMENTS / DETAIL / STRUCTURE" in output
+    assert "document_structure" in output
+    assert "Safety" in output
+    assert (
+        "GET",
+        "/documents/doc-1/structure?include_blocks=true&include_assets=true",
+        None,
+        "secret-token",
+    ) in FakeTuiClient.calls
 
 
 def test_upload_result_truncates_long_document_and_job_ids(tmp_path: Path) -> None:

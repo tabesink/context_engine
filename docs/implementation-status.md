@@ -24,6 +24,13 @@ This file records what the current codebase implements. For the intended build s
 - LightRAG domain deployment control behind `LIGHTRAG_DEPLOY_ENABLED`, including managed domain manifest, generated domain env files, generated compose file, fakeable Docker Compose runner, admin APIs in `app/api/routes/lightrag_admin.py`, user-safe `GET /lightrag/domains`, domain-aware upload/query selection, per-domain PostgreSQL storage metadata, and matching TUI/admin service wrappers.
 - Contract files under `external/lightrag/contract/`.
 - Behavior tests for API, terminal client (launcher, settings, TUI, services, API client, screen renderers, query payload), routing policy, LightRAG adapter, LightRAG deploy stack, auth guardrails, upload, retrieval, answer flow, queued jobs, and worker failure handling.
+- Canonical document-processing scaffolding for `DocumentStructure`, pages, sections, blocks, source chunks, assets, structure quality, storage paths, and document-processing repository persistence.
+- The LightRAG ingestion job now uses the existing upload/job flow to build and persist canonical `DocumentStructure` plus `SourceChunk` rows for parseable text/Markdown uploads, and it can use the real `DoclingParser` boundary for PDFs when Docling is installed. Built Source Chunks include section title/path metadata and section-prefixed chunk text that is forwarded to LightRAG alongside document, section, block, page, and asset IDs. Unsupported parse failures still use the existing raw LightRAG upload fallback.
+- Document asset extraction saves assets, generates resized thumbnails when Pillow can read the asset, computes content hashes, extracts figure/image/table snapshots when Docling exposes image data, and deduplicates identical asset payloads while preserving per-occurrence metadata links.
+- TOC refinement supports `auto`, `always`, and `never` modes, enforces bounded extractor calls, can parse common TOC text lines deterministically when no candidate sections are injected, resolves logical-to-physical page offsets by matching section titles outside TOC pages, validates resolved section starts against normalized page text, preserves nested refined section hierarchy, assigns hierarchy-aware page ranges, and assigns blocks/assets to the deepest matching refined section.
+- Authenticated document debug APIs now expose canonical structure data when available: `GET /documents/{document_id}/structure`, `GET /documents/{document_id}/structure-quality`, `GET /documents/{document_id}/sections/{section_id}`, `GET /documents/{document_id}/chunks/{chunk_id}`, `GET /documents/{document_id}/toc-refinement-report`, and authenticated asset/thumbnail streaming.
+- Retrieval asset enrichment can resolve assets from LightRAG evidence using legacy `metadata.source_chunk_id`, chunk-ingest `metadata.chunk_id`, or returned `metadata.asset_ids`, then rank and limit assets using direct chunk links, block links, caption/query overlap, page proximity, and section proximity.
+- CLI service wrappers and TUI/screen renderers now cover document structure quality, TOC refinement reports, canonical structure summaries, section detail, source chunk detail with metadata, document detail debug summaries, and admin wrappers/actions for structure rebuild and LightRAG reingest.
 
 ## LightRAG Runtime Behavior
 
@@ -43,6 +50,9 @@ When `LIGHTRAG_ENABLED=true`:
 - Startup table creation is used instead of Alembic migrations.
 - SQL cleanup/smoke scripts live under `migrations/`; they are not yet an Alembic migration chain.
 - Context Engine stores LightRAG metadata and navigation data only; LightRAG owns chunks, embeddings, vector indexes, and graph data.
+- Current text/Markdown ingestion still uses `TextDoclingParser`, a lightweight stub. The `DoclingParser` boundary and asset extraction exist with focused fake Docling fixtures, but broader real-PDF fixture coverage remains pending.
+- The TOC Refiner is still a bounded service scaffold with an injectable extractor, deterministic TOC-line parsing for common formats, title-matched logical-to-physical page offset resolution, normalized title/page start validation, hierarchy-aware range assignment, and merge/assigner services. A real LLM provider/prompt implementation remains pending.
+- Source Chunk ingestion is production-wired through `StructureAwareChunkBuilder`, including section-aware grouping, page ranges, inherited assets, section title/path metadata, section-prefixed chunk text, and caption text for asset-only chunks. Better sizing/tuning against real Docling output remains pending.
 - The answer composer is deterministic and citation-focused. A real LLM provider can be added behind the same composer/provider boundary.
 - Document ACLs are deferred; authenticated users can read ready documents.
 - LightRAG domain deployment control is opt-in and generates a separate `.data/lightrag/docker-compose.lightrag-domains.yml`; generated domain services share the root Docker network.
@@ -53,4 +63,7 @@ When `LIGHTRAG_ENABLED=true`:
 - Add rate limiting middleware and stronger request-size controls.
 - Expand evaluation datasets and retrieval metrics.
 - Add richer LightRAG status polling, database provisioning operations, and fuller TUI forms for domain create/start/stop/remove operations.
+- Replace `TextDoclingParser` with a Docling parser adapter plus asset extraction and thumbnail generation.
+- Implement the bounded PageIndex-style TOC Refiner and merge refined sections back into Docling blocks/assets.
+- Implement a real `StructureAwareChunkBuilder` and use it before LightRAG chunk ingest.
 

@@ -19,6 +19,9 @@ class RetrievalRoutingPolicy:
     remote_modes = frozenset({RetrievalMode.AUTO, RetrievalMode.SEMANTIC, RetrievalMode.HYBRID})
 
     def resolve(self, *, lightrag_enabled: bool, mode: RetrievalMode) -> RetrievalRoute:
-        if lightrag_enabled and mode in self.remote_modes:
+        del lightrag_enabled
+        if mode == RetrievalMode.NAVIGATION:
+            return RetrievalRoute(backend=RetrievalBackend.LOCAL, selected_engine="navigation")
+        if mode in self.remote_modes:
             return RetrievalRoute(backend=RetrievalBackend.LIGHTRAG, selected_engine="lightrag")
-        return RetrievalRoute(backend=RetrievalBackend.LOCAL, selected_engine="local")
+        return RetrievalRoute(backend=RetrievalBackend.LIGHTRAG, selected_engine="lightrag")
