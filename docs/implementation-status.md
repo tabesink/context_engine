@@ -17,7 +17,7 @@ This file records what the current codebase implements. For the intended build s
 - Job table, job status endpoints, Redis `rq` enqueue path, and worker-owned job lifecycle.
 - Audit/query log repositories and admin log endpoints.
 - Seed admin, backup, and retrieval evaluation scripts.
-- Interactive terminal UI: console scripts `context-engine` / `context-tui` (`cli.launcher`) driving `cli/tui/app.py` plus `cli/tui/` navigation, screens, and helpers; `cli/screens/` + `cli/renderers/` supply composable layouts; `cli/flows/` holds multi-step UX; all HTTP via `ApiClient` and `cli/services/`.
+- Interactive terminal UI: console script `context-engine` (`cli.launcher`) driving `cli/tui/app.py` plus `cli/tui/` navigation, screens, and helpers; `cli/screens/` + `cli/renderers/` supply composable layouts; `cli/flows/` holds multi-step UX; all HTTP via `ApiClient` and `cli/services/`.
 - Remote LightRAG integration for semantic retrieval/runtime, including HTTP adapter, domain manifest resolution, retrieval strategy, queued ingestion jobs, status refresh, and graph proxy routes.
 - LightRAG domain deployment control behind `LIGHTRAG_DEPLOY_ENABLED`, including managed domain manifest, generated domain env files, generated compose file, fakeable Docker Compose runner, admin APIs in `app/api/routes/lightrag_admin.py`, user-safe `GET /lightrag/domains`, domain-aware upload/query selection, per-domain PostgreSQL storage metadata, and matching TUI/admin service wrappers.
 - LightRAG provider configuration contract for generated `domain.env` files, including `LLM_BINDING*`, `EMBEDDING_BINDING*`, and `OPENAI_LLM_*` tuning fields sourced from root `LIGHTRAG_*` settings.
@@ -47,7 +47,7 @@ Runtime behavior:
 - Admin upload stores a local mirror record/file and enqueues `document_ingest`.
 - Uploads require a LightRAG domain manifest so requested domains are explicit and validated.
 - Upload responses include the LightRAG ingestion job id; LightRAG status is tracked under `documents.metadata.lightrag`.
-- `GET /graphs` and `GET /graph/label/...` proxy to the remote LightRAG service.
+- Domain-scoped graph routes under `GET /lightrag/domains/{domain_id}/graphs` and `GET /lightrag/domains/{domain_id}/graph/labels...` proxy to the remote LightRAG service.
 - LightRAG timeouts/connect failures become `503`; auth/upstream/invalid-response failures become `502`.
 
 ## Intentional Simplifications

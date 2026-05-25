@@ -20,7 +20,7 @@ Included:
 - LightRAG-only semantic retrieval, queued LightRAG ingestion, graph proxy routes, and admin-controlled domain deployment through generated `.data/lightrag` files.
 - Unified `Evidence` model, retrieval router, and evaluation script.
 - Redis-backed worker path for indexing jobs, plus inline mode for deterministic local/dev flows.
-- Interactive terminal UI (`context-engine` / `context-tui`) that exercises supported backend flows through HTTP; planned-only backend surfaces remain visible as gaps rather than silent stubs.
+- Interactive terminal UI (`context-engine`) that exercises supported backend flows through HTTP; planned-only backend surfaces remain visible as gaps rather than silent stubs.
 
 Excluded or deferred:
 
@@ -50,7 +50,7 @@ Tests should describe observable behavior, not private implementation details.
 The runnable foundation includes:
 
 - Package layout under `app/`, `cli/`, `scripts/`, and `tests/`.
-- `pyproject.toml` with console scripts `context-engine` and `context-tui`, both resolving to `cli.launcher:main`.
+- `pyproject.toml` with console script `context-engine` resolving to `cli.launcher:main`.
 - `.env.example`.
 - `docker-compose.yml` with PostgreSQL, Redis, API, worker, and shared-network support for generated LightRAG domain services.
 - `app/main.py` app factory and route registration.
@@ -143,10 +143,10 @@ Implemented:
 - Queued LightRAG ingestion through `document_ingest` jobs.
 - Status normalization helper for `/documents/track_status/{track_id}`.
 - Authenticated graph proxy routes:
-  - `GET /graphs`
-  - `GET /graph/label/list`
-  - `GET /graph/label/popular`
-  - `GET /graph/label/search`
+  - `GET /lightrag/domains/{domain_id}/graphs`
+  - `GET /lightrag/domains/{domain_id}/graph/labels`
+  - `GET /lightrag/domains/{domain_id}/graph/labels/popular`
+  - `GET /lightrag/domains/{domain_id}/graph/labels/search`
 - Contract files under `external/lightrag/contract/`.
 - Mocked adapter/API tests that do not require live LightRAG.
 

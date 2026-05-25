@@ -1,6 +1,6 @@
 # Operator capability map (`context-engine` TUI ↔ REST)
 
-The launcher **`context-engine`** / **`context-tui`** exposes **only** the interactive terminal UI (`cli.launcher:main`). The tables below tie **capabilities** operators reach through menus to canonical **HTTP verbs and paths**.
+The launcher **`context-engine`** exposes **only** the interactive terminal UI (`cli.launcher:main`). The tables below tie **capabilities** operators reach through menus to canonical **HTTP verbs and paths**.
 
 For request/response field detail, reuse `docs/cli_docs/api-contract.md`.
 
@@ -65,10 +65,10 @@ Known **backend gaps** (examples only—currently no matching routes):
 
 | UI intent | REST |
 | --- | --- |
-| Graph summary (`label`, depth knobs) | **`GET /graphs`** with query params per backend schema |
-| Label catalog/list | **`GET /graph/label/list`** |
-| Popular labels | **`GET /graph/label/popular`** |
-| Label search | **`GET /graph/label/search?q=…`** |
+| Graph summary (`label`, depth knobs) | **`GET /lightrag/domains/{domain_id}/graphs`** with query params per backend schema |
+| Label catalog/list | **`GET /lightrag/domains/{domain_id}/graph/labels`** |
+| Popular labels | **`GET /lightrag/domains/{domain_id}/graph/labels/popular`** |
+| Label search | **`GET /lightrag/domains/{domain_id}/graph/labels/search?q=…`** |
 
 The UI never connects to LightRAG directly; backend proxy handles **`LIGHTRAG_ENABLED`** and outbound HTTP.
 

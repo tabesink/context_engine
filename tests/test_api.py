@@ -1260,22 +1260,29 @@ def test_lightrag_graph_proxy_uses_upstream_route_names(monkeypatch: pytest.Monk
     get_settings.cache_clear()
 
     seen_paths: list[str] = []
+    seen_domains: list[str | None] = []
+
+    def fake_for_domain(cls, domain: str | None = None):
+        seen_domains.append(domain)
+        return cls(base_url="http://lightrag.local")
 
     def fake_get_json(self: LightRAGRemoteAdapter, path: str, *, params: dict | None = None):
         del self, params
         seen_paths.append(path)
         return {"path": path, "nodes": [], "edges": []}
 
+    monkeypatch.setattr(LightRAGRemoteAdapter, "for_domain", classmethod(fake_for_domain))
     monkeypatch.setattr(LightRAGRemoteAdapter, "get_json", fake_get_json)
 
     with TestClient(app) as client:
         _seed_users()
         user_headers = _login(client, "user@example.com")
-        graph = client.get("/graphs?label=Pump", headers=user_headers)
-        labels = client.get("/graph/label/list", headers=user_headers)
+        graph = client.get("/lightrag/domains/fatigue/graphs?label=Pump", headers=user_headers)
+        labels = client.get("/lightrag/domains/fatigue/graph/labels", headers=user_headers)
 
     assert graph.status_code == 200
     assert labels.status_code == 200
+    assert seen_domains == ["fatigue", "fatigue"]
     assert seen_paths == ["/graphs", "/graph/label/list"]
 
 

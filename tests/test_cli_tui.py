@@ -102,7 +102,7 @@ class FakeTuiClient:
                 "asset_count": 1,
                 "reasons": [],
             })
-        if path == "/graph/label/popular?limit=20":
+        if path == "/lightrag/domains/default/graph/labels/popular?limit=20":
             if self.fail_graphs:
                 raise ApiClientError("service_disabled", "LightRAG graph proxy is disabled.", 503)
             return self._record("GET", path, None, [{"label": "manual", "count": 4}])
@@ -880,7 +880,12 @@ def test_lightrag_tui_screen_uses_backend_graph_proxy(tmp_path: Path) -> None:
     output = run_with_inputs(tmp_path, ["down", "down", "enter", "q"], authenticated_store(tmp_path))
 
     assert "GRAPHS / LABELS" in output
-    assert ("GET", "/graph/label/popular?limit=20", None, "secret-token") in FakeTuiClient.calls
+    assert (
+        "GET",
+        "/lightrag/domains/default/graph/labels/popular?limit=20",
+        None,
+        "secret-token",
+    ) in FakeTuiClient.calls
 
 
 def test_graphs_screen_shows_honest_disabled_state_when_backend_unavailable(tmp_path: Path) -> None:

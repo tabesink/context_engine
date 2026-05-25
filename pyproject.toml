@@ -26,7 +26,6 @@ dependencies = [
 
 [project.scripts]
 context-engine = "cli.launcher:main"
-context-tui = "cli.launcher:main"
 
 [project.optional-dependencies]
 dev = [

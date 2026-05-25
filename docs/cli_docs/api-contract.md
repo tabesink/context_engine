@@ -1,8 +1,8 @@
 # Terminal client ←→ backend contract
 
-Maps **capabilities operators reach via the `context-engine`/`context-tui` Rich terminal UI** to the backend that exists today. Items marked **`supported`** call concrete FastAPI routes through `cli/api_client.py`. Backend gaps are documented separately and are not exposed as successful TUI actions.
+Maps **capabilities operators reach via the `context-engine` Rich terminal UI** to the backend that exists today. Items marked **`supported`** call concrete FastAPI routes through `cli/api_client.py`. Backend gaps are documented separately and are not exposed as successful TUI actions.
 
-Older Typer-era subcommands were named **`ragcli …`**; shipping entrypoints are **`context-engine`** and **`context-tui`** only (**`cli.launcher:main`**).
+Older Typer-era subcommands were named **`ragcli …`**; the shipping entrypoint is **`context-engine`** (**`cli.launcher:main`**).
 
 ## Auth
 
@@ -45,10 +45,10 @@ Sample retrieve body:
 
 | TUI capability | Backend | Role | Status |
 | --- | --- | --- | --- |
-| Graph summary with label and limits | `GET /graphs?label=…&max_depth=…&max_nodes=…` | authenticated | supported |
-| Label catalog | `GET /graph/label/list` | authenticated | supported |
-| Popular labels | `GET /graph/label/popular?limit=…` | authenticated | supported |
-| Label search | `GET /graph/label/search?q=…&limit=…` | authenticated | supported |
+| Graph summary with label and limits | `GET /lightrag/domains/{domain_id}/graphs?label=…&max_depth=…&max_nodes=…` | authenticated | supported |
+| Label catalog | `GET /lightrag/domains/{domain_id}/graph/labels` | authenticated | supported |
+| Popular labels | `GET /lightrag/domains/{domain_id}/graph/labels/popular?limit=…` | authenticated | supported |
+| Label search | `GET /lightrag/domains/{domain_id}/graph/labels/search?q=…&limit=…` | authenticated | supported |
 
 Requires backend **`LIGHTRAG_ENABLED=true`** (mandatory at startup) with a reachable remote LightRAG service. LightRAG outages surface as HTTP `502`/`503` integration errors; there is no local semantic fallback.
 

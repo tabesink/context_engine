@@ -1,6 +1,6 @@
 # context-engine TUI UX
 
-Launch **`context-engine`** (or **`context-tui`**) for the interactive Rich terminal layer that rehearses future browser screens. It stays intentionally simple: Rich-only, mostly monochrome, ASCII tables, and shared screen builders under `cli/tui/`.
+Launch **`context-engine`** for the interactive Rich terminal layer that rehearses future browser screens. It stays intentionally simple: Rich-only, mostly monochrome, ASCII tables, and shared screen builders under `cli/tui/`.
 
 ## Main Menu
 

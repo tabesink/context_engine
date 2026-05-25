@@ -24,7 +24,7 @@ class EvidenceResponse(BaseModel):
     page_start: int | None = None
     page_end: int | None = None
     section_title: str | None = None
-    metadata: dict = {}
+    metadata: dict = Field(default_factory=dict)
 
 
 class AssetResponse(BaseModel):
@@ -41,5 +41,5 @@ class RetrieveResponse(BaseModel):
     query: str
     mode: RetrievalMode
     evidence: list[EvidenceResponse]
-    assets: list[AssetResponse] = []
+    assets: list[AssetResponse] = Field(default_factory=list)
     debug: dict | None = None

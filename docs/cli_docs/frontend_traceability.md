@@ -1,6 +1,6 @@
 # Frontend Traceability Matrix
 
-Maps **`context-engine` / `context-tui` TUI screens and flows** to future browser surfaces. There is no parallel Typer command tree.
+Maps **`context-engine` TUI screens and flows** to future browser surfaces. There is no parallel Typer command tree.
 
 | Frontend Screen | Terminal client | Backend Routes | Status | Gaps |
 |---|---|---|---|---|
@@ -12,8 +12,8 @@ Maps **`context-engine` / `context-tui` TUI screens and flows** to future browse
 | Retrieval | Retrieval | `POST /retrieve` | Implemented | Default retrieval params follow screen |
 | Retrieval Compare | Retrieval compare flow (if enabled) | `POST /retrieve` per mode | Implemented | Partial failures render per mode |
 | Retrieval Domain Selector | Retrieval domain field | `GET /lightrag/domains`, `POST /retrieve` with `lightrag_domain_id` | Implemented | Defaults to backend/user domain list |
-| LightRAG Labels | Graphs | `GET /graph/label/list`, `GET /graph/label/popular`, `GET /graph/label/search` | Implemented | Often starts with popular labels |
-| Graph Summary | Graphs | `GET /graphs` | Implemented | Summaries only in-terminal; use JSON from API for viz |
+| LightRAG Labels | Graphs | `GET /lightrag/domains/{domain_id}/graph/labels`, `GET /lightrag/domains/{domain_id}/graph/labels/popular`, `GET /lightrag/domains/{domain_id}/graph/labels/search` | Implemented | Often starts with popular labels |
+| Graph Summary | Graphs | `GET /lightrag/domains/{domain_id}/graphs` | Implemented | Summaries only in-terminal; use JSON from API for viz |
 | LightRAG Domain Admin | LightRAG Domains and lifecycle forms | `GET /admin/lightrag/domains`, `POST /admin/lightrag/domains`, `/up`, `/down`, `/recreate`, `DELETE /admin/lightrag/domains/{id}` | Implemented | Permanent delete requires backend flag and typed confirmation |
 | Documents Admin Actions | Documents -> Admin Actions | `GET /admin/documents` | Implemented | Authorization from backend responses |
 | Admin Upload Flow | Documents -> Admin Actions -> Upload | `POST /admin/documents/upload`, optional `GET /jobs/{job_id}` | Implemented | None |

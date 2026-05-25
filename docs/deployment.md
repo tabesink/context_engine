@@ -85,7 +85,7 @@ If no `.env` overrides `DATABASE_URL`, the app uses SQLite at `.data/context_eng
 
 ## Terminal Client (`context-engine`)
 
-After `pip install -e .`, the supported CLI is the interactive TUI (`context-engine` and `context-tui` entry points invoke the same code):
+After `pip install -e .`, the supported CLI is the interactive TUI:
 
 ```bash
 context-engine
@@ -112,7 +112,7 @@ LIGHTRAG_API_KEY=
 - Admin uploads enqueue `document_ingest`; the worker builds canonical structure/source chunks, ingests chunks to LightRAG, polls status, and updates `documents.metadata.lightrag`.
 - Structure-processing failures fail ingestion explicitly (no raw LightRAG upload fallback).
 - Unknown upstream LightRAG statuses surface as integration errors instead of silently normalizing to `indexing`.
-- `/graphs` and `/graph/label/...` proxy to LightRAG.
+- `/lightrag/domains/{domain_id}/graphs` and `/lightrag/domains/{domain_id}/graph/labels...` proxy to LightRAG.
 
 ## LightRAG Domain Deployment Control
 

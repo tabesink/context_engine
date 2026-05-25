@@ -12,20 +12,43 @@ class LightRagService:
     def __init__(self, client: ApiClient):
         self._client = client
 
-    def list_labels(self) -> list[dict[str, Any]] | list[str]:
-        payload = self._client.get("/graph/label/list")
+    def list_labels(self, domain_id: str = "default") -> list[dict[str, Any]] | list[str]:
+        payload = self._client.get(f"/lightrag/domains/{domain_id}/graph/labels")
         return payload if isinstance(payload, list) else []
 
-    def popular_labels(self, limit: int = 20) -> list[dict[str, Any]] | list[str]:
-        payload = self._client.get(f"/graph/label/popular?{urlencode({'limit': limit})}")
-        return payload if isinstance(payload, list) else []
-
-    def search_labels(self, query: str, limit: int = 20) -> list[dict[str, Any]] | list[str]:
-        payload = self._client.get(f"/graph/label/search?{urlencode({'q': query, 'limit': limit})}")
-        return payload if isinstance(payload, list) else []
-
-    def get_graph(self, label: str, max_depth: int = 3, max_nodes: int = 1000) -> dict[str, Any]:
+    def popular_labels(
+        self,
+        *,
+        domain_id: str = "default",
+        limit: int = 20,
+    ) -> list[dict[str, Any]] | list[str]:
         payload = self._client.get(
-            f"/graphs?{urlencode({'label': label, 'max_depth': max_depth, 'max_nodes': max_nodes})}"
+            f"/lightrag/domains/{domain_id}/graph/labels/popular?{urlencode({'limit': limit})}"
+        )
+        return payload if isinstance(payload, list) else []
+
+    def search_labels(
+        self,
+        *,
+        domain_id: str = "default",
+        query: str,
+        limit: int = 20,
+    ) -> list[dict[str, Any]] | list[str]:
+        payload = self._client.get(
+            f"/lightrag/domains/{domain_id}/graph/labels/search?{urlencode({'q': query, 'limit': limit})}"
+        )
+        return payload if isinstance(payload, list) else []
+
+    def get_graph(
+        self,
+        *,
+        domain_id: str = "default",
+        label: str,
+        max_depth: int = 3,
+        max_nodes: int = 1000,
+    ) -> dict[str, Any]:
+        payload = self._client.get(
+            f"/lightrag/domains/{domain_id}/graphs?"
+            f"{urlencode({'label': label, 'max_depth': max_depth, 'max_nodes': max_nodes})}"
         )
         return payload if isinstance(payload, dict) else {}

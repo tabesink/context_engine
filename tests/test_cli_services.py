@@ -151,10 +151,14 @@ def test_lightrag_service_routes() -> None:
     service.search_labels(query="reset", limit=5)
     service.get_graph(label="manual", max_depth=2, max_nodes=100)
 
-    assert ("GET", "/graph/label/list", None) in client.calls
-    assert ("GET", "/graph/label/popular?limit=7", None) in client.calls
-    assert ("GET", "/graph/label/search?q=reset&limit=5", None) in client.calls
-    assert ("GET", "/graphs?label=manual&max_depth=2&max_nodes=100", None) in client.calls
+    assert ("GET", "/lightrag/domains/default/graph/labels", None) in client.calls
+    assert ("GET", "/lightrag/domains/default/graph/labels/popular?limit=7", None) in client.calls
+    assert ("GET", "/lightrag/domains/default/graph/labels/search?q=reset&limit=5", None) in client.calls
+    assert (
+        "GET",
+        "/lightrag/domains/default/graphs?label=manual&max_depth=2&max_nodes=100",
+        None,
+    ) in client.calls
 
 
 def test_lightrag_domain_service_routes() -> None:

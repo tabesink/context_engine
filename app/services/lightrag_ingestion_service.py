@@ -11,7 +11,7 @@ from app.document_processing.artifacts import DocumentProcessingArtifactStore
 from app.document_processing.chunk_builder import StructureAwareChunkBuilder
 from app.document_processing.docling_parser import DoclingParser
 from app.document_processing.pipeline import TextDoclingParser
-from app.document_processing.refinement import StructureQualityScorer
+from app.document_processing.quality import StructureQualityScorer
 from app.domain.models import DocumentStatus
 from app.integrations.lightrag_remote_adapter import LightRAGRemoteAdapter
 from app.storage.repositories.document_processing import DocumentProcessingRepository

@@ -1,10 +1,10 @@
 # context-engine Terminal Client
 
-The **`context-engine`** and **`context-tui`** commands (same implementation, `cli.launcher:main`) are the supported operator interface for Context Engine: a **Rich-only interactive terminal UI**. They authenticate via the REST API, store a bearer token locally, call FastAPI routes through `cli/api_client.py` (`cli/services/*` wrappers), and never embed backend business logic.
+The **`context-engine`** command (`cli.launcher:main`) is the supported operator interface for Context Engine: a **Rich-only interactive terminal UI**. It authenticates via the REST API, stores a bearer token locally, calls FastAPI routes through `cli/api_client.py` (`cli/services/*` wrappers), and never embeds backend business logic.
 
 Automation and CI should prefer **calling the REST API directly** (`curl`, HTTP libraries). The launcher is geared toward guided human operation.
 
-Examples use backend paths such as `/auth/login`, `/documents`, `/retrieve`, `/admin/documents/upload`, `/jobs/{job_id}`, `/graphs`, `/graph/label/…`, `/lightrag/domains`, and `/admin/lightrag/domains`.
+Examples use backend paths such as `/auth/login`, `/documents`, `/retrieve`, `/admin/documents/upload`, `/jobs/{job_id}`, `/lightrag/domains/{domain_id}/graphs`, `/lightrag/domains/{domain_id}/graph/labels`, `/lightrag/domains`, and `/admin/lightrag/domains`.
 
 ## Install For Local Development
 
@@ -22,8 +22,7 @@ Then start the interactive client:
 
 ```bash
 context-engine
-# same entry point:
-context-tui --api-base-url http://127.0.0.1:8010
+context-engine --api-base-url http://127.0.0.1:8010
 ```
 
 Launcher options (see `cli/config.py`):

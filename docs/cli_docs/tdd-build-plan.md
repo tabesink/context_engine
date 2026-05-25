@@ -62,10 +62,10 @@ Acceptance:
 
 Behavior covered:
 
-- `lightrag graphs show` calls `GET /graphs` with `label`, `max_depth`, and `max_nodes`.
-- `lightrag labels list` calls `GET /graph/label/list`.
-- `lightrag labels popular` calls `GET /graph/label/popular`.
-- `lightrag labels search` calls `GET /graph/label/search`.
+- Graph browsing calls `GET /lightrag/domains/{domain_id}/graphs` with `label`, `max_depth`, and `max_nodes`.
+- Label listing calls `GET /lightrag/domains/{domain_id}/graph/labels`.
+- Popular labels call `GET /lightrag/domains/{domain_id}/graph/labels/popular`.
+- Label search calls `GET /lightrag/domains/{domain_id}/graph/labels/search`.
 
 Acceptance:
 

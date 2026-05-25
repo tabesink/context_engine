@@ -5,7 +5,7 @@ The app is a backend-only multi-user Context Engine. It exposes one FastAPI API,
 ## System Shape
 
 ```text
-HTTP client or `context-engine` TUI (`context-engine` / `context-tui`)
+HTTP client or `context-engine` TUI
   -> FastAPI route
   -> application service
   -> repository / retrieval strategy / job queue / remote adapter
@@ -111,10 +111,10 @@ For Bedrock OpenAI-compatible routing, the supported pattern is LightRAG `openai
 
 The API exposes authenticated read-only graph proxy routes:
 
-- `GET /graphs`
-- `GET /graph/label/list`
-- `GET /graph/label/popular`
-- `GET /graph/label/search`
+- `GET /lightrag/domains/{domain_id}/graphs`
+- `GET /lightrag/domains/{domain_id}/graph/labels`
+- `GET /lightrag/domains/{domain_id}/graph/labels/popular`
+- `GET /lightrag/domains/{domain_id}/graph/labels/search`
 
 These routes call the configured remote LightRAG service and do not fall back to any local semantic implementation.
 

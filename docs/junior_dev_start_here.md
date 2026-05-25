@@ -61,7 +61,7 @@ For model providers in managed domains:
 - `RetrievalMode`: `semantic`, `navigation`, `hybrid`, or `auto`.
 - `RetrievalRoutingPolicy` / strategies: chooses local routing (`RichNavigationEngine`) versus `LightRAGRemoteRetrievalEngine` before evidence mapping.
 - `Job`: background indexing work run by the worker.
-- `context-engine` / `context-tui`: installed launcher commands (same implementation) that open the interactive terminal UI against the REST API.
+- `context-engine`: installed launcher command that opens the interactive terminal UI against the REST API.
 - `CredentialStore`: local session persistence for bearer tokens (`cli/credentials.py`).
 - `LightRAGRemoteAdapter`: HTTP boundary to an external LightRAG service.
 - `LightRAGDomainService`: admin control-plane service for generated domain env/manifest/compose files and Docker Compose lifecycle operations.
@@ -92,7 +92,7 @@ operator -> context-engine TUI -> ApiClient -> /retrieve
 Graph reads:
 
 ```text
-user -> /graphs or /graph/label/... -> LightRAGRemoteAdapter -> external LightRAG
+user -> /lightrag/domains/{domain_id}/graphs or /lightrag/domains/{domain_id}/graph/labels... -> LightRAGRemoteAdapter -> external LightRAG
 ```
 
 Domain deployment and user listing:
