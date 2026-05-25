@@ -109,7 +109,7 @@ LIGHTRAG_API_KEY=
 - `auto`, `semantic`, and `hybrid` query modes use remote LightRAG.
 - `hybrid` may add local navigation evidence when available.
 - `navigation` query mode remains local page/tree retrieval.
-- Admin uploads enqueue `lightrag_ingest_document`; the worker builds canonical structure/source chunks, ingests chunks to LightRAG, polls status, and updates `documents.metadata.lightrag`.
+- Admin uploads enqueue `document_ingest`; the worker builds canonical structure/source chunks, ingests chunks to LightRAG, polls status, and updates `documents.metadata.lightrag`.
 - Structure-processing failures fail ingestion explicitly (no raw LightRAG upload fallback).
 - Unknown upstream LightRAG statuses surface as integration errors instead of silently normalizing to `indexing`.
 - `/graphs` and `/graph/label/...` proxy to LightRAG.

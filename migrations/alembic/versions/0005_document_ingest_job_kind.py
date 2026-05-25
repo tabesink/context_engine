@@ -17,6 +17,9 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    if "jobs" not in set(sa.inspect(bind).get_table_names()):
+        return
     op.execute(
         sa.text(
             "UPDATE jobs SET kind = :new_kind WHERE kind = :old_kind"
@@ -25,6 +28,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    bind = op.get_bind()
+    if "jobs" not in set(sa.inspect(bind).get_table_names()):
+        return
     op.execute(
         sa.text(
             "UPDATE jobs SET kind = :old_kind WHERE kind = :new_kind"

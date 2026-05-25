@@ -22,6 +22,18 @@ services:
     networks:
       - context_engine_lightrag
 
+  migrate:
+    build: .
+    command: alembic upgrade head
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    depends_on:
+      - postgres
+    networks:
+      - context_engine_lightrag
+
   api:
     build: .
     command: uvicorn app.main:create_app --factory --host 0.0.0.0 --port ${API_PORT:-8000} --reload
@@ -33,8 +45,12 @@ services:
       - .:/app
       - uploads:/app/.data/uploads
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
     networks:
       - context_engine_lightrag
 
@@ -47,8 +63,12 @@ services:
       - .:/app
       - uploads:/app/.data/uploads
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
     networks:
       - context_engine_lightrag
 

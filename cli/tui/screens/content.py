@@ -459,8 +459,8 @@ class DocumentsAdminActionsScreen:
         return (
             "Upload Document",
             "List All Documents",
-            "Rebuild Structure",
-            "Reingest LightRAG",
+            "Reingest",
+            "Refresh Status",
             "Delete Document",
             "Back",
         )
@@ -490,13 +490,11 @@ class DocumentsAdminActionsScreen:
             return ScreenCommand.push(UploadDocumentScreen())
         if selected == "List All Documents":
             return ScreenCommand.push(admin_documents_screen())
-        if selected == "Rebuild Structure":
+        if selected == "Reingest":
+            return ScreenCommand.push(AdminDocumentMutationScreen("Reingest", "reingest", "Reingest queued."))
+        if selected == "Refresh Status":
             return ScreenCommand.push(
-                AdminDocumentMutationScreen("Rebuild Structure", "rebuild_structure", "Rebuild queued.")
-            )
-        if selected == "Reingest LightRAG":
-            return ScreenCommand.push(
-                AdminDocumentMutationScreen("Reingest LightRAG", "reingest_lightrag", "Reingest queued.")
+                AdminDocumentMutationScreen("Refresh Status", "refresh_status", "Status refreshed.")
             )
         if selected == "Delete Document":
             return ScreenCommand.push(AdminDocumentMutationScreen("Delete Document", "delete_document", "Delete submitted."))

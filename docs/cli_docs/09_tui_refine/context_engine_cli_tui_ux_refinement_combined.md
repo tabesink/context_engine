@@ -592,9 +592,8 @@ GET /documents/{document_id}/pages/{page_number}
 ```text
 GET    /admin/documents
 POST   /admin/documents/upload
-POST   /admin/documents/{document_id}/rebuild-structure
-POST   /admin/documents/{document_id}/reingest-lightrag
-POST   /admin/documents/{document_id}/refresh-lightrag-status
+POST   /admin/documents/{document_id}/reingest
+POST   /admin/documents/{document_id}/refresh-status
 DELETE /admin/documents/{document_id}
 ```
 

@@ -44,7 +44,7 @@ Acceptance:
 Behavior covered:
 
 - `admin documents upload` sends multipart field `file` to `/admin/documents/upload`.
-- `admin documents rebuild-structure`, `reingest-lightrag`, and `refresh-lightrag-status` call current admin routes.
+- `admin documents reingest` and `refresh-status` call current admin routes.
 - `admin documents delete` renders the deleted document response.
 - `admin documents list` calls `GET /admin/documents`.
 - `admin audit-logs list` calls `GET /admin/audit-logs`.

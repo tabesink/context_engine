@@ -4,10 +4,10 @@ This file records what the current codebase implements. For the intended build s
 
 ## Implemented
 
-- FastAPI app factory, route registration, health endpoints, and startup table creation.
+- FastAPI app factory, route registration, health endpoints, and Alembic-managed schema migrations.
 - SQLAlchemy storage models and repositories for users, documents, jobs, rich document-processing data (pages, sections, blocks, source chunks, assets), audit logs, and query logs.
 - JWT auth, password hashing, `/auth/login`, `/auth/me`, `get_current_user`, and `require_admin`.
-- Admin document upload, delete, list, structure rebuild, LightRAG reingest, and LightRAG status refresh endpoints.
+- Admin document upload, delete, list, canonical reingest, and status refresh endpoints.
 - Authenticated document list, detail, rich structure, rich page, section, chunk, and asset endpoints.
 - Text, Markdown, and PDF parsing into canonical `DocumentStructure`.
 - LightRAG-only semantic retrieval; local semantic chunks and deterministic embedding fallback have been removed from runtime code.
@@ -32,9 +32,9 @@ This file records what the current codebase implements. For the intended build s
 - Deterministic structure quality scoring is retained; runtime TOC refinement and TOC refinement report APIs are removed from ingestion and HTTP routes.
 - Authenticated document debug APIs expose canonical structure data: `GET /documents/{document_id}/structure`, `GET /documents/{document_id}/structure-quality`, `GET /documents/{document_id}/sections/{section_id}`, `GET /documents/{document_id}/chunks/{chunk_id}`, and authenticated asset/thumbnail streaming.
 - Retrieval asset enrichment can resolve assets from LightRAG evidence using legacy `metadata.source_chunk_id`, chunk-ingest `metadata.chunk_id`, or returned `metadata.asset_ids`, then rank and limit assets using direct chunk links, block links, caption/query overlap, page proximity, and section proximity.
-- CLI service wrappers and TUI/screen renderers now cover document structure quality, canonical structure summaries, section detail, source chunk detail with metadata, document detail debug summaries, and admin wrappers/actions for structure rebuild, LightRAG reingest, and delete.
+- CLI service wrappers and TUI/screen renderers now cover document structure quality, canonical structure summaries, section detail, source chunk detail with metadata, document detail debug summaries, and admin wrappers/actions for reingest, status refresh, and delete.
 - Single rich navigation is implemented end-to-end: local navigation retrieval uses `RichNavigationEngine` over canonical `DocumentStructure`, and legacy `parsed_documents`/`navigation_indexes` runtime paths have been removed.
-- Canonical ingestion job kind is `document_ingest`; legacy `lightrag_ingest_document` is accepted as a compatibility alias during migration.
+- Canonical ingestion job kind is `document_ingest`; legacy runtime aliases have been removed after the Alembic data migration.
 
 ## LightRAG Runtime Behavior
 
@@ -52,7 +52,7 @@ Runtime behavior:
 
 ## Intentional Simplifications
 
-- Startup table creation is still present for local development, and an Alembic migration chain now exists under `migrations/alembic/versions/`.
+- Alembic is the production schema source of truth; local test helpers may still create tables directly for isolated tests.
 - Context Engine stores LightRAG metadata and canonical local navigation structure; LightRAG owns semantic chunks, embeddings, vector indexes, and graph data.
 - Current text/Markdown ingestion still uses `TextDoclingParser`, a lightweight stub. The `DoclingParser` boundary and asset extraction exist with focused fake Docling fixtures, but broader real-PDF fixture coverage remains pending.
 - Runtime TOC refinement has been removed from ingestion. Structure quality scoring remains available via deterministic local logic.

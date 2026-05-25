@@ -21,10 +21,6 @@ class UploadResponse(BaseModel):
     job_id: str | None = None
 
 
-class RebuildStructureRequest(BaseModel):
-    preserve_assets: bool = True
-
-
 class PageResponse(BaseModel):
     document_id: str
     page_number: int
@@ -55,7 +51,6 @@ class StructureQualityResponse(BaseModel):
     unsectioned_block_ratio: float
     invalid_page_range_count: int
     score: float
-    should_run_toc_refiner: bool
     reasons: list[str] = []
 
 

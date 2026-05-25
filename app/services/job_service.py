@@ -9,11 +9,10 @@ from app.domain.models import JobStatus
 from app.storage.repositories.jobs import JobRepository
 
 DOCUMENT_INGEST_JOB_KIND = "document_ingest"
-LEGACY_DOCUMENT_INGEST_JOB_KINDS = {"lightrag_ingest_document"}
 
 
 def is_document_ingest_job_kind(kind: str) -> bool:
-    return kind == DOCUMENT_INGEST_JOB_KIND or kind in LEGACY_DOCUMENT_INGEST_JOB_KINDS
+    return kind == DOCUMENT_INGEST_JOB_KIND
 
 
 class IndexQueue(Protocol):
@@ -51,14 +50,6 @@ class JobService:
         from app.workers.tasks import run_document_ingest_job
 
         run_document_ingest_job(job_id)
-
-    # Backward-compatible wrapper for call sites that still use old naming.
-    def enqueue_lightrag_ingest_document(self, *, document_id: str) -> str:
-        return self.enqueue_document_ingest(document_id=document_id)
-
-    # Backward-compatible wrapper for retry or direct invocations.
-    def run_lightrag_ingest_job(self, job_id: str) -> None:
-        self.run_document_ingest_job(job_id)
 
     def _queue(self) -> IndexQueue:
         if self.queue is not None:

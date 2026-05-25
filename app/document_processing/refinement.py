@@ -25,6 +25,5 @@ class StructureQualityScorer:
             has_toc=has_toc,
             has_page_ranges=any(section.page_start is not None for section in structure.sections),
             score=max(score, 0.0),
-            should_run_toc_refiner=False,
             reasons=reasons,
         )

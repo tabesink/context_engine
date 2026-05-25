@@ -166,32 +166,7 @@ class DocumentService:
             refreshed.append(self.refresh_lightrag_status(document_id=document.id))
         return refreshed
 
-    def rebuild_structure(
-        self,
-        *,
-        actor_id: str,
-        document_id: str,
-        preserve_assets: bool = True,
-    ) -> str:
-        document = self.documents.get(document_id)
-        if not document:
-            raise not_found("Document not found")
-        metadata = dict(document.meta or {})
-        metadata["document_processing"] = dict(metadata.get("document_processing") or {}) | {
-            "preserve_assets": preserve_assets,
-        }
-        metadata["lightrag"] = dict(metadata.get("lightrag") or {}) | {"status": "queued"}
-        document = self.documents.update_metadata(document, metadata)
-        self.documents.update_status(document, DocumentStatus.INDEXING)
-        self.documents.audit(
-            actor_id=actor_id,
-            event="document.structure_rebuild_queued",
-            target_id=document_id,
-            metadata={"preserve_assets": preserve_assets},
-        )
-        return JobService(self.session).enqueue_document_ingest(document_id=document_id)
-
-    def reingest_lightrag(self, *, actor_id: str, document_id: str) -> str:
+    def reingest(self, *, actor_id: str, document_id: str) -> str:
         document = self.documents.get(document_id)
         if not document:
             raise not_found("Document not found")
@@ -201,7 +176,7 @@ class DocumentService:
         self.documents.update_status(document, DocumentStatus.INDEXING)
         self.documents.audit(
             actor_id=actor_id,
-            event="document.lightrag_reingest_queued",
+            event="document.reingest_queued",
             target_id=document_id,
             metadata={},
         )

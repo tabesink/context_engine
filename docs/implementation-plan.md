@@ -140,7 +140,7 @@ Implemented:
 - `app/integrations/lightrag_domains.py` for optional domain manifest resolution.
 - `app/integrations/lightrag_remote_adapter.py` for HTTP-only LightRAG access.
 - Remote retrieval through `/query/data`.
-- Queued LightRAG ingestion through `lightrag_ingest_document` jobs.
+- Queued LightRAG ingestion through `document_ingest` jobs.
 - Status normalization helper for `/documents/track_status/{track_id}`.
 - Authenticated graph proxy routes:
   - `GET /graphs`
@@ -154,7 +154,7 @@ Current behavior:
 
 - With LightRAG enabled, `auto`, `semantic`, and `hybrid` semantic retrieval go remote and map to LightRAG `mix`; `hybrid` may add local navigation evidence.
 - `navigation` stays local.
-- Admin upload stores a local mirror record/file, records `semantic_engine="lightrag"`, and enqueues `lightrag_ingest_document`.
+- Admin upload stores a local mirror record/file, records LightRAG metadata, and enqueues `document_ingest`.
 - LightRAG ingestion status is tracked through `documents.metadata.lightrag` and can be refreshed through the admin status endpoint.
 - Graph routes return HTTP `400` when LightRAG is disabled.
 

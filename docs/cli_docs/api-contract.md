@@ -85,9 +85,8 @@ Admin domain routes require **`LIGHTRAG_DEPLOY_ENABLED=true`**. Runtime graph/re
 | TUI capability | Backend | Role | Status |
 | --- | --- | --- | --- |
 | Upload | `POST /admin/documents/upload` (`multipart/form-data`, field `file`) | admin | supported |
-| Rebuild structure | `POST /admin/documents/{document_id}/rebuild-structure` | admin | supported |
-| Reingest LightRAG | `POST /admin/documents/{document_id}/reingest-lightrag` | admin | supported |
-| Refresh LightRAG status | `POST /admin/documents/{document_id}/refresh-lightrag-status` | admin | supported |
+| Reingest | `POST /admin/documents/{document_id}/reingest` | admin | supported |
+| Refresh status | `POST /admin/documents/{document_id}/refresh-status` | admin | supported |
 | Delete | `DELETE /admin/documents/{document_id}` | admin | supported |
 | Admin listing | `GET /admin/documents` | admin | supported |
 | Corpus publish/rollback/cleanup | no matching endpoints | admin | documented gap |

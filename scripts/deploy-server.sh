@@ -115,5 +115,6 @@ if [[ "$needs_install" == true ]]; then
   fi
 fi
 
+"$venv_python" -m alembic upgrade head
 "$venv_python" -m scripts.seed_admin
 "$venv_python" -m uvicorn app.main:create_app --factory --reload --port "$api_port"

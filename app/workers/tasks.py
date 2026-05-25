@@ -29,7 +29,3 @@ def poll_lightrag_statuses() -> None:
         DocumentService(session).refresh_pending_lightrag_statuses()
 
 
-# Backward-compatible worker entrypoint name.
-def run_lightrag_ingest_job(job_id: str) -> None:
-    run_document_ingest_job(job_id)
-

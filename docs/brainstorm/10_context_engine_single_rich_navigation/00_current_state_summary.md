@@ -63,8 +63,8 @@ Semantic retrieval:
 [x] Route `mode=navigation` to `RichNavigationEngine`.
 [x] Remove structure fallback to old navigation index.
 [x] Remove TOC refinement.
-[ ] Canonicalize job kind to `document_ingest` (with legacy compatibility).
-[ ] Remove stale CLI/TUI calls to removed TOC/index/reindex endpoints.
+[x] Canonicalize job kind to `document_ingest`.
+[x] Remove stale CLI/TUI calls to removed TOC/index/reindex endpoints.
 [ ] Keep full LightRAG domain deployment lifecycle (`/admin/lightrag/domains/*`) and guard with tests.
 ```
 

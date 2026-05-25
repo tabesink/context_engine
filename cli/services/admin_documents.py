@@ -35,22 +35,12 @@ class AdminDocumentService:
         )
         return payload if isinstance(payload, dict) else {}
 
-    def rebuild_structure(
-        self,
-        document_id: str,
-        *,
-        preserve_assets: bool = True,
-    ) -> dict[str, Any]:
-        payload = self._client.post(
-            f"/admin/documents/{document_id}/rebuild-structure",
-            {
-                "preserve_assets": preserve_assets,
-            },
-        )
+    def refresh_status(self, document_id: str) -> dict[str, Any]:
+        payload = self._client.post(f"/admin/documents/{document_id}/refresh-status")
         return payload if isinstance(payload, dict) else {}
 
-    def reingest_lightrag(self, document_id: str) -> dict[str, Any]:
-        payload = self._client.post(f"/admin/documents/{document_id}/reingest-lightrag")
+    def reingest(self, document_id: str) -> dict[str, Any]:
+        payload = self._client.post(f"/admin/documents/{document_id}/reingest")
         return payload if isinstance(payload, dict) else {}
 
     def delete_document(self, document_id: str) -> dict[str, Any]:

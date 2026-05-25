@@ -8,7 +8,7 @@ The app is a backend-only multi-user Context Engine. It exposes one FastAPI API,
 HTTP client or `context-engine` TUI (`context-engine` / `context-tui`)
   -> FastAPI route
   -> application service
-  -> repository / retrieval router / job queue / remote adapter
+  -> repository / retrieval strategy / job queue / remote adapter
   -> storage or retrieval engine
   -> response schema
 ```
@@ -39,8 +39,7 @@ Both paths return local `Evidence` objects. API routes never expose raw LightRAG
 - `app/domain/`: dataclasses/enums that define the app vocabulary.
 - `app/schemas/`: Pydantic request/response models.
 - `app/services/`: use cases and orchestration.
-- `app/retrieval/`: retrieval interfaces, rich navigation engine, LightRAG remote engine, and merger.
-- `app/indexing/`: chunking helpers.
+- `app/retrieval/`: retrieval interfaces, rich navigation engine, LightRAG remote engine, routing policy, strategies, and merger.
 - `app/integrations/`: wrappers around external/reference systems, including remote LightRAG HTTP.
 - `app/lightrag_deploy/`: admin-only LightRAG domain deployment control, manifest/env/compose generation, and Docker Compose runner boundary.
 - `app/storage/`: database session and repositories.
@@ -72,7 +71,7 @@ LIGHTRAG_ENABLED=true (required)
   POST /admin/documents/upload
     -> require_admin
     -> DocumentService stores a local mirror record and file
-    -> JobService enqueues lightrag_ingest_document
+    -> JobService enqueues document_ingest
     -> validate LightRAG domain manifest and requested domain
     -> response includes document_id, lightrag job_id, and queued lightrag metadata
 ```

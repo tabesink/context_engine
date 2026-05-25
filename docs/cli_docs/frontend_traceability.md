@@ -17,7 +17,7 @@ Maps **`context-engine` / `context-tui` TUI screens and flows** to future browse
 | LightRAG Domain Admin | LightRAG Domains and lifecycle forms | `GET /admin/lightrag/domains`, `POST /admin/lightrag/domains`, `/up`, `/down`, `/recreate`, `DELETE /admin/lightrag/domains/{id}` | Implemented | Permanent delete requires backend flag and typed confirmation |
 | Documents Admin Actions | Documents -> Admin Actions | `GET /admin/documents` | Implemented | Authorization from backend responses |
 | Admin Upload Flow | Documents -> Admin Actions -> Upload | `POST /admin/documents/upload`, optional `GET /jobs/{job_id}` | Implemented | None |
-| Admin Rebuild/Reingest | Documents -> Admin Actions mutation flows | `POST /admin/documents/{id}/rebuild-structure`, `POST /admin/documents/{id}/reingest-lightrag`, `POST /admin/documents/{id}/refresh-lightrag-status` | Implemented | None |
+| Admin Reingest/Refresh | Documents -> Admin Actions mutation flows | `POST /admin/documents/{id}/reingest`, `POST /admin/documents/{id}/refresh-status` | Implemented | None |
 | Jobs | Jobs | `GET /jobs`, `GET /jobs/{id}`, `POST /jobs/{id}/retry` | Implemented | None |
 | Observability | Observability | `GET /admin/audit-logs`, `GET /admin/query-logs` | Implemented | Read-only |
 | Admin Dashboard | Composite admin views | `GET /admin/documents`, `GET /jobs`, `GET /admin/query-logs` | Implemented | Corpus lifecycle routes still backend gaps |

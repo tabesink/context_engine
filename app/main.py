@@ -7,14 +7,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import admin, auth, documents, health, jobs, lightrag, lightrag_admin, retrieve
 from app.core.config import get_settings
 from app.core.logging import configure_logging
-from app.storage.db import create_db_and_tables
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     del app
     configure_logging()
-    create_db_and_tables()
     yield
 
 

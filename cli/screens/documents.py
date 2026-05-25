@@ -75,10 +75,6 @@ def build_document_detail_screen(
                     {"field": "Sections", "value": structure_quality.get("section_count", "")},
                     {"field": "Blocks", "value": structure_quality.get("block_count", "")},
                     {"field": "Assets", "value": structure_quality.get("asset_count", "")},
-                    {
-                        "field": "TOC Refiner",
-                        "value": str(structure_quality.get("should_run_toc_refiner", "")),
-                    },
                 ],
                 columns=["field", "value"],
             )
@@ -91,14 +87,8 @@ def build_document_detail_screen(
             ScreenAction("Structure", f"context-engine documents structure --document-id {document_id}"),
             ScreenAction("Page", f"context-engine documents page --document-id {document_id} --page-number 1"),
             ScreenAction("Retrieve", f"context-engine documents retrieve --query \"your question\" --document-id {document_id}"),
-            ScreenAction(
-                "Rebuild structure",
-                f"context-engine admin documents rebuild-structure --document-id {document_id}",
-            ),
-            ScreenAction(
-                "Reingest LightRAG",
-                f"context-engine admin documents reingest-lightrag --document-id {document_id}",
-            ),
+            ScreenAction("Reingest", f"context-engine admin documents reingest --document-id {document_id}"),
+            ScreenAction("Refresh status", f"context-engine admin documents refresh-status --document-id {document_id}"),
         ],
         raw=document,
     )

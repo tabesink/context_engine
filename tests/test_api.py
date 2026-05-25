@@ -32,14 +32,14 @@ from app.lightrag_deploy.models import (  # noqa: E402
 from app.lightrag_deploy.service import LightRAGDomainService  # noqa: E402
 from app.lightrag_deploy.settings import LightRAGDeploySettings  # noqa: E402
 from app.main import app  # noqa: E402
-from app.services.lightrag_ingestion_service import LightRAGIngestionService  # noqa: E402
+from app.services.lightrag_ingestion_service import LightRAGIngestionService, RedisIngestLock  # noqa: E402
 from app.services.job_service import JobService  # noqa: E402
 from app.storage.db import SessionLocal, create_db_and_tables  # noqa: E402
 from app.storage.repositories.document_processing import DocumentProcessingRepository  # noqa: E402
 from app.storage.repositories.jobs import JobRepository  # noqa: E402
 from app.storage.repositories.documents import DocumentRepository  # noqa: E402
 from app.storage.repositories.users import UserRepository  # noqa: E402
-from app.workers.tasks import run_lightrag_ingest_job  # noqa: E402
+from app.workers.tasks import run_document_ingest_job  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -60,6 +60,7 @@ def _settings_cache(
 
 
 def _seed_users() -> None:
+    create_db_and_tables()
     with SessionLocal() as session:
         users = UserRepository(session)
         if not users.get_by_email("admin@example.com"):
@@ -364,7 +365,7 @@ def test_user_can_read_document_structure_quality() -> None:
     assert body["section_count"] == 1
     assert body["block_count"] == 1
     assert body["has_page_ranges"] is True
-    assert body["should_run_toc_refiner"] is False
+    assert "should_run_toc_refiner" not in body
 
 
 def test_structure_quality_route_hides_missing_structure_and_non_ready_documents() -> None:
@@ -1104,7 +1105,7 @@ def test_admin_refresh_lightrag_status_marks_document_ready(monkeypatch: pytest.
         _seed_users()
         admin_headers = _login(client, "admin@example.com")
         response = client.post(
-            f"/admin/documents/{document_id}/refresh-lightrag-status",
+            f"/admin/documents/{document_id}/refresh-status",
             headers=admin_headers,
         )
 
@@ -1145,7 +1146,7 @@ def test_admin_refresh_lightrag_status_rejects_unknown_upstream_state(
         _seed_users()
         admin_headers = _login(client, "admin@example.com")
         response = client.post(
-            f"/admin/documents/{document_id}/refresh-lightrag-status",
+            f"/admin/documents/{document_id}/refresh-status",
             headers=admin_headers,
         )
 
@@ -1381,7 +1382,7 @@ def test_lightrag_domain_admin_api_lifecycle_routes_remain_available() -> None:
             display_name=f"{domain_id.title()} Manuals",
             host_port=9621,
             base_url=f"http://lightrag-{domain_id}:9621",
-            host_base_url=f"http://127.0.0.1:9621",
+            host_base_url="http://127.0.0.1:9621",
             container_base_url=f"http://lightrag-{domain_id}:9621",
             container_name=f"lightrag_{domain_id}",
             service_name=f"lightrag_{domain_id}",
@@ -1557,7 +1558,9 @@ def test_lightrag_domain_user_safe_list_hides_paths_and_container_details(
     assert unauthenticated.status_code == 401
 
 
-def test_lightrag_ingest_job_can_be_enqueued_without_running_inline() -> None:
+def test_document_ingest_job_can_be_enqueued_without_running_inline() -> None:
+    create_db_and_tables()
+
     class FakeQueue:
         def __init__(self) -> None:
             self.enqueued: list[tuple[object, str]] = []
@@ -1587,7 +1590,9 @@ def test_lightrag_ingest_job_can_be_enqueued_without_running_inline() -> None:
     assert job.meta["rq_job_id"] == "rq-job-1"
 
 
-def test_worker_marks_failed_lightrag_ingest_job_when_document_is_missing() -> None:
+def test_worker_marks_failed_document_ingest_job_when_document_is_deleted() -> None:
+    create_db_and_tables()
+
     with SessionLocal() as session:
         document = DocumentRepository(session).create(
             owner_id=None,
@@ -1602,11 +1607,72 @@ def test_worker_marks_failed_lightrag_ingest_job_when_document_is_missing() -> N
         job_id = job.id
 
     with pytest.raises(ValueError, match="Structure-aware ingestion failed"):
-        run_lightrag_ingest_job(job_id)
+        run_document_ingest_job(job_id)
 
     with SessionLocal() as session:
         refreshed = JobRepository(session).get(job_id)
 
     assert refreshed.status == "failed"
     assert "Structure-aware ingestion failed" in refreshed.error_message
+
+
+def test_admin_can_retry_document_ingest_job(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    create_db_and_tables()
+    upload_path = tmp_path / "manual.txt"
+    upload_path.write_text("Retryable document body.", encoding="utf-8")
+    monkeypatch.setattr(RedisIngestLock, "acquire", lambda self: True)
+    monkeypatch.setattr(RedisIngestLock, "release", lambda self: None)
+
+    def fake_ingest_source_chunks(
+        self: LightRAGRemoteAdapter,
+        *,
+        domain: str,
+        chunks: list[SourceChunk],
+    ) -> dict:
+        del self
+        assert domain == "default"
+        assert chunks
+        return {"document_id": "remote-doc", "track_id": "track-1", "status": "ready"}
+
+    monkeypatch.setattr(LightRAGRemoteAdapter, "ingest_source_chunks", fake_ingest_source_chunks)
+
+    with SessionLocal() as session:
+        document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="manual.txt",
+            content_type="text/plain",
+            storage_path=str(upload_path),
+            metadata={"lightrag": {"domain_id": "default", "status": "queued"}},
+            status=DocumentStatus.INDEXING,
+        )
+        job = JobRepository(session).create(kind="document_ingest", document_id=document.id)
+        job_id = job.id
+
+    with TestClient(app) as client:
+        _seed_users()
+        admin_headers = _login(client, "admin@example.com")
+        response = client.post(f"/jobs/{job_id}/retry", headers=admin_headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["kind"] == "document_ingest"
+    assert body["status"] == "succeeded"
+
+
+def test_admin_retry_rejects_non_document_ingest_job() -> None:
+    create_db_and_tables()
+    with SessionLocal() as session:
+        job = JobRepository(session).create(kind="other_job", document_id=None)
+        job_id = job.id
+
+    with TestClient(app) as client:
+        _seed_users()
+        admin_headers = _login(client, "admin@example.com")
+        response = client.post(f"/jobs/{job_id}/retry", headers=admin_headers)
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Only document_ingest jobs can be retried"
 

@@ -93,8 +93,8 @@ def test_admin_document_service_routes() -> None:
 
     service.list_documents()
     service.upload_document("manual.pdf", b"pdf-bytes")
-    service.rebuild_structure("doc-1", preserve_assets=False)
-    service.reingest_lightrag("doc-1")
+    service.reingest("doc-1")
+    service.refresh_status("doc-1")
     service.delete_document("doc-1")
 
     assert ("GET", "/admin/documents", None) in client.calls
@@ -103,12 +103,8 @@ def test_admin_document_service_routes() -> None:
         "/admin/documents/upload",
         {"field_name": "file", "filename": "manual.pdf", "size": 9, "fields": None},
     ) in client.calls
-    assert (
-        "POST",
-        "/admin/documents/doc-1/rebuild-structure",
-        {"preserve_assets": False},
-    ) in client.calls
-    assert ("POST", "/admin/documents/doc-1/reingest-lightrag", None) in client.calls
+    assert ("POST", "/admin/documents/doc-1/reingest", None) in client.calls
+    assert ("POST", "/admin/documents/doc-1/refresh-status", None) in client.calls
     assert ("DELETE", "/admin/documents/doc-1", None) in client.calls
 
 

@@ -60,6 +60,7 @@ def retry_job(
     if not is_document_ingest_job_kind(job.kind):
         raise HTTPException(status_code=400, detail="Only document_ingest jobs can be retried")
     JobService(session).run_document_ingest_job(job.id)
+    session.expire_all()
     refreshed = JobRepository(session).get(job_id)
     return job_response(refreshed)
 

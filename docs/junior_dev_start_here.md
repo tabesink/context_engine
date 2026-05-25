@@ -74,7 +74,7 @@ For model providers in managed domains:
 Admin upload:
 
 ```text
-admin -> /admin/documents/upload -> local mirror record -> lightrag_ingest_document job
+admin -> /admin/documents/upload -> local mirror record -> document_ingest job
 ```
 
 Retrieve (HTTP shaped):

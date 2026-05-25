@@ -100,7 +100,6 @@ class FakeTuiClient:
                 "section_count": 2,
                 "block_count": 8,
                 "asset_count": 1,
-                "should_run_toc_refiner": False,
                 "reasons": [],
             })
         if path == "/graph/label/popular?limit=20":
@@ -627,7 +626,7 @@ def test_document_detail_shows_structure_quality(tmp_path: Path) -> None:
     output = run_with_inputs(tmp_path, ["enter", "enter", "q"], authenticated_store(tmp_path))
 
     assert "Structure Quality" in output
-    assert "TOC Refiner" in output  # quality signal only; no TOC report endpoint is used
+    assert "TOC Refiner" not in output
     assert ("GET", "/documents/doc-1/structure-quality", None, "secret-token") in FakeTuiClient.calls
 
 

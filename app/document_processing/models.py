@@ -22,7 +22,7 @@ class DocumentSection(BaseModel):
     block_ids: list[str] = Field(default_factory=list)
     child_section_ids: list[str] = Field(default_factory=list)
     summary: str | None = None
-    source: Literal["docling", "toc_refiner", "fallback"] = "docling"
+    source: Literal["docling", "fallback"] = "docling"
     confidence: float | None = None
 
 
@@ -95,7 +95,6 @@ class StructureQuality(BaseModel):
     unsectioned_block_ratio: float = 0.0
     invalid_page_range_count: int = 0
     score: float = 0.0
-    should_run_toc_refiner: bool = False
     reasons: list[str] = Field(default_factory=list)
 
 
