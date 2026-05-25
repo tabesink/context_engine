@@ -1,0 +1,299 @@
+from app.document_processing.models import DocumentAsset, DocumentPage, DocumentSection, SourceChunk
+from app.lightrag_deploy.service import LightRAGDomainService
+from app.schemas.workspace_tree import WorkspaceTreeNode, WorkspaceTreeResponse
+from app.services.document_access_policy import DocumentAccessPolicy
+from app.storage.repositories.document_processing import DocumentProcessingRepository
+from app.storage.repositories.documents import DocumentRepository
+from app.storage.tables import DocumentRow, UserRow
+
+
+class WorkspaceTreeService:
+    def __init__(
+        self,
+        *,
+        documents: DocumentRepository,
+        processing: DocumentProcessingRepository,
+        domain_service: LightRAGDomainService,
+    ):
+        self.documents = documents
+        self.processing = processing
+        self.domain_service = domain_service
+
+    def build_for_domain(self, *, domain_id: str, user: UserRow) -> WorkspaceTreeResponse:
+        domain = self.domain_service.get_domain(domain_id)
+        readable_ids = {
+            document.id
+            for document in DocumentAccessPolicy(self.documents).list_readable_documents(user)
+        }
+        documents = [
+            document
+            for document in self.documents.list_ready_by_lightrag_domain(domain_id)
+            if document.id in readable_ids
+        ]
+
+        root = WorkspaceTreeNode(
+            id=f"domain:{domain.id}",
+            kind="domain",
+            title=domain.display_name or domain.id,
+            children=[self._document_node(document) for document in documents],
+            metadata={
+                "is_healthy": domain.is_healthy,
+                "is_default": domain.is_default,
+            },
+        )
+        return WorkspaceTreeResponse(
+            domain_id=domain.id,
+            display_name=domain.display_name,
+            document_count=len(root.children),
+            root=root,
+        )
+
+    def _document_node(self, document: DocumentRow) -> WorkspaceTreeNode:
+        structure = self.processing.get_structure(document.id, source_file=document.storage_path)
+        metadata = {"structure_available": structure is not None}
+        if structure is None:
+            children: list[WorkspaceTreeNode] = []
+        else:
+            children = self._structure_nodes(
+                document_id=document.id,
+                sections=structure.sections,
+                pages=structure.pages,
+                chunks=structure.source_chunks,
+                assets=structure.assets,
+            )
+
+        return WorkspaceTreeNode(
+            id=f"document:{document.id}",
+            kind="document",
+            title=document.filename,
+            document_id=document.id,
+            status=document.status,
+            filename=document.filename,
+            content_type=document.content_type,
+            children=children,
+            metadata=metadata,
+        )
+
+    def _structure_nodes(
+        self,
+        *,
+        document_id: str,
+        sections: list[DocumentSection],
+        pages: list[DocumentPage],
+        chunks: list[SourceChunk],
+        assets: list[DocumentAsset],
+    ) -> list[WorkspaceTreeNode]:
+        placed_chunks: set[str] = set()
+        placed_assets: set[str] = set()
+
+        if sections:
+            nodes = self._section_nodes(
+                document_id=document_id,
+                sections=sections,
+                pages=pages,
+                chunks=chunks,
+                assets=assets,
+                placed_chunks=placed_chunks,
+                placed_assets=placed_assets,
+            )
+        elif pages:
+            nodes = [
+                self._page_node(
+                    document_id=document_id,
+                    page=page,
+                    chunks=chunks,
+                    assets=assets,
+                    placed_chunks=placed_chunks,
+                    placed_assets=placed_assets,
+                )
+                for page in sorted(pages, key=lambda item: item.page_number)
+            ]
+        else:
+            nodes = []
+
+        nodes.extend(
+            self._loose_reference_nodes(
+                document_id=document_id,
+                chunks=chunks,
+                assets=assets,
+                placed_chunks=placed_chunks,
+                placed_assets=placed_assets,
+            )
+        )
+        return nodes
+
+    def _section_nodes(
+        self,
+        *,
+        document_id: str,
+        sections: list[DocumentSection],
+        pages: list[DocumentPage],
+        chunks: list[SourceChunk],
+        assets: list[DocumentAsset],
+        placed_chunks: set[str],
+        placed_assets: set[str],
+    ) -> list[WorkspaceTreeNode]:
+        by_parent: dict[str | None, list[DocumentSection]] = {}
+        for section in sections:
+            by_parent.setdefault(section.parent_section_id, []).append(section)
+
+        def build(parent_id: str | None) -> list[WorkspaceTreeNode]:
+            nodes: list[WorkspaceTreeNode] = []
+            for section in by_parent.get(parent_id, []):
+                child_sections = build(section.section_id)
+                child_ranges = [
+                    (child.page_start, child.page_end)
+                    for child in by_parent.get(section.section_id, [])
+                    if child.page_start is not None
+                ]
+                child_pages = [
+                    self._page_node(
+                        document_id=document_id,
+                        page=page,
+                        chunks=chunks,
+                        assets=assets,
+                        placed_chunks=placed_chunks,
+                        placed_assets=placed_assets,
+                    )
+                    for page in sorted(pages, key=lambda item: item.page_number)
+                    if self._page_in_section(page, section)
+                    and not self._page_in_ranges(page.page_number, child_ranges)
+                ]
+                direct_chunks = [
+                    self._chunk_node(document_id=document_id, chunk=chunk)
+                    for chunk in chunks
+                    if chunk.section_id == section.section_id and chunk.chunk_id not in placed_chunks
+                ]
+                direct_assets = [
+                    self._asset_node(document_id=document_id, asset=asset)
+                    for asset in assets
+                    if asset.section_id == section.section_id and asset.asset_id not in placed_assets
+                ]
+                placed_chunks.update(node.chunk_id for node in direct_chunks if node.chunk_id)
+                placed_assets.update(node.asset_id for node in direct_assets if node.asset_id)
+                nodes.append(
+                    WorkspaceTreeNode(
+                        id=f"section:{document_id}:{section.section_id}",
+                        kind="section",
+                        title=section.title,
+                        document_id=document_id,
+                        section_id=section.section_id,
+                        page_start=section.page_start,
+                        page_end=section.page_end,
+                        children=child_sections + child_pages + direct_chunks + direct_assets,
+                        metadata={"level": section.level},
+                    )
+                )
+            return nodes
+
+        return build(None)
+
+    def _page_node(
+        self,
+        *,
+        document_id: str,
+        page: DocumentPage,
+        chunks: list[SourceChunk],
+        assets: list[DocumentAsset],
+        placed_chunks: set[str],
+        placed_assets: set[str],
+    ) -> WorkspaceTreeNode:
+        page_chunks = [
+            self._chunk_node(document_id=document_id, chunk=chunk)
+            for chunk in chunks
+            if chunk.chunk_id not in placed_chunks and self._chunk_in_page(chunk, page.page_number)
+        ]
+        page_assets = [
+            self._asset_node(document_id=document_id, asset=asset)
+            for asset in assets
+            if asset.asset_id not in placed_assets and asset.page_number == page.page_number
+        ]
+        placed_chunks.update(node.chunk_id for node in page_chunks if node.chunk_id)
+        placed_assets.update(node.asset_id for node in page_assets if node.asset_id)
+        metadata = {key: value for key, value in page.metadata.items() if key != "text"}
+        return WorkspaceTreeNode(
+            id=f"page:{document_id}:{page.page_number}",
+            kind="page",
+            title=f"Page {page.page_number}",
+            document_id=document_id,
+            page_number=page.page_number,
+            children=page_chunks + page_assets,
+            metadata=metadata,
+        )
+
+    def _loose_reference_nodes(
+        self,
+        *,
+        document_id: str,
+        chunks: list[SourceChunk],
+        assets: list[DocumentAsset],
+        placed_chunks: set[str],
+        placed_assets: set[str],
+    ) -> list[WorkspaceTreeNode]:
+        nodes: list[WorkspaceTreeNode] = []
+        for chunk in chunks:
+            if chunk.chunk_id not in placed_chunks:
+                nodes.append(self._chunk_node(document_id=document_id, chunk=chunk))
+        for asset in assets:
+            if asset.asset_id not in placed_assets:
+                nodes.append(self._asset_node(document_id=document_id, asset=asset))
+        return nodes
+
+    def _chunk_node(self, *, document_id: str, chunk: SourceChunk) -> WorkspaceTreeNode:
+        snippet = " ".join(chunk.text.split())[:80]
+        return WorkspaceTreeNode(
+            id=f"chunk:{document_id}:{chunk.chunk_id}",
+            kind="chunk",
+            title=snippet or f"Chunk {chunk.chunk_id}",
+            document_id=document_id,
+            section_id=chunk.section_id,
+            chunk_id=chunk.chunk_id,
+            page_start=chunk.page_start,
+            page_end=chunk.page_end,
+            metadata={"asset_ids": chunk.asset_ids},
+        )
+
+    def _asset_node(self, *, document_id: str, asset: DocumentAsset) -> WorkspaceTreeNode:
+        title = asset.caption or f"{asset.asset_type.replace('_', ' ').title()} {asset.asset_id}"
+        thumbnail_url = None
+        if asset.thumbnail_path:
+            thumbnail_url = f"/documents/{document_id}/assets/{asset.asset_id}/thumbnail"
+        return WorkspaceTreeNode(
+            id=f"asset:{document_id}:{asset.asset_id}",
+            kind="asset",
+            title=title,
+            document_id=document_id,
+            section_id=asset.section_id,
+            page_number=asset.page_number,
+            asset_id=asset.asset_id,
+            asset_type=asset.asset_type,
+            thumbnail_url=thumbnail_url,
+            metadata={
+                "url": f"/documents/{document_id}/assets/{asset.asset_id}",
+                "caption": asset.caption,
+                "mime_type": asset.mime_type,
+            },
+        )
+
+    def _page_in_section(self, page: DocumentPage, section: DocumentSection) -> bool:
+        if section.page_start is None:
+            return False
+        page_end = section.page_end or section.page_start
+        return section.page_start <= page.page_number <= page_end
+
+    def _page_in_ranges(
+        self,
+        page_number: int,
+        ranges: list[tuple[int | None, int | None]],
+    ) -> bool:
+        for start, end in ranges:
+            if start is None:
+                continue
+            if start <= page_number <= (end or start):
+                return True
+        return False
+
+    def _chunk_in_page(self, chunk: SourceChunk, page_number: int) -> bool:
+        if chunk.page_start is None:
+            return False
+        return chunk.page_start <= page_number <= (chunk.page_end or chunk.page_start)

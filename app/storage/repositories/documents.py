@@ -54,6 +54,17 @@ class DocumentRepository:
             )
         )
 
+    def list_ready_by_lightrag_domain(self, domain_id: str) -> list[DocumentRow]:
+        documents = self.list_ready()
+        matched: list[DocumentRow] = []
+        for document in documents:
+            metadata = document.meta if isinstance(document.meta, dict) else {}
+            lightrag = metadata.get("lightrag") if isinstance(metadata.get("lightrag"), dict) else {}
+            document_domain_id = lightrag.get("domain_id") or lightrag.get("domain")
+            if document_domain_id == domain_id:
+                matched.append(document)
+        return matched
+
     def list_all(self) -> list[DocumentRow]:
         return list(self.session.scalars(select(DocumentRow).order_by(DocumentRow.created_at.desc())))
 

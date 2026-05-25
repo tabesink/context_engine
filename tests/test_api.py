@@ -76,6 +76,30 @@ def _login(client: TestClient, email: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+def _configure_lightrag_manifest(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    domains: dict[str, str],
+) -> None:
+    settings = LightRAGDeploySettings(
+        enabled=True,
+        deploy_root=tmp_path / "lightrag",
+        domains_root=tmp_path / "lightrag/domains",
+        manifest_path=tmp_path / "lightrag/domains.json",
+        compose_file=tmp_path / "lightrag/compose.yml",
+        deleted_root=tmp_path / "lightrag/deleted",
+    )
+    service = LightRAGDomainService(settings=settings)
+    for domain_id, display_name in domains.items():
+        service.create_domain(
+            LightRAGDomainCreateRequest(domain_id=domain_id, display_name=display_name)
+        )
+    monkeypatch.setenv("LIGHTRAG_ENABLED", "true")
+    monkeypatch.setenv("LIGHTRAG_DOMAIN_MANIFEST", str(settings.manifest_path))
+    monkeypatch.setenv("LIGHTRAG_DOMAINS_MANIFEST", str(settings.manifest_path))
+    get_settings.cache_clear()
+
+
 def test_health_returns_ok() -> None:
     with TestClient(app) as client:
         response = client.get("/health")
@@ -1578,6 +1602,177 @@ def test_lightrag_domain_user_safe_list_hides_paths_and_container_details(
     assert "paths" not in domain
     assert "container_name" not in domain
     assert unauthenticated.status_code == 401
+
+
+def test_workspace_tree_requires_authentication() -> None:
+    with TestClient(app) as client:
+        response = client.get("/lightrag/domains/default/workspace-tree")
+
+    assert response.status_code == 401
+
+
+def test_workspace_tree_returns_empty_root_for_valid_domain(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _configure_lightrag_manifest(monkeypatch, tmp_path, {"emptytree": "Empty Tree"})
+
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        response = client.get("/lightrag/domains/emptytree/workspace-tree", headers=user_headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["domain_id"] == "emptytree"
+    assert body["display_name"] == "Empty Tree"
+    assert body["document_count"] == 0
+    assert body["root"]["id"] == "domain:emptytree"
+    assert body["root"]["kind"] == "domain"
+    assert body["root"]["children"] == []
+
+
+def test_workspace_tree_unknown_domain_returns_404(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _configure_lightrag_manifest(monkeypatch, tmp_path, {"manuals404": "Manuals"})
+
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        response = client.get("/lightrag/domains/missing/workspace-tree", headers=user_headers)
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "LightRAG domain 'missing' does not exist"
+
+
+def test_workspace_tree_filters_domain_and_returns_structure_references(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    create_db_and_tables()
+    _configure_lightrag_manifest(
+        monkeypatch,
+        tmp_path,
+        {"manualtree": "Manual Tree", "policytree": "Policy Tree"},
+    )
+    with SessionLocal() as session:
+        documents = DocumentRepository(session)
+        manual = documents.create(
+            owner_id=None,
+            filename="manual.pdf",
+            content_type="application/pdf",
+            storage_path=".data/uploads/manual.pdf",
+            metadata={"lightrag": {"domain_id": "manualtree"}},
+            status=DocumentStatus.READY,
+        )
+        fallback = documents.create(
+            owner_id=None,
+            filename="legacy-manual.pdf",
+            content_type="application/pdf",
+            storage_path=".data/uploads/legacy-manual.pdf",
+            metadata={"lightrag": {"domain": "manualtree"}},
+            status=DocumentStatus.READY,
+        )
+        documents.create(
+            owner_id=None,
+            filename="policy.pdf",
+            content_type="application/pdf",
+            storage_path=".data/uploads/policy.pdf",
+            metadata={"lightrag": {"domain_id": "policytree"}},
+            status=DocumentStatus.READY,
+        )
+        documents.create(
+            owner_id=None,
+            filename="indexing.pdf",
+            content_type="application/pdf",
+            storage_path=".data/uploads/indexing.pdf",
+            metadata={"lightrag": {"domain_id": "manualtree"}},
+            status=DocumentStatus.INDEXING,
+        )
+        DocumentProcessingRepository(session).save_structure(
+            DocumentStructure(
+                document_id=manual.id,
+                source_file=manual.storage_path,
+                pages=[DocumentPage(page_number=1, text="Full page text must not leak")],
+                sections=[
+                    DocumentSection(
+                        section_id="intro",
+                        document_id=manual.id,
+                        title="Introduction",
+                        level=1,
+                        page_start=1,
+                        page_end=1,
+                    )
+                ],
+                source_chunks=[
+                    SourceChunk(
+                        chunk_id="chunk-1",
+                        document_id=manual.id,
+                        section_id="intro",
+                        block_ids=[],
+                        text=(
+                            "Short reference label with enough harmless words to form the display "
+                            "snippet before the hidden tail appears. "
+                            "SECRET_CHUNK_TAIL_SHOULD_NOT_APPEAR_IN_TREE_RESPONSE"
+                        ),
+                        page_start=1,
+                        page_end=1,
+                    )
+                ],
+                assets=[
+                    DocumentAsset(
+                        asset_id="asset-1",
+                        document_id=manual.id,
+                        asset_type="figure",
+                        storage_path=".data/assets/asset-1.png",
+                        thumbnail_path=".data/assets/asset-1-thumb.png",
+                        mime_type="image/png",
+                        content_hash="hash-asset-1",
+                        page_number=1,
+                        section_id="intro",
+                        caption="Pump diagram",
+                    )
+                ],
+            )
+        )
+        manual_id = manual.id
+        fallback_id = fallback.id
+
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        response = client.get("/lightrag/domains/manualtree/workspace-tree", headers=user_headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["domain_id"] == "manualtree"
+    assert body["document_count"] == 2
+    document_nodes = body["root"]["children"]
+    document_ids = {node["document_id"] for node in document_nodes}
+    assert document_ids == {manual_id, fallback_id}
+    assert all(node["filename"] != "policy.pdf" for node in document_nodes)
+    assert all(node["filename"] != "indexing.pdf" for node in document_nodes)
+
+    manual_node = next(node for node in document_nodes if node["document_id"] == manual_id)
+    fallback_node = next(node for node in document_nodes if node["document_id"] == fallback_id)
+    assert fallback_node["metadata"]["structure_available"] is False
+    section_node = manual_node["children"][0]
+    page_node = section_node["children"][0]
+    chunk_node = page_node["children"][0]
+    asset_node = page_node["children"][1]
+    assert section_node["kind"] == "section"
+    assert section_node["section_id"] == "intro"
+    assert page_node["kind"] == "page"
+    assert page_node["page_number"] == 1
+    assert chunk_node["kind"] == "chunk"
+    assert chunk_node["chunk_id"] == "chunk-1"
+    assert "SECRET_CHUNK_TAIL_SHOULD_NOT_APPEAR_IN_TREE_RESPONSE" not in response.text
+    assert "Full page text must not leak" not in response.text
+    assert asset_node["kind"] == "asset"
+    assert asset_node["asset_id"] == "asset-1"
+    assert asset_node["thumbnail_url"] == f"/documents/{manual_id}/assets/asset-1/thumbnail"
 
 
 def test_document_ingest_job_can_be_enqueued_without_running_inline() -> None:
