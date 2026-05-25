@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 from typing import Annotated
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -19,7 +19,8 @@ class Settings(BaseSettings):
     allowed_origins: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["*"])
     seed_admin_username: str = "admin"
     seed_admin_password: str = "admin-password"
-    lightrag_enabled: bool = False
+    # Semantic retrieval is remote-LightRAG-only in this service.
+    lightrag_enabled: bool = True
     lightrag_base_url: str = "http://localhost:9621"
     lightrag_api_key: str | None = None
     lightrag_domain: str = "default"
@@ -99,6 +100,24 @@ class Settings(BaseSettings):
                 return [str(item).strip() for item in parsed if str(item).strip()]
 
         return [item.strip() for item in raw.split(",") if item.strip()]
+
+    @model_validator(mode="after")
+    def validate_required_lightrag(self) -> "Settings":
+        if not self.lightrag_enabled:
+            raise ValueError(
+                "LightRAG is required. Local semantic retrieval is no longer supported. "
+                "Set LIGHTRAG_ENABLED=true."
+            )
+        has_base_url = bool((self.lightrag_base_url or "").strip())
+        has_domain_manifest = bool(
+            (self.lightrag_domain_manifest and self.lightrag_domain_manifest.is_file())
+            or (self.lightrag_domains_manifest and self.lightrag_domains_manifest.is_file())
+        )
+        if not has_base_url and not has_domain_manifest:
+            raise ValueError(
+                "LightRAG is required but no LightRAG base URL or domain manifest is configured."
+            )
+        return self
 
 
 @lru_cache

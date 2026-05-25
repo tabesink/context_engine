@@ -30,7 +30,7 @@ Behavior covered:
 - `documents retrieve` calls `POST /query/retrieve`.
 - `documents answer` calls `POST /query/answer`.
 - `query` calls `POST /query`.
-- Query payloads include `query`, `mode`, `top_k`, `include_debug`, `allow_general_fallback`, and optional `document_ids`.
+- Query payloads include `query`, `mode`, `top_k`, `include_debug`, and optional `document_ids` / `lightrag_domain_id`.
 - Repeated `--document-id` values become a JSON array.
 - Query payload construction is concentrated in `cli/query_payload.py` and validated through the backend `QueryRequest` schema so CLI field drift is caught close to the command layer.
 

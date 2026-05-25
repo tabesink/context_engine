@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 
 from app.api.deps import get_current_user
-from app.core.config import get_settings
 from app.integrations.lightrag_remote_adapter import (
     LightRAGAdapterError,
     LightRAGRemoteAdapter,
@@ -52,10 +51,6 @@ def search_graph_labels(
 
 
 def _proxy_get(path: str, *, params: dict | None = None):
-    if not get_settings().lightrag_enabled:
-        from fastapi import HTTPException
-
-        raise HTTPException(status_code=400, detail="LightRAG is disabled")
     try:
         return LightRAGRemoteAdapter.for_domain().get_json(path, params=params)
     except LightRAGAdapterError as exc:

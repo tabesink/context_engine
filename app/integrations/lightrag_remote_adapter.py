@@ -261,12 +261,14 @@ class LightRAGRemoteAdapter:
             return "indexing"
         if normalized in {"processed", "ready", "complete", "completed"}:
             return "ready"
-        return "indexing"
+        raise LightRAGInvalidResponse(f"Unknown LightRAG upload status: {value!r}")
 
     def _normalize_status(self, value: Any) -> str:
         normalized = str(value or "").lower()
         if normalized in {"processed", "ready", "complete", "completed", "success"}:
             return "ready"
+        if normalized in {"processing", "pending", "queued", "indexing"}:
+            return "indexing"
         if normalized in {"failed", "failure", "error"}:
             return "failed"
-        return "indexing"
+        raise LightRAGInvalidResponse(f"Unknown LightRAG status: {value!r}")

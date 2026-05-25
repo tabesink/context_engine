@@ -138,7 +138,11 @@ def test_retrieval_service_routes() -> None:
     assert retrieve_call[2]["top_k"] == 5
     assert retrieve_call[2]["include_debug"] is True
     assert retrieve_call[2]["lightrag_domain_id"] == "fatigue"
-    assert ("POST", "/query/answer", {"query": "reset procedure", "mode": "auto", "top_k": 8, "include_debug": False, "allow_general_fallback": False}) in client.calls
+    assert (
+        "POST",
+        "/query/answer",
+        {"query": "reset procedure", "mode": "auto", "top_k": 8, "include_debug": False},
+    ) in client.calls
 
 
 def test_job_service_routes() -> None:

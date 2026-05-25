@@ -13,7 +13,6 @@ class QueryRequest(BaseModel):
     include_assets: bool = False
     include_thumbnails: bool = True
     max_assets: int = Field(default=5, ge=0, le=20)
-    allow_general_fallback: bool = False
 
 
 class EvidenceResponse(BaseModel):

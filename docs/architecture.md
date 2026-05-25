@@ -13,28 +13,21 @@ HTTP client or `context-engine` TUI (`context-engine` / `context-tui`)
   -> response schema
 ```
 
-Retrieval has two runtime capabilities: LightRAG semantic retrieval and local navigation/page retrieval. `RetrievalRoutingPolicy` in `app/retrieval/routing_policy.py` picks local navigation versus LightRAG-backed retrieval; `RetrievalService` dispatches through small strategy objects in `app/retrieval/strategies.py`.
+Retrieval has two runtime capabilities: mandatory remote LightRAG semantic retrieval and local navigation/page retrieval. `RetrievalRoutingPolicy` in `app/retrieval/routing_policy.py` selects the backend by retrieval mode, and `RetrievalService` dispatches through strategy objects in `app/retrieval/strategies.py`.
 
 ```text
-mode=navigation or LightRAG-disabled semantic request
+mode=navigation
   RetrievalService
     -> LocalRetrievalStrategy
-    -> RetrievalRouter
-       -> NavigationRetrievalEngine
-       -> HybridMerger
+    -> NavigationRetrievalEngine
 
-LIGHTRAG_ENABLED=true and mode in auto|semantic|hybrid
+mode in auto|semantic|hybrid
   RetrievalService
     -> LightRAGRetrievalStrategy
     -> LightRAGRemoteRetrievalEngine
        -> LightRAGRemoteAdapter
        -> external LightRAG HTTP API
     -> NavigationRetrievalEngine for hybrid enrichment
-
-LIGHTRAG_ENABLED=true and mode=navigation
-  RetrievalService
-    -> LocalRetrievalStrategy
-    -> RetrievalRouter navigation path
 ```
 
 Both paths return local `Evidence` objects. API routes never expose raw LightRAG, PageIndex, or storage rows.
@@ -63,27 +56,30 @@ POST /query, /query/retrieve, or /query/answer
   -> QueryRequest (optional document filter, optional lightrag_domain_id)
   -> auth dependency
   -> RetrievalService (routing policy + local/remote strategy)
-  -> local RetrievalRouter or remote LightRAG adapter
+  -> NavigationRetrievalEngine or LightRAGRemoteAdapter
   -> EvidenceResponse list
   -> optional AnswerComposer
   -> response schema
 ```
 
-When LightRAG is enabled, `auto`, `semantic`, and `hybrid` are sent to LightRAG as `mix`; `hybrid` may add local navigation evidence. `navigation` stays local page/tree retrieval.
+`auto`, `semantic`, and `hybrid` are sent to LightRAG as `mix`; `hybrid` may add local navigation evidence. `navigation` stays local page/tree retrieval. There is no semantic fallback to local navigation when LightRAG fails.
 
 `include_debug` is accepted on query requests, but debug details are returned only for admin users.
 
 ## Request Flow: Upload and Index
 
 ```text
-LIGHTRAG_ENABLED=true
+LIGHTRAG_ENABLED=true (required)
   POST /admin/documents/upload
     -> require_admin
     -> DocumentService stores a local mirror record and file
     -> JobService enqueues lightrag_ingest_document
     -> optional navigation_process_document job updates metadata.navigation
+    -> validate LightRAG domain manifest and requested domain
     -> response includes document_id, lightrag job_id, and queued lightrag metadata
 ```
+
+Admin uploads require a readable LightRAG domain manifest. Structure-aware ingestion must produce source chunks before LightRAG ingest proceeds; parse/build failures mark the document failed instead of raw-uploading to LightRAG.
 
 Navigation processing uses the worker/job system. Remote LightRAG ingestion is started by a worker job, serialized per domain with a Redis lock, and tracked through mirrored metadata such as `lightrag.track_id`.
 
@@ -123,7 +119,7 @@ The API exposes authenticated read-only graph proxy routes:
 - `GET /graph/label/popular`
 - `GET /graph/label/search`
 
-These routes call the configured remote LightRAG service only when `LIGHTRAG_ENABLED=true`. When disabled, they return HTTP `400` with a disabled LightRAG message instead of falling back locally.
+These routes call the configured remote LightRAG service and do not fall back to any local semantic implementation.
 
 ## Storage
 

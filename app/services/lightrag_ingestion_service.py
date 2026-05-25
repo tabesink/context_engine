@@ -93,15 +93,10 @@ class LightRAGIngestionService:
         try:
             adapter = self.adapter_factory(str(domain_id))
             remote = self._ingest_source_chunks(document=document, adapter=adapter, domain_id=str(domain_id))
-            if remote is None:
-                remote = adapter.upload_document(
-                    file_path=Path(document.storage_path),
-                    filename=document.filename,
-                    content_type=document.content_type,
-                    metadata={"local_document_id": document.id},
-                    domain=str(domain_id),
-                )
             self._apply_remote_status(document=document, lightrag=lightrag, remote=remote, adapter=adapter)
+        except Exception as exc:
+            self._mark_failed(document=document, lightrag=lightrag, message=str(exc))
+            raise
         finally:
             lock.release()
 
@@ -111,9 +106,11 @@ class LightRAGIngestionService:
         document: DocumentRow,
         adapter: LightRAGRemoteAdapter,
         domain_id: str,
-    ) -> dict | None:
+    ) -> dict:
         if not self._can_build_document_structure(document):
-            return None
+            raise ValueError(
+                f"Document {document.id} cannot be structure-processed for LightRAG ingestion."
+            )
 
         try:
             parser = self.structure_parser or self._parser_for_document(document)
@@ -121,8 +118,10 @@ class LightRAGIngestionService:
                 document_id=document.id,
                 source_path=Path(document.storage_path),
             )
-        except Exception:
-            return None
+        except Exception as exc:
+            raise ValueError(
+                f"Structure-aware ingestion failed for document {document.id}: {exc}"
+            ) from exc
 
         structure = structure.model_copy(update={"quality": self.quality_scorer.score(structure)})
         toc_refinement_mode = self._toc_refinement_mode(document)
@@ -145,11 +144,22 @@ class LightRAGIngestionService:
 
         structure = self.chunk_builder.build(structure)
         if not structure.source_chunks:
-            return None
+            raise ValueError(
+                f"Structure-aware ingestion produced no source chunks for document {document.id}."
+            )
 
         self.document_processing.save_structure(structure)
         self.artifact_store.save_structure(structure)
         return adapter.ingest_source_chunks(domain=domain_id, chunks=structure.source_chunks)
+
+    def _mark_failed(self, *, document: DocumentRow, lightrag: dict, message: str) -> None:
+        updated_lightrag = lightrag | {
+            "status": "failed",
+            "message": message,
+            "last_status_check_at": self.now().isoformat().replace("+00:00", "Z"),
+        }
+        document = self.documents.update_metadata(document, document.meta | {"lightrag": updated_lightrag})
+        self.documents.update_status(document, DocumentStatus.FAILED, error_message=message)
 
     def _can_build_document_structure(self, document: DocumentRow) -> bool:
         content_type = (document.content_type or "").split(";")[0].strip().lower()
@@ -189,7 +199,10 @@ class LightRAGIngestionService:
         remote: dict,
         adapter: LightRAGRemoteAdapter,
     ) -> None:
-        status = str(remote.get("status") or "indexing")
+        raw_status = remote.get("status")
+        if raw_status is None:
+            raise ValueError("LightRAG ingestion response missing status.")
+        status = str(raw_status)
         track_id = remote.get("track_id")
         if status == "indexing" and track_id:
             status_payload = adapter.document_status(str(track_id))
@@ -215,3 +228,5 @@ class LightRAGIngestionService:
                 DocumentStatus.FAILED,
                 error_message=updated_lightrag.get("message"),
             )
+        elif status != "indexing":
+            raise ValueError(f"Unknown LightRAG status: {status!r}")

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 os.environ["DATABASE_URL"] = "sqlite:///./.data/test_context_engine.db"
 os.environ["INDEX_JOBS_INLINE"] = "true"
-os.environ["LIGHTRAG_ENABLED"] = "false"
+os.environ["LIGHTRAG_ENABLED"] = "true"
 Path(".data/test_context_engine.db").unlink(missing_ok=True)
 
 from app.document_processing.artifacts import DocumentProcessingArtifactStore  # noqa: E402
@@ -74,6 +74,12 @@ class FakeStructureParser:
     def parse(self, *, document_id: str, source_path: Path) -> DocumentStructure:
         del document_id, source_path
         return self.structure
+
+
+class FailingStructureParser:
+    def parse(self, *, document_id: str, source_path: Path) -> DocumentStructure:
+        del document_id, source_path
+        raise RuntimeError("parser exploded")
 
 
 def _artifact_store(tmp_path: Path) -> DocumentProcessingArtifactStore:
@@ -395,7 +401,7 @@ def test_lightrag_ingestion_runs_toc_refinement_when_mode_is_always(
     assert adapter.ingested_chunks[0].section_id == "toc-sec-1"
 
 
-def test_lightrag_ingestion_falls_back_to_raw_upload_for_unsupported_files(
+def test_lightrag_ingestion_fails_when_pdf_structure_processing_is_unavailable(
     tmp_path: Path,
     session: Session,
 ) -> None:
@@ -415,22 +421,57 @@ def test_lightrag_ingestion_falls_back_to_raw_upload_for_unsupported_files(
         status=DocumentStatus.INDEXING,
     )
 
-    LightRAGIngestionService(
-        session,
-        adapter_factory=lambda domain_id: adapter,
-        lock_factory=lambda domain_id: lock,
-        artifact_store=_artifact_store(tmp_path),
-    ).ingest_document(document.id)
+    with pytest.raises(ValueError, match="Structure-aware ingestion failed"):
+        LightRAGIngestionService(
+            session,
+            adapter_factory=lambda domain_id: adapter,
+            lock_factory=lambda domain_id: lock,
+            artifact_store=_artifact_store(tmp_path),
+        ).ingest_document(document.id)
 
     refreshed = DocumentRepository(session).get(document.id)
     source_chunk_count = session.query(DocumentSourceChunkRow).count()
 
     assert adapter.ingested_chunks is None
-    assert adapter.uploaded is not None
-    assert adapter.uploaded["file_path"] == upload_path
-    assert adapter.uploaded["domain"] == "fatigue"
+    assert adapter.uploaded is None
     assert source_chunk_count == 0
     assert refreshed is not None
-    assert refreshed.status == DocumentStatus.READY.value
-    assert refreshed.meta["lightrag"]["document_id"] == "remote-doc"
-    assert refreshed.meta["lightrag"]["track_id"] == "track-raw"
+    assert refreshed.status == DocumentStatus.FAILED.value
+    assert refreshed.meta["lightrag"]["status"] == "failed"
+    assert "Structure-aware ingestion failed" in refreshed.meta["lightrag"]["message"]
+
+
+def test_lightrag_ingestion_fails_when_structure_parser_errors(
+    tmp_path: Path,
+    session: Session,
+) -> None:
+    upload_path = tmp_path / "manual.txt"
+    upload_path.write_text("Hello world", encoding="utf-8")
+    lock = FakeLock()
+    adapter = CapturingChunkAdapter()
+    document = DocumentRepository(session).create(
+        owner_id=None,
+        filename="manual.txt",
+        content_type="text/plain",
+        storage_path=str(upload_path),
+        metadata={
+            "semantic_engine": "lightrag",
+            "lightrag": {"domain_id": "fatigue", "status": "queued"},
+        },
+        status=DocumentStatus.INDEXING,
+    )
+
+    with pytest.raises(ValueError, match="Structure-aware ingestion failed"):
+        LightRAGIngestionService(
+            session,
+            adapter_factory=lambda domain_id: adapter,
+            lock_factory=lambda domain_id: lock,
+            artifact_store=_artifact_store(tmp_path),
+            structure_parser=FailingStructureParser(),
+        ).ingest_document(document.id)
+
+    refreshed = DocumentRepository(session).get(document.id)
+    assert refreshed is not None
+    assert refreshed.status == DocumentStatus.FAILED.value
+    assert refreshed.meta["lightrag"]["status"] == "failed"
+    assert "Structure-aware ingestion failed" in refreshed.meta["lightrag"]["message"]

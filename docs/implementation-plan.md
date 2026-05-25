@@ -117,8 +117,7 @@ Implemented:
 - `RetrievalMode`: `semantic`, `navigation`, `hybrid`, and `auto`.
 - `RetrievalRoutingPolicy` and `RetrievalBackend` in `app/retrieval/routing_policy.py`.
 - `LocalRetrievalStrategy` and `LightRAGRetrievalStrategy` in `app/retrieval/strategies.py`.
-- Shared retrieval contracts for LightRAG semantic retrieval and local navigation retrieval.
-- Deterministic query classifier for legacy local navigation-only fallback paths.
+- Shared retrieval contracts for mandatory LightRAG semantic retrieval and local navigation retrieval.
 - Hybrid evidence merger.
 - `POST /query/retrieve`.
 - `POST /query/answer`.
@@ -128,19 +127,20 @@ Implemented:
 
 Current acceptance:
 
-- `mode=semantic` uses LightRAG semantic retrieval when LightRAG is enabled.
+- `mode=semantic` always uses LightRAG semantic retrieval.
 - `mode=navigation` uses local navigation retrieval.
-- `mode=hybrid` combines LightRAG semantic evidence with local navigation enrichment when available.
+- `mode=hybrid` combines LightRAG semantic evidence with local navigation enrichment.
+- `mode=auto` routes to LightRAG semantic retrieval.
 - Context Engine does not read or write local semantic chunks or embeddings.
 - Response evidence identifies `source_engine`.
 - Non-admin users do not receive internal debug details.
-- Answers cite evidence IDs and refuse weak evidence unless `allow_general_fallback=true`. The current deterministic composer treats evidence as weak only when every evidence item has a numeric score below `0.2`; unscored evidence is allowed.
+- Answers are evidence-bound: if no evidence is available, the service returns a no-evidence response and does not synthesize unsupported content.
 
 ## Remote LightRAG Integration
 
 Implemented:
 
-- `LIGHTRAG_ENABLED`, `LIGHTRAG_BASE_URL`, `LIGHTRAG_API_KEY`, `LIGHTRAG_DOMAIN`, `LIGHTRAG_DOMAIN_MANIFEST`, and `LIGHTRAG_TIMEOUT_SECONDS` settings.
+- `LIGHTRAG_ENABLED`, `LIGHTRAG_BASE_URL`, `LIGHTRAG_API_KEY`, `LIGHTRAG_DOMAIN`, `LIGHTRAG_DOMAIN_MANIFEST`, and `LIGHTRAG_TIMEOUT_SECONDS` settings (`LIGHTRAG_ENABLED` must remain `true`).
 - `app/integrations/lightrag_domains.py` for optional domain manifest resolution.
 - `app/integrations/lightrag_remote_adapter.py` for HTTP-only LightRAG access.
 - Remote retrieval through `/query/data`.

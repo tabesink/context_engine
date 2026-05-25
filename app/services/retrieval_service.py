@@ -3,15 +3,13 @@ from time import perf_counter
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
-from app.domain.models import RetrievalMode, RetrievalResult
+from app.domain.models import RetrievalResult
 from app.integrations.lightrag_remote_adapter import LightRAGAdapterError, lightrag_http_exception
 from app.retrieval.answer_composer import AnswerComposer
 from app.retrieval.evidence_mapper import to_evidence_response
 from app.retrieval.lightrag_remote_engine import LightRAGRemoteRetrievalEngine
 from app.retrieval.navigation_engine import NavigationRetrievalEngine
 from app.retrieval.routing_policy import RetrievalBackend, RetrievalRoutingPolicy
-from app.retrieval.router import RetrievalRouter
 from app.retrieval.strategies import LightRAGRetrievalStrategy, LocalRetrievalStrategy, RetrievalStrategy
 from app.schemas.query import QueryRequest, QueryResponse, RetrieveResponse
 from app.services.retrieval_asset_resolver import RetrievalAssetResolver
@@ -32,16 +30,11 @@ class RetrievalService:
         answer_composer: AnswerComposer | None = None,
     ):
         self.session = session
-        self.settings = get_settings()
         self.navigation_engine = NavigationRetrievalEngine(session)
-        self.router = RetrievalRouter(
-            semantic_engine=self.navigation_engine,
-            navigation_engine=self.navigation_engine,
-        )
         self.remote_engine = LightRAGRemoteRetrievalEngine()
         self.routing_policy = routing_policy or RetrievalRoutingPolicy()
         self.strategies = {
-            RetrievalBackend.LOCAL: local_strategy or LocalRetrievalStrategy(self.router),
+            RetrievalBackend.LOCAL: local_strategy or LocalRetrievalStrategy(self.navigation_engine),
             RetrievalBackend.LIGHTRAG: remote_strategy
             or LightRAGRetrievalStrategy(
                 self.remote_engine,
@@ -76,12 +69,7 @@ class RetrievalService:
 
     def _retrieve_result(self, *, request: QueryRequest, user: UserRow) -> RetrievalResult:
         self._validate_lightrag_document_filter(request)
-        if not self.settings.lightrag_enabled and request.mode != RetrievalMode.NAVIGATION:
-            raise HTTPException(status_code=400, detail="LightRAG is required for semantic retrieval")
-        route = self.routing_policy.resolve(
-            lightrag_enabled=self.settings.lightrag_enabled,
-            mode=request.mode,
-        )
+        route = self.routing_policy.resolve(mode=request.mode)
         return self.strategies[route.backend].retrieve(
             query=request.query,
             mode=request.mode,
@@ -96,7 +84,6 @@ class RetrievalService:
         answer = self.answer_composer.compose(
             query=request.query,
             evidence=retrieved.evidence,
-            allow_general_fallback=request.allow_general_fallback,
         )
         response = self._retrieve_response(
             retrieved,

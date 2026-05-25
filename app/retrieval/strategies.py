@@ -4,7 +4,6 @@ from app.domain.models import RetrievalMode, RetrievalResult
 from app.retrieval.hybrid_merger import HybridMerger
 from app.retrieval.lightrag_remote_engine import LightRAGRemoteRetrievalEngine
 from app.retrieval.navigation_engine import NavigationRetrievalEngine
-from app.retrieval.router import RetrievalRouter
 
 
 class RetrievalStrategy(Protocol):
@@ -22,8 +21,8 @@ class RetrievalStrategy(Protocol):
 
 
 class LocalRetrievalStrategy:
-    def __init__(self, router: RetrievalRouter):
-        self.router = router
+    def __init__(self, navigation_engine: NavigationRetrievalEngine):
+        self.navigation_engine = navigation_engine
 
     def retrieve(
         self,
@@ -36,12 +35,17 @@ class LocalRetrievalStrategy:
         lightrag_domain_id: str | None = None,
     ) -> RetrievalResult:
         del lightrag_domain_id
-        return self.router.retrieve(
+        evidence = self.navigation_engine.retrieve(
             query=query,
-            mode=mode,
             document_ids=document_ids,
             top_k=top_k,
             user_id=user_id,
+        )
+        return RetrievalResult(
+            query=query,
+            mode=mode,
+            evidence=evidence,
+            debug={"requested_mode": mode.value, "selected_engine": "navigation"},
         )
 
 

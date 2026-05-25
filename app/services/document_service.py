@@ -35,32 +35,14 @@ class DocumentService:
         process_navigation: bool = True,
         enable_toc_refinement: str = "auto",
     ) -> tuple[DocumentRow, str | None]:
-        if self.settings.lightrag_enabled:
-            return self._upload_remote(
-                actor_id=actor_id,
-                file=file,
-                semantic_engine=semantic_engine,
-                lightrag_domain_id=lightrag_domain_id,
-                process_navigation=process_navigation,
-                enable_toc_refinement=enable_toc_refinement,
-            )
-
-        path = self.storage.save_upload(file)
-        document = self.documents.create(
-            owner_id=actor_id,
-            filename=file.filename or path.name,
-            content_type=file.content_type or "application/octet-stream",
-            storage_path=str(path),
-            metadata={"original_filename": file.filename},
-        )
-        self.documents.audit(
+        return self._upload_remote(
             actor_id=actor_id,
-            event="document.uploaded",
-            target_id=document.id,
-            metadata={"filename": document.filename},
+            file=file,
+            semantic_engine=semantic_engine,
+            lightrag_domain_id=lightrag_domain_id,
+            process_navigation=process_navigation,
+            enable_toc_refinement=enable_toc_refinement,
         )
-        job_id = JobService(self.session).enqueue_index_document(document_id=document.id)
-        return document, job_id
 
     def _upload_remote(
         self,
@@ -132,7 +114,10 @@ class DocumentService:
     def _validate_lightrag_domain(self, domain_id: str) -> None:
         path = self.settings.lightrag_domain_manifest or self.settings.lightrag_domains_manifest
         if not path or not path.is_file():
-            return
+            raise HTTPException(
+                status_code=400,
+                detail="LightRAG domain manifest is required for uploads.",
+            )
         payload = json.loads(path.read_text(encoding="utf-8"))
         domains = payload.get("domains", [])
         if isinstance(domains, dict):
@@ -186,7 +171,9 @@ class DocumentService:
         except LightRAGAdapterError as exc:
             raise lightrag_http_exception(exc) from exc
 
-        status = str(status_payload.get("status") or "indexing")
+        status = str(status_payload.get("status") or "")
+        if status not in {"indexing", "ready", "failed"}:
+            raise HTTPException(status_code=502, detail=f"Unknown LightRAG status: {status!r}")
         updated_lightrag = lightrag | {
             "document_id": status_payload.get("document_id") or lightrag.get("document_id"),
             "track_id": status_payload.get("track_id") or track_id,

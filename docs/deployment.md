@@ -21,11 +21,11 @@ Important settings:
 - `STORAGE_ROOT`: persistent mounted upload directory.
 - `SEED_ADMIN_USERNAME` and `SEED_ADMIN_PASSWORD`: first admin credentials for `scripts.seed_admin`.
 - `ALLOWED_ORIGINS`: comma-separated CORS origins, or `*` for local development.
-- `LIGHTRAG_ENABLED`: enables LightRAG semantic retrieval, ingestion, and graph proxying. Runtime semantic retrieval has no local fallback.
-- `LIGHTRAG_BASE_URL`: base URL of the external LightRAG service, default `http://localhost:9621`.
+- `LIGHTRAG_ENABLED`: required. Startup fails when set to `false`. Context Engine does not provide local semantic fallback.
+- `LIGHTRAG_BASE_URL`: base URL of the external LightRAG service, default `http://localhost:9621`. Startup also requires either this URL or a readable domain manifest path.
+- `LIGHTRAG_DOMAIN_MANIFEST` / `LIGHTRAG_DOMAINS_MANIFEST`: domain manifest used for upload validation and per-domain routing. Admin uploads fail with HTTP `400` when the manifest file is missing.
 - `LIGHTRAG_API_KEY`: optional API key sent to LightRAG with the `X-API-Key` header.
 - `LIGHTRAG_DOMAIN`: default LightRAG domain name.
-- `LIGHTRAG_DOMAIN_MANIFEST`: optional JSON manifest for per-domain base URLs/API keys.
 - `LIGHTRAG_TIMEOUT_SECONDS`: HTTP timeout for LightRAG calls.
 - `LIGHTRAG_DEPLOY_ENABLED`: gates **mutating** LightRAG domain deployment APIs (`/admin/lightrag/domains...`). The read-only `GET /lightrag/domains` listing remains available to authenticated users so clients can choose `lightrag_domain_id` when manifests exist.
 - `LIGHTRAG_DEPLOY_ROOT`, `LIGHTRAG_DOMAINS_ROOT`, `LIGHTRAG_DOMAINS_MANIFEST`, `LIGHTRAG_COMPOSE_FILE`, `LIGHTRAG_DELETED_ROOT`: generated deployment state under `.data/lightrag`.
@@ -34,7 +34,7 @@ Important settings:
 - `LIGHTRAG_ARCHIVE_DELETED_DOMAINS`, `LIGHTRAG_ALLOW_PERMANENT_DELETE`: archival versus hard delete semantics for removed domains.
 - `LIGHTRAG_IMAGE`, `LIGHTRAG_DOCKER_COMPOSE_BIN`, `LIGHTRAG_DOCKER_EXECUTION_MODE`, `LIGHTRAG_DOCKER_TIMEOUT_SECONDS`: image and Docker Compose execution settings.
 
-In `app/core/config.py`, `lightrag_enabled` and `lightrag_deploy_enabled` default to `false` for safe standalone runs. The checked-in `.env.example` enables both for integration-style local setups; tighten those flags for environments that must not assume LightRAG or Docker Compose control.
+In `app/core/config.py`, `lightrag_enabled` defaults to `true` and is validated as required at startup. `lightrag_deploy_enabled` remains `false` by default so domain lifecycle control stays opt-in.
 
 ## First Run With Compose
 
@@ -106,15 +106,13 @@ LIGHTRAG_BASE_URL=http://localhost:9621
 LIGHTRAG_API_KEY=
 ```
 
-When enabled:
-
 - `auto`, `semantic`, and `hybrid` query modes use remote LightRAG.
 - `hybrid` may add local navigation evidence when available.
 - `navigation` query mode remains local page/tree retrieval.
-- Admin uploads enqueue `lightrag_ingest_document`; the worker uploads to LightRAG, polls status, and updates `documents.metadata.lightrag`.
+- Admin uploads enqueue `lightrag_ingest_document`; the worker builds canonical structure/source chunks, ingests chunks to LightRAG, polls status, and updates `documents.metadata.lightrag`.
+- Structure-processing failures fail ingestion explicitly (no raw LightRAG upload fallback).
+- Unknown upstream LightRAG statuses surface as integration errors instead of silently normalizing to `indexing`.
 - `/graphs` and `/graph/label/...` proxy to LightRAG.
-
-When disabled, semantic retrieval and graph proxy routes respond with clear LightRAG-disabled errors. Local navigation/page browsing remains a separate capability.
 
 ## LightRAG Domain Deployment Control
 

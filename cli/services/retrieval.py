@@ -21,7 +21,6 @@ class RetrievalService:
         mode: RetrievalMode,
         top_k: int,
         include_debug: bool = False,
-        allow_general_fallback: bool = False,
         lightrag_domain_id: str | None = None,
     ) -> dict[str, Any]:
         payload = build_query_payload(
@@ -29,7 +28,6 @@ class RetrievalService:
             mode=mode,
             top_k=top_k,
             include_debug=include_debug,
-            allow_general_fallback=allow_general_fallback,
             lightrag_domain_id=lightrag_domain_id,
         )
         response = self._client.post("/query/retrieve", payload)
@@ -42,7 +40,6 @@ class RetrievalService:
         mode: RetrievalMode,
         top_k: int,
         include_debug: bool = False,
-        allow_general_fallback: bool = False,
         lightrag_domain_id: str | None = None,
     ) -> dict[str, Any]:
         payload = build_query_payload(
@@ -50,7 +47,6 @@ class RetrievalService:
             mode=mode,
             top_k=top_k,
             include_debug=include_debug,
-            allow_general_fallback=allow_general_fallback,
             lightrag_domain_id=lightrag_domain_id,
         )
         response = self._client.post("/query/answer", payload)

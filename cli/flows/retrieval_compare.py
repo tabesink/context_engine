@@ -22,7 +22,6 @@ def compare_retrieval_modes(client: Any, *, query: str, top_k: int) -> dict[str,
                     mode=mode,  # type: ignore[arg-type]
                     top_k=top_k,
                     include_debug=False,
-                    allow_general_fallback=False,
                 ),
             )
         except ApiClientError as exc:

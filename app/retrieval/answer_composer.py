@@ -9,13 +9,10 @@ class AnswerComposer:
         *,
         query: str,
         evidence: list[Evidence],
-        allow_general_fallback: bool,
     ) -> str:
-        if not evidence and not allow_general_fallback:
-            return "I do not have enough indexed evidence to answer that question."
         if not evidence:
-            return "No indexed evidence was found. General fallback is allowed, but no LLM provider is configured."
-        if self._is_weak_evidence(evidence) and not allow_general_fallback:
+            return "I do not have enough indexed evidence to answer that question."
+        if self._is_weak_evidence(evidence):
             return "I do not have enough strong indexed evidence to answer that question."
 
         lines = [f"Answer based on {len(evidence)} evidence item(s):"]

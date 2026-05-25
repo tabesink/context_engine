@@ -50,13 +50,12 @@ Representative **`POST /query/retrieve`** body:
   "mode": "auto",
   "top_k": 5,
   "include_debug": false,
-  "allow_general_fallback": false,
   "document_ids": ["doc_123"],
   "lightrag_domain_id": "fatigue"
 }
 ```
 
-`document_ids` and `lightrag_domain_id` are omitted unless filters/domain selection apply. **`include_debug`** is honored only for admins on the backend. Supported modes: **`auto`**, **`semantic`**, **`navigation`**, **`hybrid`** (routing policy respects **`LIGHTRAG_ENABLED`** as documented elsewhere).
+`document_ids` and `lightrag_domain_id` are omitted unless filters/domain selection apply. **`include_debug`** is honored only for admins on the backend. Supported modes: **`auto`**, **`semantic`**, **`navigation`**, **`hybrid`** (`auto`/`semantic`/`hybrid` route to LightRAG; `navigation` stays local).
 
 Known **backend gaps** (examples only—currently no matching routes):
 

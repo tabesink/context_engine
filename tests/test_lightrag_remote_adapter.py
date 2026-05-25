@@ -299,6 +299,47 @@ def test_remote_adapter_normalizes_track_status() -> None:
     assert status["error"] is None
 
 
+def test_remote_adapter_rejects_unknown_track_status() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/documents/track_status/track-1"
+        return httpx.Response(
+            200,
+            json={
+                "track_id": "track-1",
+                "documents": [{"id": "external-doc", "status": "mystery", "error_msg": None}],
+            },
+        )
+
+    adapter = LightRAGRemoteAdapter(
+        base_url="http://lightrag.local",
+        client=httpx.Client(transport=httpx.MockTransport(handler), base_url="http://lightrag.local"),
+    )
+
+    with pytest.raises(LightRAGInvalidResponse, match="Unknown LightRAG status"):
+        adapter.document_status("track-1")
+
+
+def test_remote_adapter_rejects_unknown_upload_status(tmp_path: Path) -> None:
+    upload = tmp_path / "manual.txt"
+    upload.write_text("manual body")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/documents/upload"
+        return httpx.Response(200, json={"status": "mystery", "track_id": "track-1"})
+
+    adapter = LightRAGRemoteAdapter(
+        base_url="http://lightrag.local",
+        client=httpx.Client(transport=httpx.MockTransport(handler), base_url="http://lightrag.local"),
+    )
+
+    with pytest.raises(LightRAGInvalidResponse, match="Unknown LightRAG upload status"):
+        adapter.upload_document(
+            file_path=upload,
+            filename="manual.txt",
+            content_type="text/plain",
+        )
+
+
 def test_remote_adapter_maps_timeout_and_invalid_json() -> None:
     timeout_adapter = LightRAGRemoteAdapter(
         base_url="http://lightrag.local",

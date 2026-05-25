@@ -932,7 +932,6 @@ class RetrievalResultScreen:
             "mode": self.mode,
             "top_k": self.top_k,
             "include_debug": False,
-            "allow_general_fallback": False,
         }
         if self.lightrag_domain_id:
             payload["lightrag_domain_id"] = self.lightrag_domain_id

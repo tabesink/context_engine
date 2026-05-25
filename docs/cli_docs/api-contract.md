@@ -37,7 +37,6 @@ Sample retrieve body:
   "mode": "auto",
   "top_k": 5,
   "include_debug": false,
-  "allow_general_fallback": false,
   "document_ids": ["doc_123"]
 }
 ```
@@ -53,7 +52,7 @@ Sample retrieve body:
 | Popular labels | `GET /graph/label/popular?limit=…` | authenticated | supported |
 | Label search | `GET /graph/label/search?q=…&limit=…` | authenticated | supported |
 
-Requires backend **`LIGHTRAG_ENABLED=true`** with a reachable remote LightRAG service. When disabled, FastAPI returns **`LightRAG is disabled`**; the UI surfaces that API error unchanged.
+Requires backend **`LIGHTRAG_ENABLED=true`** (mandatory at startup) with a reachable remote LightRAG service. LightRAG outages surface as HTTP `502`/`503` integration errors; there is no local semantic fallback.
 
 This capability is surfaced as **`Graphs`** in the root TUI menu.
 

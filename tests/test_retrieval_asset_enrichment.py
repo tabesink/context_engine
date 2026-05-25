@@ -70,13 +70,11 @@ class FakeAssetMetadataStrategy:
 
 
 def _retrieval_service(session, strategy) -> RetrievalService:
-    service = RetrievalService(
+    return RetrievalService(
         session,
         local_strategy=strategy,
         remote_strategy=strategy,
     )
-    service.settings.lightrag_enabled = True
-    return service
 
 
 def test_retrieval_response_can_include_assets_linked_to_source_chunks() -> None:

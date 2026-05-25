@@ -2,6 +2,8 @@
 
 Backend-only multi-user hybrid RAG application.
 
+Semantic retrieval is mandatory remote LightRAG (`LIGHTRAG_ENABLED=true`). This service keeps local navigation retrieval (`mode=navigation`) for page/section lookups, but it does not provide a local semantic fallback.
+
 ## Prerequisites
 
 - **Python 3.11+** (see `requires-python` in `pyproject.toml`)

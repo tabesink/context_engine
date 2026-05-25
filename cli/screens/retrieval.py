@@ -43,10 +43,6 @@ def build_retrieval_screen(response: dict[str, Any]) -> ScreenResult:
                 {"field": "Top K", "value": response.get("top_k", "")},
                 {"field": "LightRAG domain", "value": response.get("lightrag_domain_id", "default")},
                 {"field": "Document filter", "value": response.get("document_filter", "none")},
-                {
-                    "field": "General fallback",
-                    "value": response.get("allow_general_fallback", False),
-                },
                 {"field": "Debug requested", "value": response.get("include_debug", bool(response.get("debug")))},
             ],
             columns=["field", "value"],

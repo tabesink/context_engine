@@ -9,9 +9,10 @@ The system has one API-facing response contract called `Evidence`.
 Evidence can come from:
 
 - Local navigation retrieval over pages, sections, and document structure.
-- Remote LightRAG semantic retrieval when `LIGHTRAG_ENABLED=true`.
+- Remote LightRAG semantic retrieval.
 
-LightRAG is external and is the only semantic retrieval engine. Local navigation/page browsing can still work without a running LightRAG service, but semantic retrieval and graph routes return clear LightRAG-disabled errors.
+LightRAG is external and is the only semantic retrieval engine. Local navigation/page browsing remains separate local capability.
+`/query/answer` is evidence-bound: if evidence is missing or too weak, the service returns a no-evidence response instead of synthesizing a general fallback answer.
 
 Admins can optionally manage same-machine LightRAG domain containers through Context Engine when `LIGHTRAG_DEPLOY_ENABLED=true`. That deployment control plane writes generated files under `.data/lightrag/`; runtime query/upload/graph traffic still goes through `LightRAGRemoteAdapter`.
 
@@ -34,7 +35,7 @@ For model providers in managed domains:
 9. `app/services/retrieval_service.py`
 10. `app/retrieval/routing_policy.py` and `app/retrieval/strategies.py`
 11. `app/retrieval/router.py`
-12. `app/retrieval/semantic_engine.py`
+12. `app/retrieval/lightrag_remote_engine.py`
 13. `app/retrieval/navigation_engine.py`
 14. `app/integrations/lightrag_remote_adapter.py`
 15. `app/integrations/lightrag_domains.py`
@@ -71,22 +72,16 @@ For model providers in managed domains:
 
 ## Common Flows
 
-Local admin upload:
+Admin upload:
 
 ```text
-admin -> /admin/documents/upload -> file storage -> document row -> indexing job
+admin -> /admin/documents/upload -> local mirror record -> lightrag_ingest_document job
 ```
 
-Local indexing:
+Navigation indexing:
 
 ```text
 worker -> parser -> navigation index -> document navigation ready
-```
-
-LightRAG upload:
-
-```text
-admin -> /admin/documents/upload -> local mirror record -> /documents/upload on LightRAG
 ```
 
 Query (HTTP shaped):
