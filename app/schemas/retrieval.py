@@ -24,6 +24,10 @@ class EvidenceResponse(BaseModel):
     page_start: int | None = None
     page_end: int | None = None
     section_title: str | None = None
+    source_path: str | None = None
+    document_title: str | None = None
+    chunk_id: str | None = None
+    reference_id: str | None = None
     metadata: dict = Field(default_factory=dict)
 
 

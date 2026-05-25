@@ -164,6 +164,16 @@ def test_removed_query_routes_return_404() -> None:
         assert client.post("/query/retrieve", headers=user_headers, json=payload).status_code == 404
 
 
+def test_retrieve_requires_authentication() -> None:
+    with TestClient(app) as client:
+        response = client.post(
+            "/retrieve",
+            json={"query": "where are installation steps", "mode": "navigation", "top_k": 3},
+        )
+
+    assert response.status_code == 401
+
+
 def test_lightrag_settings_default_to_remote_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("LIGHTRAG_ENABLED", raising=False)
     get_settings.cache_clear()
@@ -912,7 +922,12 @@ def test_retrieve_uses_remote_lightrag_when_enabled(monkeypatch: pytest.MonkeyPa
                 text=f"Remote context for {query}",
                 score=0.91,
                 page_ref=PageRef(document_id=UUID(document_id), page_start=2, page_end=3),
-                metadata={"source_path": "manual.pdf"},
+                metadata={
+                    "source_path": "manual.pdf",
+                    "document_title": "Service Manual",
+                    "chunk_id": "chunk-1",
+                    "reference_id": "ref-1",
+                },
             )
         ]
 
@@ -932,6 +947,10 @@ def test_retrieve_uses_remote_lightrag_when_enabled(monkeypatch: pytest.MonkeyPa
     body = response.json()
     assert body["evidence"][0]["source_engine"] == "lightrag"
     assert body["evidence"][0]["text"] == "Remote context for summarize remote context"
+    assert body["evidence"][0]["source_path"] == "manual.pdf"
+    assert body["evidence"][0]["document_title"] == "Service Manual"
+    assert body["evidence"][0]["chunk_id"] == "chunk-1"
+    assert body["evidence"][0]["reference_id"] == "ref-1"
 
 
 def test_admin_upload_queues_lightrag_ingestion_when_enabled(
@@ -1258,6 +1277,69 @@ def test_retrieve_uses_selected_lightrag_domain(monkeypatch: pytest.MonkeyPatch)
 
     assert response.status_code == 200
     assert seen_domains == ["fatigue"]
+
+
+def test_retrieve_empty_evidence_is_successful_empty_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LIGHTRAG_ENABLED", "true")
+    get_settings.cache_clear()
+
+    def fake_retrieve(self: LightRAGRemoteAdapter, **kwargs):
+        del self, kwargs
+        return []
+
+    monkeypatch.setattr(LightRAGRemoteAdapter, "retrieve", fake_retrieve)
+
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        response = client.post(
+            "/retrieve",
+            headers=user_headers,
+            json={"query": "missing evidence", "mode": "semantic", "include_assets": True},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["query"] == "missing evidence"
+    assert body["mode"] == "semantic"
+    assert body["evidence"] == []
+    assert body["assets"] == []
+    assert body["debug"] is None
+
+
+def test_retrieve_debug_is_admin_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LIGHTRAG_ENABLED", "true")
+    get_settings.cache_clear()
+
+    def fake_retrieve(self: LightRAGRemoteAdapter, **kwargs):
+        del self, kwargs
+        return []
+
+    monkeypatch.setattr(LightRAGRemoteAdapter, "retrieve", fake_retrieve)
+
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        admin_headers = _login(client, "admin@example.com")
+
+        user_response = client.post(
+            "/retrieve",
+            headers=user_headers,
+            json={"query": "debug details", "mode": "semantic", "include_debug": True},
+        )
+        admin_response = client.post(
+            "/retrieve",
+            headers=admin_headers,
+            json={"query": "debug details", "mode": "semantic", "include_debug": True},
+        )
+
+    assert user_response.status_code == 200
+    assert user_response.json()["debug"] is None
+    assert admin_response.status_code == 200
+    assert admin_response.json()["debug"] == {
+        "requested_mode": "semantic",
+        "selected_engine": "lightrag",
+    }
 
 
 def test_retrieve_rejects_document_ids_from_different_lightrag_domain(
