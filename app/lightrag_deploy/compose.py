@@ -5,6 +5,51 @@ from app.lightrag_deploy.paths import DomainPaths
 from app.lightrag_deploy.settings import LightRAGDeploySettings
 
 
+def _append_env(lines: list[str], key: str, value: object | None) -> None:
+    if value is None:
+        return
+    if isinstance(value, str) and not value.strip():
+        return
+    if isinstance(value, bool):
+        rendered = "true" if value else "false"
+    else:
+        rendered = str(value)
+    lines.append(f"{key}={rendered}")
+
+
+def _append_provider_env(lines: list[str], settings: LightRAGDeploySettings | None) -> None:
+    if settings is None:
+        return
+
+    lines.append("")
+    lines.append("# Model provider configuration")
+    _append_env(lines, "LLM_BINDING", settings.llm_binding)
+    _append_env(lines, "LLM_BINDING_HOST", settings.llm_binding_host)
+    _append_env(lines, "LLM_BINDING_API_KEY", settings.llm_binding_api_key)
+    _append_env(lines, "LLM_MODEL", settings.llm_model)
+    _append_env(lines, "KEYWORD_LLM_MODEL", settings.keyword_llm_model)
+    _append_env(lines, "QUERY_LLM_MODEL", settings.query_llm_model)
+    _append_env(lines, "VLM_LLM_MODEL", settings.vlm_llm_model)
+
+    lines.append("")
+    lines.append("# Embedding provider configuration")
+    _append_env(lines, "EMBEDDING_BINDING", settings.embedding_binding)
+    _append_env(lines, "EMBEDDING_BINDING_HOST", settings.embedding_binding_host)
+    _append_env(lines, "EMBEDDING_BINDING_API_KEY", settings.embedding_binding_api_key)
+    _append_env(lines, "EMBEDDING_MODEL", settings.embedding_model)
+    _append_env(lines, "EMBEDDING_DIM", settings.embedding_dim)
+    _append_env(lines, "EMBEDDING_TOKEN_LIMIT", settings.embedding_token_limit)
+    _append_env(lines, "EMBEDDING_SEND_DIM", settings.embedding_send_dim)
+    _append_env(lines, "EMBEDDING_USE_BASE64", settings.embedding_use_base64)
+
+    lines.append("")
+    lines.append("# OpenAI-compatible provider tuning")
+    _append_env(lines, "OPENAI_LLM_MAX_TOKENS", settings.openai_llm_max_tokens)
+    _append_env(lines, "OPENAI_LLM_MAX_COMPLETION_TOKENS", settings.openai_llm_max_completion_tokens)
+    _append_env(lines, "OPENAI_LLM_TEMPERATURE", settings.openai_llm_temperature)
+    _append_env(lines, "OPENAI_LLM_EXTRA_BODY", settings.openai_llm_extra_body)
+
+
 def write_domain_env(
     domain: LightRAGDomain,
     settings: LightRAGDeploySettings,
@@ -45,6 +90,7 @@ def render_domain_env(
                 "POSTGRES_VECTOR_INDEX_TYPE=HNSW",
             ]
         )
+    _append_provider_env(lines, settings)
     return "\n".join(lines) + "\n"
 
 

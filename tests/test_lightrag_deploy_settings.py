@@ -30,6 +30,25 @@ def test_env_example_declares_lightrag_deployment_settings() -> None:
         "LIGHTRAG_POSTGRES_DATABASE_PREFIX",
         "LIGHTRAG_POSTGRES_USER_PREFIX",
         "LIGHTRAG_POSTGRES_PASSWORD",
+        "LIGHTRAG_LLM_BINDING",
+        "LIGHTRAG_LLM_BINDING_HOST",
+        "LIGHTRAG_LLM_BINDING_API_KEY",
+        "LIGHTRAG_LLM_MODEL",
+        "LIGHTRAG_KEYWORD_LLM_MODEL",
+        "LIGHTRAG_QUERY_LLM_MODEL",
+        "LIGHTRAG_VLM_LLM_MODEL",
+        "LIGHTRAG_EMBEDDING_BINDING",
+        "LIGHTRAG_EMBEDDING_BINDING_HOST",
+        "LIGHTRAG_EMBEDDING_BINDING_API_KEY",
+        "LIGHTRAG_EMBEDDING_MODEL",
+        "LIGHTRAG_EMBEDDING_DIM",
+        "LIGHTRAG_EMBEDDING_TOKEN_LIMIT",
+        "LIGHTRAG_EMBEDDING_SEND_DIM",
+        "LIGHTRAG_EMBEDDING_USE_BASE64",
+        "LIGHTRAG_OPENAI_LLM_MAX_TOKENS",
+        "LIGHTRAG_OPENAI_LLM_MAX_COMPLETION_TOKENS",
+        "LIGHTRAG_OPENAI_LLM_TEMPERATURE",
+        "LIGHTRAG_OPENAI_LLM_EXTRA_BODY",
     ]:
         assert f"{key}=" in env_example
 
@@ -55,6 +74,25 @@ def test_settings_parse_lightrag_deployment_fields(tmp_path: Path) -> None:
         lightrag_postgres_database_prefix="lr",
         lightrag_postgres_user_prefix="lr_user",
         lightrag_postgres_password="secret",
+        lightrag_llm_binding="openai",
+        lightrag_llm_binding_host="https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1",
+        lightrag_llm_binding_api_key="bedrock-key",
+        lightrag_llm_model="openai.gpt-oss-20b-1:0",
+        lightrag_keyword_llm_model="keyword-model",
+        lightrag_query_llm_model="query-model",
+        lightrag_vlm_llm_model="vlm-model",
+        lightrag_embedding_binding="openai",
+        lightrag_embedding_binding_host="https://api.openai.com/v1",
+        lightrag_embedding_binding_api_key="openai-key",
+        lightrag_embedding_model="text-embedding-3-large",
+        lightrag_embedding_dim=3072,
+        lightrag_embedding_token_limit=8192,
+        lightrag_embedding_send_dim=False,
+        lightrag_embedding_use_base64=True,
+        lightrag_openai_llm_max_tokens=9000,
+        lightrag_openai_llm_max_completion_tokens=1200,
+        lightrag_openai_llm_temperature=0.2,
+        lightrag_openai_llm_extra_body='{"top_p":0.95}',
     )
 
     deploy = LightRAGDeploySettings.from_app_settings(settings)
@@ -68,6 +106,25 @@ def test_settings_parse_lightrag_deployment_fields(tmp_path: Path) -> None:
     assert deploy.postgres_host == "postgres"
     assert deploy.postgres_database_prefix == "lr"
     assert deploy.postgres_user_prefix == "lr_user"
+    assert deploy.llm_binding == "openai"
+    assert deploy.llm_binding_host == "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1"
+    assert deploy.llm_binding_api_key == "bedrock-key"
+    assert deploy.llm_model == "openai.gpt-oss-20b-1:0"
+    assert deploy.keyword_llm_model == "keyword-model"
+    assert deploy.query_llm_model == "query-model"
+    assert deploy.vlm_llm_model == "vlm-model"
+    assert deploy.embedding_binding == "openai"
+    assert deploy.embedding_binding_host == "https://api.openai.com/v1"
+    assert deploy.embedding_binding_api_key == "openai-key"
+    assert deploy.embedding_model == "text-embedding-3-large"
+    assert deploy.embedding_dim == 3072
+    assert deploy.embedding_token_limit == 8192
+    assert deploy.embedding_send_dim is False
+    assert deploy.embedding_use_base64 is True
+    assert deploy.openai_llm_max_tokens == 9000
+    assert deploy.openai_llm_max_completion_tokens == 1200
+    assert deploy.openai_llm_temperature == 0.2
+    assert deploy.openai_llm_extra_body == '{"top_p":0.95}'
 
 
 def test_domain_path_resolver_creates_expected_domain_tree(tmp_path: Path) -> None:

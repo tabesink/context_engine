@@ -87,6 +87,8 @@ LIGHTRAG_ENABLED=true
 
 Navigation processing uses the worker/job system. Remote LightRAG ingestion is started by a worker job, serialized per domain with a Redis lock, and tracked through mirrored metadata such as `lightrag.track_id`.
 
+When Docling is available for PDF parsing, ingestion normalizes label variants (for example `section-header`), falls back across provenance entries for page-number resolution, and maps detached caption blocks to nearby image/table assets when per-item caption APIs are empty. TOC refinement rejections now include validation details (accuracy, inferred offset, and section starts) in the persisted report warnings.
+
 ## LightRAG Domain Deployment Control
 
 Runtime LightRAG traffic remains HTTP-only through `LightRAGRemoteAdapter`. Deployment control is separate:
@@ -102,6 +104,15 @@ Admin API or TUI
 Deployment routes are disabled by default with `LIGHTRAG_DEPLOY_ENABLED=false`. When enabled, admins can create, list, show, regenerate, start, stop, recreate, archive, or explicitly permanently delete domains. Any authenticated user may call `GET /lightrag/domains` for a safe subset of domain metadata used to pick `lightrag_domain_id` on uploads and queries (admin mutating routes still require deploy mode on).
 
 Each managed domain lives under `.data/lightrag/domains/<domain>/`, gets one generated `domain.env`, and uses a LightRAG-owned PostgreSQL database such as `lightrag_manuals`. Domain removal archives data by default under `.data/lightrag/deleted/`.
+
+The generated `domain.env` now includes provider runtime wiring (when configured) for:
+
+- `LLM_BINDING`, `LLM_BINDING_HOST`, `LLM_BINDING_API_KEY`, `LLM_MODEL`
+- Optional `KEYWORD_LLM_MODEL`, `QUERY_LLM_MODEL`, `VLM_LLM_MODEL`
+- `EMBEDDING_BINDING`, `EMBEDDING_BINDING_HOST`, `EMBEDDING_BINDING_API_KEY`, `EMBEDDING_MODEL`, `EMBEDDING_DIM`, `EMBEDDING_TOKEN_LIMIT`, `EMBEDDING_SEND_DIM`, `EMBEDDING_USE_BASE64`
+- Optional `OPENAI_LLM_MAX_TOKENS`, `OPENAI_LLM_MAX_COMPLETION_TOKENS`, `OPENAI_LLM_TEMPERATURE`, `OPENAI_LLM_EXTRA_BODY`
+
+For Bedrock OpenAI-compatible routing, the supported pattern is LightRAG `openai` binding + Bedrock OpenAI-compatible host URL (`https://bedrock-runtime.<region>.amazonaws.com/openai/v1`). This preserves LightRAG's OpenAI binding surface while targeting Bedrock.
 
 ## LightRAG Graph Proxy
 
@@ -130,6 +141,12 @@ Docker Compose uses PostgreSQL, Redis, API, worker, and generated LightRAG domai
 All routes require authentication except health and login. Admin-only operations use a single `require_admin` dependency.
 
 V1 document read policy: every authenticated user may read/query ready, non-deleted documents. Document-level ACLs are deferred.
+
+Deployment secret boundaries:
+
+- `LIGHTRAG_API_KEY` (Context Engine -> LightRAG server auth) remains root app configuration and is not copied into manifests.
+- Provider keys from `LIGHTRAG_LLM_BINDING_API_KEY` / `LIGHTRAG_EMBEDDING_BINDING_API_KEY` are emitted only to generated per-domain `domain.env` files.
+- Domain manifest and generated compose output do not inline provider secrets; compose references `env_file` paths instead.
 
 ## Evidence Contract
 

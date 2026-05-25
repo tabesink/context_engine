@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -50,6 +51,24 @@ def _settings(tmp_path: Path, *, allow_permanent_delete: bool = False) -> LightR
     )
 
 
+def _settings_with_provider(tmp_path: Path) -> LightRAGDeploySettings:
+    return replace(
+        _settings(tmp_path),
+        llm_binding="openai",
+        llm_binding_host="https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1",
+        llm_binding_api_key="test-bedrock-key",
+        llm_model="openai.gpt-oss-20b-1:0",
+        embedding_binding="openai",
+        embedding_binding_host="https://api.openai.com/v1",
+        embedding_binding_api_key="test-openai-key",
+        embedding_model="text-embedding-3-large",
+        embedding_dim=3072,
+        embedding_token_limit=8192,
+        embedding_send_dim=False,
+        embedding_use_base64=True,
+    )
+
+
 def _service(tmp_path: Path, runner: FakeRunner | None = None) -> LightRAGDomainService:
     return LightRAGDomainService(
         settings=_settings(tmp_path),
@@ -97,6 +116,32 @@ def test_create_domain_renders_postgres_owned_lightrag_storage_without_manifest_
     assert "POSTGRES_PASSWORD=" in env_text
     assert "postgres_database" in manifest_text
     assert "POSTGRES_PASSWORD" not in manifest_text
+
+
+def test_create_domain_keeps_provider_keys_in_domain_env_only(tmp_path: Path) -> None:
+    settings = _settings_with_provider(tmp_path)
+    service = LightRAGDomainService(
+        settings=settings,
+        runner=FakeRunner(),
+        now=lambda: datetime(2026, 5, 18, 14, 30, tzinfo=UTC),
+    )
+
+    service.create_domain(LightRAGDomainCreateRequest(domain_id="manual-domain"))
+
+    env_text = (tmp_path / "lightrag/domains/manual-domain/domain.env").read_text(
+        encoding="utf-8"
+    )
+    manifest_text = (tmp_path / "lightrag/domains.json").read_text(encoding="utf-8")
+    compose_text = (tmp_path / "lightrag/docker-compose.lightrag-domains.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "LLM_BINDING_API_KEY=test-bedrock-key" in env_text
+    assert "EMBEDDING_BINDING_API_KEY=test-openai-key" in env_text
+    assert "test-bedrock-key" not in manifest_text
+    assert "test-openai-key" not in manifest_text
+    assert "test-bedrock-key" not in compose_text
+    assert "test-openai-key" not in compose_text
 
 
 def test_create_domain_auto_selects_next_available_port(tmp_path: Path) -> None:

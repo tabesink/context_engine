@@ -15,6 +15,12 @@ LightRAG is external and is the only semantic retrieval engine. Local navigation
 
 Admins can optionally manage same-machine LightRAG domain containers through Context Engine when `LIGHTRAG_DEPLOY_ENABLED=true`. That deployment control plane writes generated files under `.data/lightrag/`; runtime query/upload/graph traffic still goes through `LightRAGRemoteAdapter`.
 
+For model providers in managed domains:
+
+- Keep LightRAG bindings as `openai` unless you are explicitly changing bindings end-to-end.
+- Bedrock OpenAI-compatible mode is configured with `LIGHTRAG_LLM_BINDING=openai` and `LIGHTRAG_LLM_BINDING_HOST=https://bedrock-runtime.<region>.amazonaws.com/openai/v1`.
+- Do not confuse `LIGHTRAG_API_KEY` (Context Engine -> LightRAG auth) with `LIGHTRAG_LLM_BINDING_API_KEY` (LightRAG -> model provider auth).
+
 ## Read Files in This Order
 
 1. `docs/implementation-status.md`
@@ -59,6 +65,7 @@ Admins can optionally manage same-machine LightRAG domain containers through Con
 - `CredentialStore`: local session persistence for bearer tokens (`cli/credentials.py`).
 - `LightRAGRemoteAdapter`: HTTP boundary to an external LightRAG service.
 - `LightRAGDomainService`: admin control-plane service for generated domain env/manifest/compose files and Docker Compose lifecycle operations.
+- `LLM_BINDING*` / `EMBEDDING_BINDING*`: generated LightRAG runtime provider keys written to per-domain `domain.env` files.
 - `Admin`: user who can mutate documents and indexes.
 - `User`: authenticated user who can query ready documents.
 
@@ -114,6 +121,7 @@ user -> GET /lightrag/domains -> safe domain list for query/UI selection (same r
 - Retrieval engines and adapters should return `Evidence`, never raw external objects.
 - Keep LightRAG communication HTTP-only inside `app/integrations/lightrag_remote_adapter.py`.
 - Keep LightRAG deployment control inside `app/lightrag_deploy/`; TUI screens and CLI services must not call Docker directly.
+- Keep provider secrets out of manifests and API responses; provider keys should only exist in generated `domain.env` files.
 - Tests should call public APIs, the launcher/TUI helpers, adapters, or public services (`tests/` uses API tests plus targeted `test_cli_*` modules).
 - Do not add a new abstraction unless it hides real complexity.
 

@@ -100,6 +100,7 @@ Implemented:
 - Navigation index builder.
 - PageIndex-style adapter.
 - Structure and page endpoints.
+- Docling parser normalization for label variants and provenance fallback, plus detached-caption propagation to image/table asset metadata when item-level captions are missing.
 
 Current acceptance:
 
@@ -166,6 +167,9 @@ Current behavior:
 Implemented:
 
 - `LIGHTRAG_DEPLOY_*` settings and root `.env.example` documentation.
+- Provider passthrough settings for generated LightRAG runtime env files:
+  - Root config keys: `LIGHTRAG_LLM_*`, `LIGHTRAG_KEYWORD_LLM_MODEL`, `LIGHTRAG_QUERY_LLM_MODEL`, `LIGHTRAG_VLM_LLM_MODEL`, `LIGHTRAG_EMBEDDING_*`, and `LIGHTRAG_OPENAI_LLM_*`.
+  - Generated domain keys: `LLM_BINDING*`, `EMBEDDING_BINDING*`, and `OPENAI_LLM_*`.
 - `app/lightrag_deploy/` control-plane module for domain models, path resolution, manifest read/write, deterministic `domain.env` generation, compose generation, Docker Compose runner boundary, and lifecycle service.
 - Per-domain LightRAG PostgreSQL database/workspace metadata and generated domain env values for `PGKVStorage`, `PGDocStatusStorage`, `PGGraphStorage`, and `PGVectorStorage`.
 - Admin API routes under `/admin/lightrag/domains` implemented in `app/api/routes/lightrag_admin.py`.
@@ -179,9 +183,11 @@ Current behavior:
 - `GET /lightrag/domains` returns a safe field subset for any authenticated user whenever the manifest can be read (used to populate `lightrag_domain_id` selections).
 - Domains are stored under `.data/lightrag/domains/<domain>/`.
 - Each LightRAG domain uses a LightRAG-owned PostgreSQL database such as `lightrag_manuals`; manifests record non-secret metadata only.
+- Provider API keys are intentionally scoped to per-domain `domain.env` only; compose and manifest artifacts remain secret-free.
 - The generated compose file is `.data/lightrag/docker-compose.lightrag-domains.yml`.
 - Domain removal archives by default; permanent delete requires both explicit request and config opt-in.
 - Default tests use fake runners and temp directories, not live Docker or live LightRAG.
+- Bedrock OpenAI-compatible deployments are supported by keeping `LIGHTRAG_LLM_BINDING=openai` and targeting a Bedrock OpenAI-compatible host URL (`.../openai/v1`) instead of switching to a native Bedrock binding.
 
 ## Jobs, Worker, And Operations
 

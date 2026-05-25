@@ -1324,6 +1324,49 @@ def test_lightrag_domain_admin_api_create_list_and_operate(
     assert regenerate.json() == {"status": "ok"}
 
 
+def test_lightrag_admin_and_user_domain_responses_do_not_leak_provider_secrets(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    bedrock_key = "test-bedrock-key"
+    embedding_key = "test-openai-key"
+    monkeypatch.setenv("LIGHTRAG_DEPLOY_ENABLED", "true")
+    monkeypatch.setenv("LIGHTRAG_DEPLOY_ROOT", str(tmp_path / "lightrag"))
+    monkeypatch.setenv("LIGHTRAG_DOMAINS_ROOT", str(tmp_path / "lightrag/domains"))
+    monkeypatch.setenv("LIGHTRAG_DOMAINS_MANIFEST", str(tmp_path / "lightrag/domains.json"))
+    monkeypatch.setenv("LIGHTRAG_COMPOSE_FILE", str(tmp_path / "lightrag/compose.yml"))
+    monkeypatch.setenv("LIGHTRAG_DELETED_ROOT", str(tmp_path / "lightrag/deleted"))
+    monkeypatch.setenv("LIGHTRAG_LLM_BINDING_HOST", "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1")
+    monkeypatch.setenv("LIGHTRAG_LLM_BINDING_API_KEY", bedrock_key)
+    monkeypatch.setenv("LIGHTRAG_EMBEDDING_BINDING_HOST", "https://api.openai.com/v1")
+    monkeypatch.setenv("LIGHTRAG_EMBEDDING_BINDING_API_KEY", embedding_key)
+    get_settings.cache_clear()
+
+    with TestClient(app) as client:
+        _seed_users()
+        admin_headers = _login(client, "admin@example.com")
+        user_headers = _login(client, "user@example.com")
+        create = client.post(
+            "/admin/lightrag/domains",
+            headers=admin_headers,
+            json={"domain_id": "fatigue"},
+        )
+        admin_list = client.get("/admin/lightrag/domains", headers=admin_headers)
+        admin_detail = client.get("/admin/lightrag/domains/fatigue", headers=admin_headers)
+        user_list = client.get("/lightrag/domains", headers=user_headers)
+
+    assert create.status_code == 200
+    assert admin_list.status_code == 200
+    assert admin_detail.status_code == 200
+    assert user_list.status_code == 200
+    assert bedrock_key not in admin_list.text
+    assert embedding_key not in admin_list.text
+    assert bedrock_key not in admin_detail.text
+    assert embedding_key not in admin_detail.text
+    assert bedrock_key not in user_list.text
+    assert embedding_key not in user_list.text
+
+
 def test_lightrag_domain_user_safe_list_hides_paths_and_container_details(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
