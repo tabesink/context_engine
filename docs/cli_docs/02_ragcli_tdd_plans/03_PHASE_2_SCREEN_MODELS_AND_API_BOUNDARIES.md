@@ -163,7 +163,7 @@ test_build_admin_documents_screen_contains_admin_actions
 Assert:
 
 - api_group is `admin`
-- actions include upload/index/reindex/delete
+- actions include upload/reingest/refresh-status/delete
 - no authorization decision is made locally
 
 ---

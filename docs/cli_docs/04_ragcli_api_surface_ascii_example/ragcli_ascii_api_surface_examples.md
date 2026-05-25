@@ -778,7 +778,7 @@ Upload result:
 
 Next:
   context-engine jobs status --job-id job_456
-  context-engine admin documents index --document-id doc_123
+  context-engine admin documents reingest --document-id doc_123
 ```
 
 Example human output when LightRAG forwarding is enabled:
@@ -829,32 +829,32 @@ ADMIN DOCUMENTS
 +---------+----------------------+----------+-------------+------------+
 
 Admin actions:
-  context-engine admin documents index --document-id doc_789
-  context-engine admin documents reindex --document-id doc_123
+  context-engine admin documents reingest --document-id doc_789
+  context-engine admin documents refresh-status --document-id doc_123
   context-engine admin documents delete --document-id doc_789
 ```
 
 ---
 
-## 4.3 Admin Documents Index
+## 4.3 Admin Documents Reingest
 
 Command:
 
 ```bash
-context-engine admin documents index --document-id doc_123
+context-engine admin documents reingest --document-id doc_123
 ```
 
 Example human output:
 
 ```text
-ADMIN DOCUMENT INDEX
+ADMIN DOCUMENT REINGEST
 
 Request:
 +----------------+----------------------------+
 | Field          | Value                      |
 +----------------+----------------------------+
 | Document ID    | doc_123                    |
-| Action         | index                      |
+| Action         | reingest                      |
 +----------------+----------------------------+
 
 Result:
@@ -871,25 +871,25 @@ Next:
 
 ---
 
-## 4.4 Admin Documents Reindex
+## 4.4 Admin Documents Refresh Status
 
 Command:
 
 ```bash
-context-engine admin documents reindex --document-id doc_123
+context-engine admin documents refresh-status --document-id doc_123
 ```
 
 Example human output:
 
 ```text
-ADMIN DOCUMENT REINDEX
+ADMIN DOCUMENT REFRESH STATUS
 
 Request:
 +----------------+----------------------------+
 | Field          | Value                      |
 +----------------+----------------------------+
 | Document ID    | doc_123                    |
-| Action         | reindex                    |
+| Action         | refresh-status                    |
 +----------------+----------------------------+
 
 Result:
@@ -1012,7 +1012,7 @@ AUDIT LOGS
 | Time                | User              | Action               | Status   |
 +---------------------+-------------------+----------------------+----------+
 | 2026-05-14 10:41:22 | admin@example.com | document.upload      | success  |
-| 2026-05-14 10:43:10 | admin@example.com | document.reindex     | accepted |
+| 2026-05-14 10:43:10 | admin@example.com | document.refresh_status     | accepted |
 | 2026-05-14 10:44:02 | user@example.com  | admin.documents.list | denied   |
 +---------------------+-------------------+----------------------+----------+
 
@@ -1067,8 +1067,8 @@ JOBS
 +---------+----------------+----------+----------+---------------------+
 | Job ID  | Type           | Status   | Document | Updated             |
 +---------+----------------+----------+----------+---------------------+
-| job_456 | index_document | running  | doc_123  | 2026-05-14 10:50:02 |
-| job_789 | reindex        | failed   | doc_789  | 2026-05-14 10:44:19 |
+| job_456 | document_ingest | running  | doc_123  | 2026-05-14 10:50:02 |
+| job_789 | refresh-status        | failed   | doc_789  | 2026-05-14 10:44:19 |
 | job_321 | upload_parse   | complete | doc_456  | 2026-05-14 09:30:10 |
 +---------+----------------+----------+----------+---------------------+
 
@@ -1096,7 +1096,7 @@ JOB STATUS
 | Field          | Value                      |
 +----------------+----------------------------+
 | Job ID         | job_789                    |
-| Type           | reindex                    |
+| Type           | refresh-status                    |
 | Status         | failed                     |
 | Document ID    | doc_789                    |
 | Created        | 2026-05-14 10:40:00        |

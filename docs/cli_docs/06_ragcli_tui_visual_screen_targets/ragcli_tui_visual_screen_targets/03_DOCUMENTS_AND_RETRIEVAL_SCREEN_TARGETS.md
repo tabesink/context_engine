@@ -98,7 +98,7 @@ bed_manual.pdf
 > View structure
   Open page
   Retrieve from this document
-  Reindex document
+  Refresh status
   Delete document
   Back
 

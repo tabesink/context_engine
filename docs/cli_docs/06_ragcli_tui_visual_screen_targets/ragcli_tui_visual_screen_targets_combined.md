@@ -590,7 +590,7 @@ bed_manual.pdf
 > View structure
   Open page
   Retrieve from this document
-  Reindex document
+  Refresh status
   Delete document
   Back
 
@@ -697,7 +697,7 @@ JOBS / STATUS
 | Field       | Value                                |
 +-------------+--------------------------------------+
 | Job ID      | b40dc5e9...9f80ec50de48              |
-| Type        | index_document                       |
+| Type        | document_ingest                       |
 | Status      | running                              |
 | Document ID | 54d1d557...b7308d2905                |
 | Started     | 2026-05-14 20:41                     |
@@ -725,7 +725,7 @@ JOBS / STATUS
 | Field       | Value                                |
 +-------------+--------------------------------------+
 | Job ID      | b40dc5e9...9f80ec50de48              |
-| Type        | index_document                       |
+| Type        | document_ingest                       |
 | Status      | failed                               |
 | Document ID | 54d1d557...b7308d2905                |
 +-------------+--------------------------------------+

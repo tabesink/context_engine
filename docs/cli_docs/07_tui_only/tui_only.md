@@ -295,7 +295,7 @@ Retrieval
 Admin documents
 - list all documents
 - upload document
-- index/reindex document
+- reingest/refresh-status document
 - delete document
 
 Jobs
@@ -423,7 +423,7 @@ Error message area
 │                                                              │
 │  [1] List all documents        GET    /admin/documents       │
 │  [2] Upload document           POST   /admin/documents/upload│
-│  [3] Index document            POST   /admin/documents/{id}/index│
+│  [3] Reingest document            POST   /admin/documents/{id}/reingest│
 │  [4] Delete document           DELETE /admin/documents/{id}  │
 │                                                              │
 ├──────────────────────────────────────────────────────────────┤

@@ -55,22 +55,6 @@ class Document:
 
 
 @dataclass(frozen=True)
-class Page:
-    number: int
-    text: str
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
-class ParsedDocument:
-    document_id: UUID
-    title: str
-    pages: list[Page]
-    full_text: str
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
 class PageRef:
     document_id: UUID
     page_start: int | None = None

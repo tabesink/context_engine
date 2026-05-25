@@ -1,6 +1,5 @@
 from pathlib import Path
 from hashlib import sha256
-from uuid import UUID
 
 from PIL import Image
 
@@ -18,7 +17,7 @@ from app.document_processing.models import (
     DocumentSection,
     DocumentStructure,
 )
-from app.document_processing.pipeline import ParsedDocumentFromStructureAdapter, TextDoclingParser
+from app.document_processing.pipeline import TextDoclingParser
 from app.document_processing.storage_paths import DocumentStoragePaths
 
 
@@ -220,19 +219,18 @@ class FakeFallbackPageConverter:
         return FakeFallbackPageConversionResult()
 
 
-def test_text_docling_parser_builds_structure_that_adapts_to_parsed_document(tmp_path: Path) -> None:
+def test_text_docling_parser_builds_rich_document_structure(tmp_path: Path) -> None:
     source = tmp_path / "manual.txt"
     source.write_text("# Safety\nWear eye protection.\n\n# Service\nDisconnect power.", encoding="utf-8")
     parser = TextDoclingParser()
 
     structure = parser.parse(document_id="11111111-1111-4111-8111-111111111111", source_path=source)
-    parsed = ParsedDocumentFromStructureAdapter().to_parsed_document(structure)
 
     assert [section.title for section in structure.sections] == ["Safety", "Service"]
     assert structure.source_chunks[0].section_id == structure.sections[0].section_id
-    assert parsed.document_id == UUID("11111111-1111-4111-8111-111111111111")
-    assert parsed.pages[0].text.startswith("Safety")
-    assert "Disconnect power." in parsed.full_text
+    assert structure.pages[0].page_number == 1
+    assert structure.pages[0].text.startswith("Safety")
+    assert "Disconnect power." in structure.pages[0].text
 
 
 def test_document_structure_builder_extracts_assets_and_thumbnails(tmp_path: Path) -> None:

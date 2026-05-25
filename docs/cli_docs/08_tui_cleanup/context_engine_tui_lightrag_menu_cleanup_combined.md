@@ -111,7 +111,7 @@ Documents
   └── Admin Actions        # visible only for admins
         ├── Upload Document
         ├── List All Documents
-        ├── Index / Reindex
+        ├── Reingest / Refresh Status
         └── Delete Document
 ```
 
@@ -228,7 +228,7 @@ DOCUMENTS > ADMIN ACTIONS
 
 > Upload Document
   List All Documents
-  Index / Reindex Document
+  Reingest / Refresh Status Document
   Delete Document
   Back
 ```
@@ -395,8 +395,8 @@ This is the normal document library.
 ```text
 GET    /admin/documents
 POST   /admin/documents/upload
-POST   /admin/documents/{id}/index
-POST   /admin/documents/{id}/reindex
+POST   /admin/documents/{id}/reingest
+POST   /admin/documents/{id}/refresh-status
 DELETE /admin/documents/{id}
 ```
 
@@ -404,7 +404,7 @@ Purpose:
 
 - admins upload documents
 - admins list all documents, not only ready documents
-- admins index/reindex
+- admins reingest/refresh-status
 - admins delete/soft-delete
 - admins see failed/indexing/deleted states
 
@@ -438,7 +438,8 @@ Documents
   └── Admin Actions                -> admin-only
         ├── Upload                 -> POST /admin/documents/upload
         ├── List All               -> GET /admin/documents
-        ├── Index / Reindex        -> POST /admin/documents/{id}/index or /reindex
+        ├── Reingest               -> POST /admin/documents/{id}/reingest
+        ├── Refresh Status         -> POST /admin/documents/{id}/refresh-status
         └── Delete                 -> DELETE /admin/documents/{id}
 ```
 
@@ -868,7 +869,7 @@ Potential future simplifications:
 | Current | Future |
 |---|---|
 | `/query/answer` + `/query` | Keep one public answer endpoint |
-| `/admin/documents/{id}/index` + `/reindex` | `POST /admin/documents/{id}/index-jobs` |
+| `/admin/documents/{id}/reingest` + `/refresh-status` | `POST /admin/documents/{id}/reingest` |
 | `/graph/label/list`, `/popular`, `/search` | `GET /graph/labels?q=&sort=&limit=` |
 | `/admin/documents` + `/documents` | maybe `GET /documents?scope=all`, admin-only |
 
@@ -1011,7 +1012,7 @@ Documents
   └── Admin Actions
         ├── Upload Document
         ├── List All Documents
-        ├── Index / Reindex Document
+        ├── Reingest / Refresh Status Document
         └── Delete Document
 ```
 
@@ -1024,8 +1025,8 @@ GET /documents/{id}/structure
 GET /documents/{id}/pages/{page}
 POST /admin/documents/upload
 GET /admin/documents
-POST /admin/documents/{id}/index
-POST /admin/documents/{id}/reindex
+POST /admin/documents/{id}/reingest
+POST /admin/documents/{id}/refresh-status
 DELETE /admin/documents/{id}
 ```
 

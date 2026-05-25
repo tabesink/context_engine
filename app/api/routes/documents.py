@@ -118,11 +118,20 @@ def get_ingestion_status(
         document_id=document_id,
     )
     metadata = document.meta if isinstance(document.meta, dict) else {}
+    structure = DocumentProcessingRepository(session).get_structure(
+        document_id,
+        source_file=document.storage_path,
+    )
     return {
         "document_id": document.id,
         "status": document.status,
         "lightrag": metadata.get("lightrag") or {},
-        "navigation": metadata.get("navigation") or {},
+        "structure": {
+            "has_pages": bool(structure and structure.pages),
+            "has_sections": bool(structure and structure.sections),
+            "has_chunks": bool(structure and structure.source_chunks),
+            "has_assets": bool(structure and structure.assets),
+        },
         "error_message": document.error_message,
     }
 

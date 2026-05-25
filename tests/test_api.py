@@ -537,7 +537,6 @@ def test_user_can_list_document_chunks_assets_and_ingestion_status() -> None:
             storage_path=".data/uploads/manual.txt",
             metadata={
                 "lightrag": {"domain_id": "fatigue", "status": "ready", "track_id": "track-1"},
-                "navigation": {"status": "ready"},
             },
             status=DocumentStatus.READY,
         )
@@ -547,10 +546,20 @@ def test_user_can_list_document_chunks_assets_and_ingestion_status() -> None:
             DocumentStructure(
                 document_id=document.id,
                 source_file=document.storage_path,
+                pages=[DocumentPage(page_number=1, text="Page one content")],
+                sections=[
+                    DocumentSection(
+                        section_id=f"{document.id}-sec-1",
+                        document_id=document.id,
+                        title="Safety",
+                        level=1,
+                    )
+                ],
                 source_chunks=[
                     SourceChunk(
                         chunk_id=chunk_id,
                         document_id=document.id,
+                        section_id=f"{document.id}-sec-1",
                         block_ids=[f"{document.id}-block-1"],
                         text="See figure.",
                         asset_ids=[asset_id],
@@ -583,7 +592,13 @@ def test_user_can_list_document_chunks_assets_and_ingestion_status() -> None:
     assert assets.json()[0]["asset_id"] == asset_id
     assert status.status_code == 200
     assert status.json()["lightrag"]["track_id"] == "track-1"
-    assert status.json()["navigation"]["status"] == "ready"
+    assert status.json()["structure"] == {
+        "has_pages": True,
+        "has_sections": True,
+        "has_chunks": True,
+        "has_assets": True,
+    }
+    assert "navigation" not in status.json()
 
 
 def test_source_section_route_hides_missing_and_non_ready_documents() -> None:

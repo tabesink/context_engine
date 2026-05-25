@@ -134,7 +134,7 @@ Documents
   └── Admin Actions
         ├── Upload Document
         ├── List All Documents
-        ├── Index / Reindex Document
+        ├── Reingest / Refresh Status Document
         └── Delete Document
 ```
 
@@ -147,8 +147,8 @@ GET /documents/{id}/structure
 GET /documents/{id}/pages/{page}
 POST /admin/documents/upload
 GET /admin/documents
-POST /admin/documents/{id}/index
-POST /admin/documents/{id}/reindex
+POST /admin/documents/{id}/reingest
+POST /admin/documents/{id}/refresh-status
 DELETE /admin/documents/{id}
 ```
 

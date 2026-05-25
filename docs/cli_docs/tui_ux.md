@@ -41,7 +41,7 @@ Session: saved
 - Graphs screens consume backend proxy JSON only—no direct LightRAG SDK.
 - LightRAG Domains lists configured domains and exposes nested admin lifecycle actions (create/show/start/stop/recreate/regenerate/archive/permanent delete).
 - Recreate and remove flows require typed confirmations; permanent delete is explicit and depends on backend configuration.
-- Documents admin actions (upload/list/index/reindex/delete) call existing `/admin/documents` routes from inside the Documents area.
+- Documents admin actions (upload/list/reingest/refresh-status/delete) call existing `/admin/documents` routes from inside the Documents area.
 - Observability stays read-through of backend payloads.
 - Backend gaps are documented in `docs/cli_docs/backend_gaps.md`; they are not exposed as a root TUI screen.
 

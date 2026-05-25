@@ -80,7 +80,7 @@ DOCUMENTS > ADMIN ACTIONS
 
 > Upload Document
   List All Documents
-  Index / Reindex Document
+  Reingest / Refresh Status Document
   Delete Document
   Back
 ```

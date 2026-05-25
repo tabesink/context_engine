@@ -55,7 +55,7 @@ Documents
   └── Admin Actions
         ├── Upload Document
         ├── List All Documents
-        ├── Index / Reindex
+        ├── Reingest / Refresh Status
         └── Delete Document
 
 LightRAG Domains

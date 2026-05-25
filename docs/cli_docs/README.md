@@ -45,7 +45,7 @@ Rough map to menus in the UI (exact labels follow `cli/tui/`):
 
 - Session: stored session summary · `GET /auth/me`
 - Documents: browse document library, structure/page views
-- Documents Admin Actions: nested under Documents for admin users (upload/list/index/reindex/delete)
+- Documents Admin Actions: nested under Documents for admin users (upload/list/reingest/refresh-status/delete)
 - Retrieval: `POST /retrieve` only
 - Graphs: graph/label summaries via backend proxies when configured
 - LightRAG Domains: admin lifecycle screens for list, create, start, stop, recreate, archive remove, and permanent delete

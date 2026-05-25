@@ -819,8 +819,8 @@ Options:
 
 ```text
 Upload
-Index
-Reindex
+Reingest
+Refresh status
 Delete
 Back
 ```

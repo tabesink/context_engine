@@ -20,8 +20,11 @@ def build_admin_documents_screen(documents: list[dict[str, Any]]) -> ScreenResul
         ],
         actions=[
             ScreenAction("Upload", "context-engine admin documents upload --file <path>"),
-            ScreenAction("Index", "context-engine admin documents index --document-id <id>"),
-            ScreenAction("Reindex", "context-engine admin documents reindex --document-id <id>"),
+            ScreenAction("Reingest", "context-engine admin documents reingest --document-id <id>"),
+            ScreenAction(
+                "Refresh status",
+                "context-engine admin documents refresh-status --document-id <id>",
+            ),
             ScreenAction("Delete", "context-engine admin documents delete --document-id <id>"),
         ],
         raw=documents,

@@ -53,8 +53,8 @@ Companion to [`ragcli_ascii_api_surface_examples.md`](ragcli_ascii_api_surface_e
 |---|-------------------|------------------------|--------|
 | 4.1 | `context-engine admin documents upload --file …` | Upload → queued LightRAG ingestion plus optional navigation processing | [L751](ragcli_ascii_api_surface_examples.md#L751) |
 | 4.2 | `context-engine admin documents list` | Admin listing with index backend column | [L808](ragcli_ascii_api_surface_examples.md#L808) |
-| 4.3 | `context-engine admin documents index --document-id …` | Index job accepted + job id | [L837](ragcli_ascii_api_surface_examples.md#L837) |
-| 4.4 | `context-engine admin documents reindex --document-id …` | Reindex job accepted | [L872](ragcli_ascii_api_surface_examples.md#L872) |
+| 4.3 | `context-engine admin documents reingest --document-id …` | Reingest job accepted + job id | [L837](ragcli_ascii_api_surface_examples.md#L837) |
+| 4.4 | `context-engine admin documents refresh-status --document-id …` | LightRAG status refreshed | [L872](ragcli_ascii_api_surface_examples.md#L872) |
 | 4.5 | `context-engine admin documents delete --document-id …` | Hard delete confirmation block | [L907](ragcli_ascii_api_surface_examples.md#L907) |
 | 4.6 | `context-engine admin documents list` (as non-admin) | **403 forbidden**; no client-side admin guessing | [L935](ragcli_ascii_api_surface_examples.md#L935) |
 | 4.7 | `context-engine admin corpus publish` | **Backend gap**; suggests `POST /admin/corpus/publish` (also rollback/cleanup) | [L961](ragcli_ascii_api_surface_examples.md#L961) |
@@ -122,7 +122,7 @@ Reserved capability labels that must return **`not_supported_by_backend`** until
 
 Sorted by primary subcommand for quick scanning.
 
-`admin audit-logs list` → [§5.1](ragcli_ascii_api_surface_examples.md#L994) · `admin corpus publish` → [§4.7](ragcli_ascii_api_surface_examples.md#L961) · `admin documents delete` → [§4.5](ragcli_ascii_api_surface_examples.md#L907) · `admin documents index` → [§4.3](ragcli_ascii_api_surface_examples.md#L837) · `admin documents list` → [§4.2](ragcli_ascii_api_surface_examples.md#L808) · `admin documents reindex` → [§4.4](ragcli_ascii_api_surface_examples.md#L872) · `admin documents upload` → [§4.1](ragcli_ascii_api_surface_examples.md#L751) · `admin query-logs list` → [§5.2](ragcli_ascii_api_surface_examples.md#L1023)
+`admin audit-logs list` → [§5.1](ragcli_ascii_api_surface_examples.md#L994) · `admin corpus publish` → [§4.7](ragcli_ascii_api_surface_examples.md#L961) · `admin documents delete` → [§4.5](ragcli_ascii_api_surface_examples.md#L907) · `admin documents reingest` → [§4.3](ragcli_ascii_api_surface_examples.md#L837) · `admin documents list` → [§4.2](ragcli_ascii_api_surface_examples.md#L808) · `admin documents refresh-status` → [§4.4](ragcli_ascii_api_surface_examples.md#L872) · `admin documents upload` → [§4.1](ragcli_ascii_api_surface_examples.md#L751) · `admin query-logs list` → [§5.2](ragcli_ascii_api_surface_examples.md#L1023)
 
 `agents list` → [§7.4](ragcli_ascii_api_surface_examples.md#L1252)
 

@@ -27,8 +27,8 @@ This is the normal document library.
 ```text
 GET    /admin/documents
 POST   /admin/documents/upload
-POST   /admin/documents/{id}/index
-POST   /admin/documents/{id}/reindex
+POST   /admin/documents/{id}/reingest
+POST   /admin/documents/{id}/refresh-status
 DELETE /admin/documents/{id}
 ```
 
@@ -36,7 +36,7 @@ Purpose:
 
 - admins upload documents
 - admins list all documents, not only ready documents
-- admins index/reindex
+- admins reingest/refresh-status
 - admins delete/soft-delete
 - admins see failed/indexing/deleted states
 
@@ -70,7 +70,8 @@ Documents
   └── Admin Actions                -> admin-only
         ├── Upload                 -> POST /admin/documents/upload
         ├── List All               -> GET /admin/documents
-        ├── Index / Reindex        -> POST /admin/documents/{id}/index or /reindex
+        ├── Reingest               -> POST /admin/documents/{id}/reingest
+        ├── Refresh Status         -> POST /admin/documents/{id}/refresh-status
         └── Delete                 -> DELETE /admin/documents/{id}
 ```
 

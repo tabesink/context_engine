@@ -134,6 +134,6 @@ Potential future simplifications:
 | Current | Future |
 |---|---|
 | `/query/answer` + `/query` | Keep one public answer endpoint |
-| `/admin/documents/{id}/index` + `/reindex` | `POST /admin/documents/{id}/index-jobs` |
+| `/admin/documents/{id}/reingest` + `/refresh-status` | `POST /admin/documents/{id}/reingest` |
 | `/graph/label/list`, `/popular`, `/search` | `GET /graph/labels?q=&sort=&limit=` |
 | `/admin/documents` + `/documents` | maybe `GET /documents?scope=all`, admin-only |

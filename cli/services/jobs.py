@@ -1,4 +1,4 @@
-"""Index job route wrappers."""
+"""Job route wrappers."""
 
 from __future__ import annotations
 

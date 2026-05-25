@@ -111,7 +111,7 @@ Documents
   └── Admin Actions        # visible only for admins
         ├── Upload Document
         ├── List All Documents
-        ├── Index / Reindex
+        ├── Reingest / Refresh Status
         └── Delete Document
 ```
 

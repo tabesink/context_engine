@@ -1,5 +1,4 @@
 from pathlib import Path
-from uuid import UUID
 
 from app.document_processing.models import (
     DocumentBlock,
@@ -9,7 +8,6 @@ from app.document_processing.models import (
     SourceChunk,
     StructureQuality,
 )
-from app.domain.models import Page, ParsedDocument
 
 
 class TextDoclingParser:
@@ -86,18 +84,3 @@ class TextDoclingParser:
             ),
         )
 
-
-class ParsedDocumentFromStructureAdapter:
-    def to_parsed_document(self, structure: DocumentStructure) -> ParsedDocument:
-        title = structure.sections[0].title if structure.sections else Path(structure.source_file).name
-        pages = [
-            Page(number=page.page_number, text=page.text or "", metadata={"source": "document_structure"})
-            for page in structure.pages
-        ]
-        return ParsedDocument(
-            document_id=UUID(structure.document_id),
-            title=title,
-            pages=pages,
-            full_text="\n".join(page.text for page in pages),
-            metadata={"source": "document_structure", "parser": structure.parser},
-        )

@@ -66,7 +66,7 @@ cli/
   flows/
     retrieval_compare.py
     upload_document.py
-    reindex_document.py
+    refresh_status_document.py
 
   tui/
     app.py

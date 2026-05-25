@@ -27,8 +27,8 @@ lightrag labels search
 lightrag graphs show
 admin documents upload
 admin documents list
-admin documents index
-admin documents reindex
+admin documents reingest
+admin documents refresh-status
 admin documents delete
 admin audit-logs list
 admin query-logs list

@@ -581,8 +581,8 @@ GET /documents/{document_id}/pages/{page_number}
 ```text
 > Upload document
   List all documents
-  Index selected
-  Reindex selected
+  Reingest selected
+  Refresh status selected
   Delete selected
   Back
 ```
@@ -763,8 +763,8 @@ Do not expose secrets.
 +------------+----------------+----------+------------+------------+
 | job_id     | kind           | status   | document   | updated    |
 +------------+----------------+----------+------------+------------+
-| job_77b... | index_document | running  | doc_01f... | 13:25      |
-| job_88c... | index_document | failed   | doc_05b... | 13:35      |
+| job_77b... | document_ingest | running  | doc_01f... | 13:25      |
+| job_88c... | document_ingest | failed   | doc_05b... | 13:35      |
 +------------+----------------+----------+------------+------------+
 ```
 
