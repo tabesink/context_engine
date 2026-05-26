@@ -30,11 +30,23 @@ class DocumentRow(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     owner_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    lightrag_domain_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     filename: Mapped[str] = mapped_column(String(512))
     content_type: Mapped[str] = mapped_column(String(255))
     storage_path: Mapped[str] = mapped_column(String(1024))
     status: Mapped[str] = mapped_column(String(32), default=DocumentStatus.UPLOADED.value)
     active_index_version: Mapped[int] = mapped_column(Integer, default=0)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    meta: Mapped[dict] = mapped_column("metadata", json_type(), default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class LightRAGDomainLifecycleRow(Base):
+    __tablename__ = "lightrag_domain_lifecycle"
+
+    domain_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    state: Mapped[str] = mapped_column(String(32), default="active", index=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     meta: Mapped[dict] = mapped_column("metadata", json_type(), default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)

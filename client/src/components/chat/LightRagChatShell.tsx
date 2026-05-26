@@ -119,7 +119,7 @@ export function LightRagChatShell() {
       const activity: ActivityEntry = {
         id: activityId,
         label: "Query started",
-        detail: `Retrieving ${settingsForTurn.mode} context from LightRAG port ${settingsForTurn.lightrag_port ?? "default"}.`,
+        detail: `Retrieving ${settingsForTurn.mode} context from Knowledge Graph port ${settingsForTurn.lightrag_port ?? "default"}.`,
         createdAt: Date.now(),
         status: "pending",
       };
@@ -230,7 +230,7 @@ export function LightRagChatShell() {
         );
         setStatus("idle");
       } catch (error) {
-        const message = error instanceof Error ? error.message : "LightRAG query failed.";
+        const message = error instanceof Error ? error.message : "Knowledge Graph query failed.";
         setLastError(message);
         setStatus("error");
         setMessages((current) =>
@@ -303,10 +303,10 @@ export function LightRagChatShell() {
           onAssistantSelect={setSelectedAssistantMessageId}
           emptyState={
             <div className="mx-auto flex max-w-lg flex-col items-center gap-3 px-4 text-center">
-              <Image src="/logo.svg" alt="LightRAG" width={112} height={112} priority className="h-28 w-28 text-[var(--foreground)]" />
-              <p className="text-2xl font-medium tracking-tight text-[var(--foreground)]">Ask a local knowledge base.</p>
+              <Image src="/logo.svg" alt="Knowledge Graph" width={112} height={112} priority className="h-28 w-28 text-[var(--foreground)]" />
+              <p className="text-2xl font-medium tracking-tight text-[var(--foreground)]">Ask your knowledge graph.</p>
               <p className="text-sm leading-6 text-[var(--muted-foreground)]">
-                Use the retrieval settings button in the composer to choose a knowledgebase, then ask a plain-language question.
+                Use the retrieval settings button in the composer to choose a knowledge graph domain, then ask a plain-language question.
               </p>
               <button
                 type="button"
@@ -314,7 +314,7 @@ export function LightRagChatShell() {
                 disabled={busy}
                 className="mt-1 rounded-full bg-[var(--muted)] px-4 py-2 text-sm text-[var(--foreground)] transition-colors hover:bg-[var(--secondary)] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Summarize this knowledge base
+                Summarize this knowledge graph
               </button>
             </div>
           }
@@ -331,7 +331,7 @@ export function LightRagChatShell() {
               onSubmit={submit}
               disabled={busy}
               busy={busy}
-              placeholder="Ask LightRAG"
+              placeholder="Ask Knowledge Graph"
               retrievalSettings={effectiveRetrievalSettings}
               onRetrievalSettingsChange={handleRetrievalSettingsChange}
               lightragDomains={lightragDomains}

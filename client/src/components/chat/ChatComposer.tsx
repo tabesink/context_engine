@@ -22,7 +22,7 @@ const MAX_HEIGHT_PX = 220;
 export function ChatComposer({
   disabled,
   busy,
-  placeholder = "Ask LightRAG",
+  placeholder = "Ask Knowledge Graph",
   onSubmit,
   retrievalSettings,
   onRetrievalSettingsChange,
@@ -90,7 +90,7 @@ export function ChatComposer({
           onClick={() => void send()}
           disabled={disabled || !value.trim()}
           className="inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-[var(--primary)] text-[var(--primary-foreground)] transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-30"
-          aria-label={busy ? "LightRAG is busy" : "Send message"}
+          aria-label={busy ? "Knowledge Graph is busy" : "Send message"}
         >
           <ArrowUp className="size-4" aria-hidden />
         </button>

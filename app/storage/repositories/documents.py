@@ -1,4 +1,4 @@
-from sqlalchemy import or_, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
 from app.domain.models import DocumentStatus, utc_now
@@ -16,6 +16,7 @@ class DocumentRepository:
         self,
         *,
         owner_id: str | None,
+        lightrag_domain_id: str | None = None,
         filename: str,
         content_type: str,
         storage_path: str,
@@ -24,6 +25,7 @@ class DocumentRepository:
     ) -> DocumentRow:
         document = DocumentRow(
             owner_id=owner_id,
+            lightrag_domain_id=lightrag_domain_id,
             filename=filename,
             content_type=content_type,
             storage_path=storage_path,
@@ -63,6 +65,24 @@ class DocumentRepository:
                 .where(
                     DocumentRow.status == DocumentStatus.READY.value,
                     or_(
+                        DocumentRow.lightrag_domain_id == domain_id,
+                        lightrag_domain_id == domain_id,
+                        legacy_lightrag_domain == domain_id,
+                    ),
+                )
+                .order_by(DocumentRow.created_at.desc())
+            )
+        )
+
+    def list_all_by_lightrag_domain(self, domain_id: str) -> list[DocumentRow]:
+        lightrag_domain_id = DocumentRow.meta["lightrag"]["domain_id"].as_string()
+        legacy_lightrag_domain = DocumentRow.meta["lightrag"]["domain"].as_string()
+        return list(
+            self.session.scalars(
+                select(DocumentRow)
+                .where(
+                    or_(
+                        DocumentRow.lightrag_domain_id == domain_id,
                         lightrag_domain_id == domain_id,
                         legacy_lightrag_domain == domain_id,
                     ),
@@ -113,6 +133,13 @@ class DocumentRepository:
 
     def mark_deleted(self, document: DocumentRow) -> DocumentRow:
         return self.update_status(document, DocumentStatus.DELETED)
+
+    def hard_delete_by_ids(self, document_ids: list[str]) -> int:
+        if not document_ids:
+            return 0
+        result = self.session.execute(delete(DocumentRow).where(DocumentRow.id.in_(document_ids)))
+        self.session.commit()
+        return int(result.rowcount or 0)
 
     def audit(self, *, actor_id: str | None, event: str, target_id: str | None, metadata: dict) -> None:
         self.session.add(

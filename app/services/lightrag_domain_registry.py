@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from app.core.config import Settings, get_settings
+from app.services.lightrag_domain_lifecycle_service import LightRAGDomainLifecycleService
 
 
 UNAVAILABLE_STATUSES = {"stopped", "unhealthy", "archived", "error"}
@@ -57,21 +58,29 @@ class LightRAGDomainRegistry:
         *,
         settings: Settings | None = None,
         registry_path: Path | None = None,
+        lifecycle: LightRAGDomainLifecycleService | None = None,
     ):
         self.settings = settings or get_settings()
         self.registry_path = registry_path or self.settings.lightrag_domain_registry
+        self.lifecycle = lifecycle or LightRAGDomainLifecycleService()
 
     def list_domains(self) -> list[LightRAGDomainSummary]:
-        return [
-            LightRAGDomainSummary(
-                id=domain["id"],
-                display_name=str(domain.get("display_name") or domain["id"]),
-                is_default=bool(domain.get("is_default", False)),
-                is_healthy=domain.get("is_healthy"),
-                status=_optional_string(domain.get("status")),
+        blocked = self._blocked_domain_ids()
+        domains: list[LightRAGDomainSummary] = []
+        for domain in self._read_domain_entries():
+            domain_id = str(domain["id"])
+            if domain_id in blocked:
+                continue
+            domains.append(
+                LightRAGDomainSummary(
+                    id=domain_id,
+                    display_name=str(domain.get("display_name") or domain_id),
+                    is_default=bool(domain.get("is_default", False)),
+                    is_healthy=domain.get("is_healthy"),
+                    status=_optional_string(domain.get("status")),
+                )
             )
-            for domain in self._read_domain_entries()
-        ]
+        return domains
 
     def get_required(self, domain_id: str | None) -> LightRAGDomainRuntime:
         requested = _require_domain_id(domain_id)
@@ -103,12 +112,23 @@ class LightRAGDomainRegistry:
 
     def validate_available(self, domain_id: str | None) -> LightRAGDomainRuntime:
         domain = self.get_required(domain_id)
+        if not self.lifecycle.is_active(domain.id):
+            raise LightRAGDomainUnavailableError(
+                f"LightRAG domain '{domain.id}' is not available"
+            )
         status = (domain.status or "").lower()
         if status in UNAVAILABLE_STATUSES:
             raise LightRAGDomainUnavailableError(
                 f"LightRAG domain '{domain.id}' is not available"
             )
         return domain
+
+    def _blocked_domain_ids(self) -> set[str]:
+        try:
+            return self.lifecycle.blocked_domain_ids()
+        except Exception:
+            # Lifecycle state is additive; keep registry readable if DB state is unavailable.
+            return set()
 
     def _domain_entry(self, domain_id: str) -> dict[str, Any] | None:
         for entry in self._read_domain_entries():

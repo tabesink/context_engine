@@ -54,5 +54,31 @@ class LightRAGDomainRemoveResponse(BaseModel):
     permanent: bool = False
 
 
+class LightRAGDomainPurgePreview(BaseModel):
+    domain_id: str
+    documents: int
+    original_uploads: int
+    assets: int
+    chunks: int
+    pages: int
+    sections: int
+    blocks: int
+    estimated_bytes: int
+    will_delete: list[str]
+
+
+class LightRAGDomainPurgeResult(BaseModel):
+    domain_id: str
+    state: str
+    purged_documents: int
+    purged_original_uploads: int
+    purged_artifact_roots: int
+    purged_processing_rows: dict[str, int]
+    canceled_jobs: int
+    cleared_job_document_references: int
+    deleted_domain_root: bool
+    deleted_domain_archive: bool
+
+
 def _datetime_to_z(value: datetime) -> str:
     return value.isoformat().replace("+00:00", "Z")

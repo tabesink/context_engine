@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Knowledgebase",
+  title: "Knowledge Graph",
   description: "Lean local chat client for query servers.",
 };
 

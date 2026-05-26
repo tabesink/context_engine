@@ -95,18 +95,12 @@ uvicorn app.main:create_app --factory --reload --port 8010
 
 `DATABASE_URL` must be configured. Local non-compose runs should point at the PostgreSQL service started above; the app no longer falls back to a hidden sqlite file database.
 
-## Terminal Client (`context-engine`)
+## Terminal Client (Deprecated)
 
-After `pip install -e .`, the supported CLI is the interactive TUI:
+The terminal client/TUI is deprecated and is not part of the supported deployment surface.
 
-```bash
-context-engine
-```
-
-- **Backend URL**: `--api-base-url` or `CONTEXT_ENGINE_API_BASE_URL` (defaults in `cli/config.py` to `http://127.0.0.1:8000` unless overridden). Align this with the API’s real host port (`API_PORT` / `.env`).
-- **Credentials**: stored under `--config-dir` or the default `~/.context-engine/cli/`; `--keyring` / `--no-keyring` toggle OS keyring vs file-backed storage.
-
-The UI calls the backend over HTTP via `cli/api_client.py` and helpers in `cli/services/`; screen layout builders under `cli/screens/` and `cli/renderers/` are composed into the Rich TUI under `cli/tui/`, not a second transport.
+- Prefer direct HTTP API usage and supported web/admin interfaces.
+- Legacy CLI/TUI code may still exist in-repo for transition purposes, but it should be treated as unsupported.
 
 ## Auth Contract (Frozen)
 
@@ -144,7 +138,7 @@ Deployment control is off by default:
 LIGHTRAG_DEPLOY_ENABLED=false
 ```
 
-When enabled, admins can manage domains through `/admin/lightrag/domains...` or the terminal UI. Generated state lives under:
+When enabled, admins can manage domains through `/admin/lightrag/domains...`. Generated state lives under:
 
 ```text
 .data/lightrag/

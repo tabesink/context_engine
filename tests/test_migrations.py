@@ -44,6 +44,7 @@ def test_alembic_document_processing_revision_upgrades_existing_baseline(
     command.upgrade(config, "head")
 
     tables = set(inspect(engine).get_table_names())
+    columns = {column["name"] for column in inspect(engine).get_columns("documents")}
 
     assert "document_sections" in tables
     assert "document_pages" in tables
@@ -53,6 +54,8 @@ def test_alembic_document_processing_revision_upgrades_existing_baseline(
     assert "parsed_documents" not in tables
     assert "navigation_indexes" not in tables
     assert "toc_refinement_reports" not in tables
+    assert "lightrag_domain_lifecycle" in tables
+    assert "lightrag_domain_id" in columns
 
 
 def test_alembic_head_creates_schema_on_fresh_database(
@@ -69,7 +72,9 @@ def test_alembic_head_creates_schema_on_fresh_database(
     command.upgrade(config, "head")
 
     engine = create_engine(database_url, future=True)
-    tables = set(inspect(engine).get_table_names())
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    columns = {column["name"] for column in inspector.get_columns("documents")}
 
     assert "users" in tables
     assert "documents" in tables
@@ -77,6 +82,8 @@ def test_alembic_head_creates_schema_on_fresh_database(
     assert "audit_logs" in tables
     assert "query_logs" in tables
     assert "document_pages" in tables
+    assert "lightrag_domain_lifecycle" in tables
+    assert "lightrag_domain_id" in columns
 
 
 def test_alembic_document_ingest_revision_renames_legacy_jobs(

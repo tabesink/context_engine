@@ -19,6 +19,9 @@ class UserRepository:
     def get_by_id(self, user_id: str) -> UserRow | None:
         return self.session.get(UserRow, user_id)
 
+    def list_all(self) -> list[UserRow]:
+        return list(self.session.scalars(select(UserRow).order_by(UserRow.created_at.asc(), UserRow.email.asc())).all())
+
     def create(
         self,
         *,
@@ -40,6 +43,34 @@ class UserRepository:
         self.session.commit()
         self.session.refresh(user)
         return user
+
+    def update_role(self, user_id: str, role: UserRole) -> UserRow | None:
+        user = self.get_by_id(user_id)
+        if not user:
+            return None
+        user.role = role.value
+        self.session.add(user)
+        self.session.commit()
+        self.session.refresh(user)
+        return user
+
+    def reset_password(self, user_id: str, new_password: str) -> UserRow | None:
+        user = self.get_by_id(user_id)
+        if not user:
+            return None
+        user.password_hash = hash_password(new_password)
+        self.session.add(user)
+        self.session.commit()
+        self.session.refresh(user)
+        return user
+
+    def delete(self, user_id: str) -> bool:
+        user = self.get_by_id(user_id)
+        if not user:
+            return False
+        self.session.delete(user)
+        self.session.commit()
+        return True
 
     def ensure_admin(
         self,

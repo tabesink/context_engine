@@ -13,6 +13,7 @@ from app.api.routes import (
     lightrag,
     lightrag_admin,
     retrieve,
+    users,
     workspace_tree,
 )
 from app.core.config import get_settings
@@ -43,6 +44,7 @@ def create_app() -> FastAPI:
     app.include_router(retrieve.router)
     app.include_router(lightrag.router)
     app.include_router(lightrag_admin.router)
+    app.include_router(users.router)
     app.include_router(workspace_tree.router)
     app.include_router(jobs.router)
     return app

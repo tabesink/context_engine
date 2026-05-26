@@ -60,7 +60,7 @@ async function loadDomains() {
   } catch (error) {
     setState({
       status: "error",
-      error: error instanceof Error ? error.message : "Could not load LightRAG knowledgebases.",
+      error: error instanceof Error ? error.message : "Could not load Knowledge Graph domains.",
     });
   }
 }

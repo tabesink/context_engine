@@ -20,7 +20,7 @@ Included:
 - LightRAG-only semantic retrieval, queued LightRAG ingestion, graph proxy routes, and admin-controlled domain deployment through generated `.data/lightrag` files.
 - Unified `Evidence` model, retrieval router, and evaluation script.
 - Redis-backed worker path for indexing jobs, plus inline mode for deterministic local/dev flows.
-- Interactive terminal UI (`context-engine`) that exercises supported backend flows through HTTP; planned-only backend surfaces remain visible as gaps rather than silent stubs.
+- Legacy terminal UI (`context-engine`) remains in-repo for transition/testing continuity but is deprecated and not a supported workflow.
 
 Excluded or deferred:
 
@@ -49,7 +49,7 @@ Tests should describe observable behavior, not private implementation details.
 
 The runnable foundation includes:
 
-- Package layout under `app/`, `cli/`, `scripts/`, and `tests/`.
+- Package layout under `app/`, `scripts/`, and `tests/` (legacy deprecated CLI/TUI code remains under `cli/`).
 - `pyproject.toml` with console script `context-engine` resolving to `cli.launcher:main`.
 - `.env.example`.
 - `docker-compose.yml` with PostgreSQL, Redis, API, worker, and shared-network support for generated LightRAG domain services.
@@ -207,9 +207,9 @@ Current acceptance:
 - Errors include actionable messages.
 - Logs use stable enough event data for tests and operator inspection.
 
-## Terminal Client Contract
+## Terminal Client Contract (Deprecated)
 
-Implemented:
+Legacy implementation (deprecated, unsupported for active workflows):
 
 - Launcher `cli/launcher.py` builds `ApiClient`, `CredentialStore`, and enters the Rich loop in `cli/tui/app.py`.
 - Optional launcher flags via `cli/config.py`: `--api-base-url`, `--config-dir`, `--keyring`, `--no-keyring`; `--api-base-url` falls back to `CONTEXT_ENGINE_API_BASE_URL` or `http://127.0.0.1:8000`.
@@ -220,7 +220,7 @@ Implemented:
 - Main menu routes: documents, retrieval, LightRAG graphs/labels, admin-only LightRAG domains / jobs / observability, health/readiness, login/logout—placeholders remain for backend gaps where applicable.
 - Legacy `cli/main.py`: thin delegate to the launcher kept for backwards-compatible imports (`app` callable).
 
-Current acceptance:
+Current legacy behavior:
 
 - The terminal client only calls backend routes, not backend internals.
 - Passwords are not persisted as plaintext; tokens are not printed by the launcher.
@@ -229,7 +229,7 @@ Current acceptance:
 
 ## Former Typer Commands (Removed)
 
-Older docs referred to discrete `ragcli …` Typer commands. The repository no longer exposes that CLI; use the interactive TUI and the same REST API from other HTTP clients. Deep-dive command-style notes may still appear under `docs/cli_docs/` for traceability only.
+Older docs referred to discrete `ragcli …` Typer commands. The repository no longer exposes that CLI; use the REST API from supported clients. Deep-dive command-style notes may still appear under `docs/cli_docs/` for traceability only.
 
 ## Hardening Roadmap
 
@@ -239,7 +239,7 @@ Add these only as scoped vertical slices:
 - Rate limiting and request-size controls.
 - Expanded retrieval evaluation datasets and quality gates.
 - Richer LightRAG ingestion/status reconciliation and database provisioning operations.
-- Richer TUI forms for create/start/stop/remove domain operations beyond the compact admin list and service wrappers.
+- Domain deployment UX hardening through supported API/web surfaces (legacy TUI forms are out of scope).
 - Object storage adapter for uploaded source files.
 - Document-level ACLs.
 
@@ -249,4 +249,4 @@ Add these only as scoped vertical slices:
 - Docs that describe the public contract are updated.
 - Unsupported backend surfaces remain explicit in the UX (gap/placeholder messaging) rather than pretending success.
 - Secrets are never printed in API responses or terminal client output beyond what the backend returns for debugging (and admin-only debug flags stay server-enforced).
-- Tests avoid live Docker and live LightRAG unless explicitly marked external integration checks; terminal client coverage includes `tests/test_cli_launcher.py`, `tests/test_cli_services.py`, `tests/test_cli_tui.py`, `tests/test_cli_api_client.py`, `tests/test_cli_screen_renderers.py`, `tests/test_cli_query_payload.py`, `tests/test_retrieval_routing_policy.py`, and LightRAG deploy tests under `tests/test_lightrag_deploy_*.py`.
+- Tests avoid live Docker and live LightRAG unless explicitly marked external integration checks; legacy CLI/TUI coverage remains for transitional stability (`tests/test_cli_*`), alongside active API/retrieval/deploy coverage such as `tests/test_retrieval_routing_policy.py` and `tests/test_lightrag_deploy_*.py`.

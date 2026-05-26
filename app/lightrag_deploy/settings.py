@@ -18,9 +18,8 @@ class LightRAGDeploySettings:
     host: str = "127.0.0.1"
     docker_network: str = "context_engine_lightrag"
     domain_env_filename: str = "domain.env"
-    image: str = "ghcr.io/hkuds/lightrag:latest"
-    dockerfile: Path | None = None
-    build_context: Path | None = None
+    dockerfile: Path = Path("docker/lightrag.Dockerfile")
+    build_context: Path = Path(".")
     postgres_url: str | None = None
     postgres_host: str = "postgres"
     postgres_port: int = 5432
@@ -76,7 +75,6 @@ class LightRAGDeploySettings:
             host=settings.lightrag_host,
             docker_network=settings.lightrag_docker_network,
             domain_env_filename=settings.lightrag_domain_env_filename,
-            image=settings.lightrag_image,
             dockerfile=settings.lightrag_dockerfile,
             build_context=settings.lightrag_build_context,
             postgres_url=settings.lightrag_postgres_url,

@@ -1,4 +1,4 @@
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.document_processing.models import (
@@ -118,6 +118,42 @@ class DocumentProcessingRepository:
         if not row or row.document_id != document_id:
             return None
         return self._asset_model(row)
+
+    def count_by_document_ids(self, document_ids: list[str]) -> dict[str, int]:
+        if not document_ids:
+            return {"pages": 0, "sections": 0, "blocks": 0, "chunks": 0, "assets": 0}
+        return {
+            "pages": self._count_rows(DocumentPageRow, document_ids),
+            "sections": self._count_rows(DocumentSectionRow, document_ids),
+            "blocks": self._count_rows(DocumentBlockRow, document_ids),
+            "chunks": self._count_rows(DocumentSourceChunkRow, document_ids),
+            "assets": self._count_rows(DocumentAssetRow, document_ids),
+        }
+
+    def delete_by_document_ids(self, document_ids: list[str]) -> dict[str, int]:
+        if not document_ids:
+            return {"assets": 0, "chunks": 0, "blocks": 0, "sections": 0, "pages": 0}
+        deleted = {
+            "assets": self._delete_rows(DocumentAssetRow, document_ids),
+            "chunks": self._delete_rows(DocumentSourceChunkRow, document_ids),
+            "blocks": self._delete_rows(DocumentBlockRow, document_ids),
+            "sections": self._delete_rows(DocumentSectionRow, document_ids),
+            "pages": self._delete_rows(DocumentPageRow, document_ids),
+        }
+        self.session.commit()
+        return deleted
+
+    def _count_rows(self, table, document_ids: list[str]) -> int:
+        return int(
+            self.session.scalar(
+                select(func.count()).select_from(table).where(table.document_id.in_(document_ids))
+            )
+            or 0
+        )
+
+    def _delete_rows(self, table, document_ids: list[str]) -> int:
+        result = self.session.execute(delete(table).where(table.document_id.in_(document_ids)))
+        return int(result.rowcount or 0)
 
     def _section_row(self, section: DocumentSection) -> DocumentSectionRow:
         return DocumentSectionRow(

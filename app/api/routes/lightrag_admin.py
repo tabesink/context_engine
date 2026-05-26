@@ -7,12 +7,16 @@ from app.lightrag_deploy.models import (
     LightRAGDomain,
     LightRAGDomainCreateRequest,
     LightRAGDomainOperationResult,
+    LightRAGDomainPurgePreview,
+    LightRAGDomainPurgeResult,
     LightRAGDomainRemoveResponse,
 )
 from app.lightrag_deploy.service import LightRAGDomainService
+from app.services.domain_purge_service import DomainPurgeService
 from app.services.lightrag_domain_registry import LightRAGDomainRegistry
 from app.storage.db import get_session
 from app.storage.repositories.logs import LogRepository
+from app.storage.repositories.lightrag_domain_lifecycle import LightRAGDomainLifecycleRepository
 from app.storage.tables import UserRow
 
 router = APIRouter(tags=["lightrag-domains"])
@@ -24,6 +28,10 @@ def get_domain_service() -> LightRAGDomainService:
 
 def get_domain_registry() -> LightRAGDomainRegistry:
     return LightRAGDomainRegistry()
+
+
+def get_domain_purge_service(session: Session = Depends(get_session)) -> DomainPurgeService:
+    return DomainPurgeService(session)
 
 
 @router.get("/admin/lightrag/domains")
@@ -125,12 +133,23 @@ def remove_domain(
     service: LightRAGDomainService = Depends(get_domain_service),
 ) -> LightRAGDomainRemoveResponse:
     _ensure_deploy_enabled(service)
+    lifecycle = LightRAGDomainLifecycleRepository(session)
+    lifecycle.set_state(
+        domain_id=domain_id,
+        state="purging" if permanent else "archiving",
+    )
     try:
         result = service.remove(domain_id, permanent=permanent)
     except DomainNotFoundError as exc:
+        lifecycle.set_state(domain_id=domain_id, state="failed", error_message=str(exc))
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except PermanentDeleteDisabledError as exc:
+        lifecycle.set_state(domain_id=domain_id, state="failed", error_message=str(exc))
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    lifecycle.set_state(
+        domain_id=domain_id,
+        state="purged" if result.permanent else "archived",
+    )
     event = "lightrag.domain.deleted_permanently" if result.permanent else "lightrag.domain.archived"
     LogRepository(session).record_audit(
         actor_id=admin.id,
@@ -139,6 +158,40 @@ def remove_domain(
         metadata={"domain_id": result.id, "archive_path": result.archive_path},
     )
     return result
+
+
+@router.post("/admin/lightrag/domains/{domain_id}/purge-preview")
+def purge_domain_preview(
+    domain_id: str,
+    admin: UserRow = Depends(require_admin),
+    service: DomainPurgeService = Depends(get_domain_purge_service),
+) -> LightRAGDomainPurgePreview:
+    del admin
+    try:
+        return service.preview_lightrag_domain_purge(domain_id)
+    except DomainNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.delete("/admin/lightrag/domains/{domain_id}/purge")
+def purge_domain(
+    domain_id: str,
+    confirm_domain_id: str,
+    admin: UserRow = Depends(require_admin),
+    service: DomainPurgeService = Depends(get_domain_purge_service),
+) -> LightRAGDomainPurgeResult:
+    try:
+        return service.purge_lightrag_domain(
+            domain_id=domain_id,
+            actor_id=admin.id,
+            confirm_domain_id=confirm_domain_id,
+        )
+    except DomainNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermanentDeleteDisabledError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/lightrag/domains")
@@ -175,9 +228,22 @@ def _domain_or_404(service: LightRAGDomainService, domain_id: str) -> LightRAGDo
 
 def _operation_or_404(operation, domain_id: str) -> LightRAGDomainOperationResult:
     try:
-        return operation(domain_id)
+        result = operation(domain_id)
     except DomainNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if result.status != "succeeded":
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "lightrag_domain_operation_failed",
+                "domain_id": result.id,
+                "operation": result.operation,
+                "status": result.status,
+                "service_name": result.service_name,
+                "message": result.message,
+            },
+        )
+    return result
 
 
 def _audit(session: Session, admin: UserRow, event: str, domain: LightRAGDomain) -> None:

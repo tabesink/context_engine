@@ -42,7 +42,7 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center bg-[var(--background)] px-6 py-10">
       <form onSubmit={onSubmit} className="w-full max-w-sm rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-sm">
         <div className="mb-6 flex flex-col items-center gap-3 text-center">
-          <Image src="/logo.svg" alt="LightRAG" width={72} height={72} priority className="size-18" />
+          <Image src="/logo.svg" alt="Knowledge Graph" width={72} height={72} priority className="size-18" />
           <div>
             <h1 className="text-xl font-semibold tracking-tight text-[var(--foreground)]">Sign in</h1>
             <p className="mt-1 text-sm text-[var(--muted-foreground)]">Use your local team account to access chat.</p>

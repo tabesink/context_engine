@@ -17,14 +17,14 @@ This file records what the current codebase implements. For the intended build s
 - Job table, job status endpoints, Redis `rq` enqueue path, and worker-owned job lifecycle.
 - Audit/query log repositories and admin log endpoints.
 - Seed admin, backup, and retrieval evaluation scripts.
-- Interactive terminal UI: console script `context-engine` (`cli.launcher`) driving `cli/tui/app.py` plus `cli/tui/` navigation, screens, and helpers; `cli/screens/` + `cli/renderers/` supply composable layouts; `cli/flows/` holds multi-step UX; all HTTP via `ApiClient` and `cli/services/`.
+- Legacy terminal UI/CLI code remains in-repo but is deprecated and unsupported for active workflows.
 - Remote LightRAG integration for semantic retrieval/runtime, including HTTP adapter, domain manifest resolution, retrieval strategy, queued ingestion jobs, status refresh, and graph proxy routes.
-- LightRAG domain deployment control behind `LIGHTRAG_DEPLOY_ENABLED`, including managed domain manifest, generated domain env files, generated compose file, fakeable Docker Compose runner, admin APIs in `app/api/routes/lightrag_admin.py`, user-safe `GET /lightrag/domains`, domain-aware upload/query selection, per-domain PostgreSQL storage metadata, and matching TUI/admin service wrappers.
+- LightRAG domain deployment control behind `LIGHTRAG_DEPLOY_ENABLED`, including managed domain manifest, generated domain env files, generated compose file, fakeable Docker Compose runner, admin APIs in `app/api/routes/lightrag_admin.py`, user-safe `GET /lightrag/domains`, domain-aware upload/query selection, and per-domain PostgreSQL storage metadata.
 - LightRAG provider configuration contract for generated `domain.env` files, including `LLM_BINDING*`, `EMBEDDING_BINDING*`, and `OPENAI_LLM_*` tuning fields sourced from root `LIGHTRAG_*` settings.
 - Bedrock OpenAI-compatible support path by keeping LightRAG bindings as `openai` and setting `LIGHTRAG_LLM_BINDING_HOST` to `https://bedrock-runtime.<region>.amazonaws.com/openai/v1`.
 - Provider secret boundary enforcement: provider API keys are emitted only to per-domain `domain.env` files and are not written into compose output, manifest JSON, or admin/user domain API responses.
 - Contract files under `external/lightrag/contract/`.
-- Behavior tests for API, terminal client (launcher, settings, TUI, services, API client, screen renderers, retrieve payload), routing policy, LightRAG adapter, LightRAG deploy stack, auth guardrails, upload, retrieval flow, queued jobs, and worker failure handling.
+- Behavior tests for API, routing policy, LightRAG adapter, LightRAG deploy stack, auth guardrails, upload, retrieval flow, queued jobs, and worker failure handling. Legacy CLI/TUI tests remain while deprecation cleanup is pending.
 - Canonical document-processing scaffolding for `DocumentStructure`, pages, sections, blocks, source chunks, assets, structure quality, storage paths, and document-processing repository persistence.
 - The LightRAG ingestion job now uses the existing upload/job flow to build and persist canonical `DocumentStructure` plus `SourceChunk` rows for parseable text/Markdown uploads, and it can use the real `DoclingParser` boundary for PDFs when Docling is installed. Built Source Chunks include section title/path metadata and section-prefixed chunk text that is forwarded to LightRAG alongside document, section, block, page, and asset IDs. Structure-processing failures fail ingestion explicitly (no raw LightRAG upload fallback).
 - Document asset extraction saves assets, generates resized thumbnails when Pillow can read the asset, computes content hashes, extracts figure/image/table snapshots when Docling exposes image data, and deduplicates identical asset payloads while preserving per-occurrence metadata links.
@@ -32,7 +32,7 @@ This file records what the current codebase implements. For the intended build s
 - Deterministic structure quality scoring is retained; runtime TOC refinement and TOC refinement report APIs are removed from ingestion and HTTP routes.
 - Authenticated document debug APIs expose canonical structure data: `GET /documents/{document_id}/structure`, `GET /documents/{document_id}/structure-quality`, `GET /documents/{document_id}/sections/{section_id}`, `GET /documents/{document_id}/chunks/{chunk_id}`, and authenticated asset/thumbnail streaming.
 - Retrieval asset enrichment can resolve assets from LightRAG evidence using legacy `metadata.source_chunk_id`, chunk-ingest `metadata.chunk_id`, or returned `metadata.asset_ids`, then rank and limit assets using direct chunk links, block links, caption/query overlap, page proximity, and section proximity.
-- CLI service wrappers and TUI/screen renderers now cover document structure quality, canonical structure summaries, section detail, source chunk detail with metadata, document detail debug summaries, and admin wrappers/actions for reingest, status refresh, and delete.
+- Legacy CLI service wrappers and TUI/screen renderers remain in-repo but are deprecated and unsupported.
 - Single rich navigation is implemented end-to-end: local navigation retrieval uses `RichNavigationEngine` over canonical `DocumentStructure`, and legacy `parsed_documents`/`navigation_indexes` runtime paths have been removed.
 - Canonical ingestion job kind is `document_ingest`; legacy runtime aliases have been removed after the Alembic data migration.
 
@@ -66,7 +66,7 @@ Runtime behavior:
 
 - Add rate limiting middleware and stronger request-size controls.
 - Expand evaluation datasets and retrieval metrics.
-- Add richer LightRAG status polling, database provisioning operations, and fuller TUI forms for domain create/start/stop/remove operations.
+- Add richer LightRAG status polling and database provisioning operations.
 - Harden real-PDF Docling fixtures (table/figure/caption variation coverage) and tune parser normalization against real outputs.
 - Tune `StructureAwareChunkBuilder` sizing and text-shaping against real Docling outputs.
 

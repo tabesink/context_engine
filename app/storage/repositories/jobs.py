@@ -1,3 +1,6 @@
+from collections.abc import Sequence
+from typing import List
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -19,7 +22,7 @@ class JobRepository:
     def get(self, job_id: str) -> JobRow | None:
         return self.session.get(JobRow, job_id)
 
-    def list(self, *, limit: int = 50, offset: int = 0) -> list[JobRow]:
+    def list(self, *, limit: int = 50, offset: int = 0) -> List[JobRow]:
         return list(
             self.session.scalars(
                 select(JobRow).order_by(JobRow.created_at.desc()).limit(limit).offset(offset)
@@ -42,4 +45,23 @@ class JobRepository:
         self.session.commit()
         self.session.refresh(job)
         return job
+
+    def list_by_document_ids(self, document_ids: Sequence[str]) -> List[JobRow]:
+        if not document_ids:
+            return []
+        return list(
+            self.session.scalars(
+                select(JobRow).where(JobRow.document_id.in_(document_ids)).order_by(JobRow.created_at.desc())
+            )
+        )
+
+    def clear_document_references(self, document_ids: Sequence[str]) -> int:
+        if not document_ids:
+            return 0
+        jobs = self.list_by_document_ids(document_ids)
+        for job in jobs:
+            job.document_id = None
+            job.updated_at = utc_now()
+        self.session.commit()
+        return len(jobs)
 

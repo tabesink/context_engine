@@ -98,4 +98,4 @@ export function useAuthStore<T = AuthState>(selector: (state: AuthState) => T = 
 }
 
 export const selectIsAdmin = (value: Pick<AuthState, "user">) => value.user?.role === "admin";
-export const selectCanWrite = (value: Pick<AuthState, "user">) => value.user?.role === "admin" || value.user?.can_write === true;
+export const selectCanWrite = (value: Pick<AuthState, "user">) => value.user?.role === "admin";

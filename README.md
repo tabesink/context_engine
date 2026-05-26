@@ -116,21 +116,13 @@ curl http://localhost:8010/health/readiness
 
 ---
 
-## Terminal Application
+## Terminal Application (Deprecated)
 
-After `pip install -e .`, launch the interactive terminal UI with:
+The local terminal UI/CLI is deprecated and no longer a supported workflow.
 
-```powershell
-context-engine
-```
-
-or:
-
-```powershell
-context-tui
-```
-
-The terminal UI is the supported local CLI workflow for login/session, documents, retrieval, LightRAG views, admin document actions, jobs, observability, and health/readiness checks.
+- Do not rely on `context-engine` / `context-tui` for production or active development workflows.
+- Use the HTTP API directly (and web/admin surfaces where available) for supported behavior.
+- Legacy CLI/TUI code remains in-repo temporarily for transition/testing continuity.
 
 ## Test
 

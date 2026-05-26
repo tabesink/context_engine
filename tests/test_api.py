@@ -9,6 +9,7 @@ Path(".data").mkdir(parents=True, exist_ok=True)
 Path(".data/test_context_engine.db").unlink(missing_ok=True)
 
 import pytest  # noqa: E402
+from fastapi import HTTPException  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from pydantic import ValidationError  # noqa: E402
 
@@ -22,7 +23,8 @@ from app.document_processing.models import (  # noqa: E402
     SourceChunk,
 )
 from app.document_processing.pipeline import TextDoclingParser  # noqa: E402
-from app.domain.models import DocumentStatus, UserRole  # noqa: E402
+from app.document_processing.storage_paths import DocumentStoragePaths  # noqa: E402
+from app.domain.models import DocumentStatus, JobStatus, UserRole  # noqa: E402
 from app.integrations.lightrag_remote_adapter import LightRAGRemoteAdapter  # noqa: E402
 from app.lightrag_deploy.models import (  # noqa: E402
     LightRAGDomain,
@@ -38,9 +40,13 @@ from app.services.job_service import JobService  # noqa: E402
 from app.storage.db import SessionLocal, create_db_and_tables  # noqa: E402
 from app.storage.repositories.document_processing import DocumentProcessingRepository  # noqa: E402
 from app.storage.repositories.jobs import JobRepository  # noqa: E402
+from app.storage.repositories.lightrag_domain_lifecycle import (  # noqa: E402
+    LightRAGDomainLifecycleRepository,
+)
 from app.storage.repositories.documents import DocumentRepository  # noqa: E402
 from app.storage.repositories.logs import LogRepository  # noqa: E402
 from app.storage.repositories.users import UserRepository  # noqa: E402
+from app.storage.tables import LightRAGDomainLifecycleRow  # noqa: E402
 from app.workers.tasks import poll_lightrag_statuses, run_document_ingest_job  # noqa: E402
 
 
@@ -61,6 +67,10 @@ def _settings_cache(
     )
     monkeypatch.setenv("LIGHTRAG_DOMAIN_REGISTRY", str(manifest_path))
     get_settings.cache_clear()
+    create_db_and_tables()
+    with SessionLocal() as session:
+        session.query(LightRAGDomainLifecycleRow).delete()
+        session.commit()
     yield
     get_settings.cache_clear()
 
@@ -192,6 +202,62 @@ def test_auth_me_rejects_inactive_user() -> None:
 
     assert response.status_code == 401
     assert response.json() == {"detail": "User is inactive or missing"}
+
+
+def test_admin_users_routes_require_admin() -> None:
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        response = client.get("/admin/users", headers=user_headers)
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Admin access required"
+
+
+def test_admin_users_role_only_lifecycle() -> None:
+    with TestClient(app) as client:
+        _seed_users()
+        admin_headers = _login(client, "admin@example.com")
+
+        listing = client.get("/admin/users", headers=admin_headers)
+        assert listing.status_code == 200
+        existing_users = listing.json()
+        assert len(existing_users) >= 2
+
+        created = client.post(
+            "/admin/users",
+            headers=admin_headers,
+            json={
+                "username": "operator@example.com",
+                "password": "operator-secret",
+                "role": "user",
+            },
+        )
+        assert created.status_code == 200
+        created_user = created.json()
+        assert created_user["username"] == "operator@example.com"
+        assert created_user["role"] == "user"
+
+        promoted = client.patch(
+            f"/admin/users/{created_user['id']}",
+            headers=admin_headers,
+            json={"role": "admin"},
+        )
+        assert promoted.status_code == 200
+        assert promoted.json()["role"] == "admin"
+
+        reset_password = client.post(
+            f"/admin/users/{created_user['id']}/reset-password",
+            headers=admin_headers,
+            json={"new_password": "operator-secret-updated"},
+        )
+        assert reset_password.status_code == 204
+
+        removed = client.delete(
+            f"/admin/users/{created_user['id']}",
+            headers=admin_headers,
+        )
+        assert removed.status_code == 204
 
 
 def test_readiness_checks_dependencies(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -476,6 +542,38 @@ def test_production_settings_reject_unsafe_defaults() -> None:
             secret_key="safe-production-secret",
             allowed_origins=["https://app.example"],
             seed_admin_password="admin123",
+        )
+
+
+def test_staging_settings_reject_unsafe_defaults() -> None:
+    with pytest.raises(ValidationError, match="SECRET_KEY"):
+        Settings(
+            _env_file=None,
+            environment="staging",
+            database_url="postgresql+psycopg://user:pass@db:5432/app",
+            secret_key="dev-secret-change-me",
+            allowed_origins=["https://staging.example"],
+            seed_admin_password="safe-staging-password",
+        )
+
+    with pytest.raises(ValidationError, match="ALLOWED_ORIGINS"):
+        Settings(
+            _env_file=None,
+            environment="staging",
+            database_url="postgresql+psycopg://user:pass@db:5432/app",
+            secret_key="safe-staging-secret",
+            allowed_origins=["*"],
+            seed_admin_password="safe-staging-password",
+        )
+
+    with pytest.raises(ValidationError, match="SEED_ADMIN_PASSWORD"):
+        Settings(
+            _env_file=None,
+            environment="staging",
+            database_url="postgresql+psycopg://user:pass@db:5432/app",
+            secret_key="safe-staging-secret",
+            allowed_origins=["https://staging.example"],
+            seed_admin_password="admin",
         )
 
 
@@ -1389,9 +1487,14 @@ def test_admin_upload_to_selected_lightrag_domain_records_domain_metadata(
         )
 
     assert response.status_code == 200
-    metadata = response.json()["document"]["metadata"]["lightrag"]
+    body = response.json()
+    metadata = body["document"]["metadata"]["lightrag"]
     assert metadata["domain_id"] == "fatigue"
     assert metadata["status"] == "queued"
+    with SessionLocal() as session:
+        stored = DocumentRepository(session).get(body["document"]["id"])
+    assert stored is not None
+    assert stored.lightrag_domain_id == "fatigue"
 
 
 def test_lightrag_ingestion_job_uploads_polls_and_marks_document_ready(tmp_path: Path) -> None:
@@ -1906,6 +2009,111 @@ def test_lightrag_failures_return_stable_errors(monkeypatch: pytest.MonkeyPatch)
     assert response.json()["detail"] == "LightRAG service unavailable"
 
 
+def test_lightrag_upstream_failures_return_bad_gateway(monkeypatch: pytest.MonkeyPatch) -> None:
+    get_settings.cache_clear()
+
+    def fake_retrieve(self: LightRAGRemoteAdapter, **kwargs):
+        del self, kwargs
+        from app.integrations.lightrag_remote_adapter import LightRAGUpstreamError
+
+        raise LightRAGUpstreamError("LightRAG upstream request failed", upstream_status=502)
+
+    monkeypatch.setattr(LightRAGRemoteAdapter, "retrieve", fake_retrieve)
+
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        response = client.post(
+            "/retrieve",
+            headers=user_headers,
+            json={
+                "query": "summarize remote context",
+                "mode": "semantic",
+                "lightrag_domain_id": "default",
+            },
+        )
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "LightRAG upstream request failed"
+
+
+def test_retrieve_response_contract_fields_are_stable(monkeypatch: pytest.MonkeyPatch) -> None:
+    get_settings.cache_clear()
+    document_id = "11111111-1111-4111-8111-111111111111"
+
+    def fake_retrieve(
+        self: LightRAGRemoteAdapter,
+        *,
+        query: str,
+        mode,
+        top_k: int,
+        document_ids: list[str] | None,
+        domain: str | None = None,
+    ):
+        del self, mode, top_k, document_ids, domain
+        from uuid import UUID
+
+        from app.domain.models import Evidence, PageRef
+
+        return [
+            Evidence(
+                id="chunk-1",
+                document_id=UUID(document_id),
+                source_engine="lightrag",
+                text=f"Remote context for {query}",
+                score=0.91,
+                page_ref=PageRef(document_id=UUID(document_id), page_start=2, page_end=3),
+                metadata={
+                    "source_path": "manual.pdf",
+                    "document_title": "Service Manual",
+                    "chunk_id": "chunk-1",
+                    "reference_id": "ref-1",
+                },
+            )
+        ]
+
+    monkeypatch.setattr(LightRAGRemoteAdapter, "retrieve", fake_retrieve)
+
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        response = client.post(
+            "/retrieve",
+            headers=user_headers,
+            json={
+                "query": "summarize remote context",
+                "mode": "semantic",
+                "top_k": 3,
+                "lightrag_domain_id": "default",
+            },
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "assets" in body
+    assert isinstance(body["assets"], list)
+    evidence = body["evidence"][0]
+    assert set(evidence.keys()) == {
+        "evidence_id",
+        "document_id",
+        "source_engine",
+        "text",
+        "score",
+        "page_start",
+        "page_end",
+        "section_title",
+        "source_path",
+        "document_title",
+        "chunk_id",
+        "reference_id",
+        "metadata",
+    }
+    assert evidence["source_path"] == "manual.pdf"
+    assert evidence["document_title"] == "Service Manual"
+    assert evidence["chunk_id"] == "chunk-1"
+    assert evidence["reference_id"] == "ref-1"
+
+
 def test_lightrag_domain_admin_api_requires_admin_and_enabled(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -2080,6 +2288,47 @@ def test_lightrag_domain_admin_api_lifecycle_routes_remain_available() -> None:
         app.dependency_overrides.pop(lightrag_admin.get_domain_service, None)
 
 
+def test_operation_or_404_maps_failed_operation_to_502() -> None:
+    from app.api.routes import lightrag_admin
+
+    def failed_operation(domain_id: str) -> LightRAGDomainOperationResult:
+        return LightRAGDomainOperationResult(
+            id=domain_id,
+            operation="up",
+            status="failed",
+            service_name="lightrag_test",
+            message="port 9622 already allocated",
+        )
+
+    with pytest.raises(HTTPException) as exc_info:
+        lightrag_admin._operation_or_404(failed_operation, "test")
+
+    assert exc_info.value.status_code == 502
+    assert exc_info.value.detail["code"] == "lightrag_domain_operation_failed"
+    assert exc_info.value.detail["domain_id"] == "test"
+    assert exc_info.value.detail["operation"] == "up"
+    assert exc_info.value.detail["status"] == "failed"
+    assert exc_info.value.detail["service_name"] == "lightrag_test"
+    assert exc_info.value.detail["message"] == "port 9622 already allocated"
+
+
+def test_operation_or_404_returns_successful_operation() -> None:
+    from app.api.routes import lightrag_admin
+
+    def successful_operation(domain_id: str) -> LightRAGDomainOperationResult:
+        return LightRAGDomainOperationResult(
+            id=domain_id,
+            operation="up",
+            status="succeeded",
+            service_name="lightrag_test",
+            message=None,
+        )
+
+    result = lightrag_admin._operation_or_404(successful_operation, "test")
+
+    assert result.status == "succeeded"
+
+
 def test_lightrag_admin_and_user_domain_responses_do_not_leak_provider_secrets(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -2159,6 +2408,402 @@ def test_lightrag_domain_user_safe_list_hides_paths_and_container_details(
     assert "paths" not in domain
     assert "container_name" not in domain
     assert unauthenticated.status_code == 401
+
+
+def test_archived_domain_is_hidden_from_user_lists_and_document_reads() -> None:
+    create_db_and_tables()
+    with SessionLocal() as session:
+        fatigue_document = DocumentRepository(session).create(
+            owner_id=None,
+            lightrag_domain_id="fatigue",
+            filename="fatigue.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/fatigue.txt",
+            metadata={"lightrag": {"domain_id": "fatigue"}},
+            status=DocumentStatus.READY,
+        )
+        active_document = DocumentRepository(session).create(
+            owner_id=None,
+            lightrag_domain_id="default",
+            filename="default.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/default.txt",
+            metadata={"lightrag": {"domain_id": "default"}},
+            status=DocumentStatus.READY,
+        )
+        fatigue_document_id = fatigue_document.id
+        active_document_id = active_document.id
+        LightRAGDomainLifecycleRepository(session).set_state(domain_id="fatigue", state="archived")
+
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        domains = client.get("/lightrag/domains", headers=user_headers)
+        documents = client.get("/documents", headers=user_headers)
+        hidden_detail = client.get(f"/documents/{fatigue_document_id}", headers=user_headers)
+        hidden_chunks = client.get(f"/documents/{fatigue_document_id}/chunks", headers=user_headers)
+        visible_detail = client.get(f"/documents/{active_document_id}", headers=user_headers)
+
+    assert domains.status_code == 200
+    domain_ids = {domain["id"] for domain in domains.json()["domains"]}
+    assert "default" in domain_ids
+    assert "fatigue" not in domain_ids
+    assert documents.status_code == 200
+    readable_ids = {item["id"] for item in documents.json()}
+    assert active_document_id in readable_ids
+    assert fatigue_document_id not in readable_ids
+    assert hidden_detail.status_code == 404
+    assert hidden_chunks.status_code == 404
+    assert visible_detail.status_code == 200
+
+
+def test_archived_domain_blocks_admin_upload_and_retrieval() -> None:
+    create_db_and_tables()
+    with SessionLocal() as session:
+        LightRAGDomainLifecycleRepository(session).set_state(domain_id="fatigue", state="archived")
+
+    with TestClient(app) as client:
+        _seed_users()
+        admin_headers = _login(client, "admin@example.com")
+        user_headers = _login(client, "user@example.com")
+        upload = client.post(
+            "/admin/documents/upload",
+            headers=admin_headers,
+            data={"lightrag_domain_id": "fatigue"},
+            files={"file": ("blocked.txt", b"blocked", "text/plain")},
+        )
+        retrieve = client.post(
+            "/retrieve",
+            headers=user_headers,
+            json={"query": "fatigue limits", "mode": "semantic", "lightrag_domain_id": "fatigue"},
+        )
+
+    assert upload.status_code == 400
+    assert upload.json()["detail"] == "LightRAG domain 'fatigue' is not available"
+    assert retrieve.status_code == 400
+    assert retrieve.json()["detail"] == "LightRAG domain 'fatigue' is not available"
+
+
+def test_lightrag_domain_purge_preview_counts_all_domain_documents(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    preview_domain_id = "fatiguepreview"
+    storage_root = tmp_path / "uploads"
+    storage_root.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
+    _configure_lightrag_manifest(
+        monkeypatch,
+        tmp_path,
+        {"default": "Default Manuals", preview_domain_id: "Fatigue Manuals"},
+    )
+    create_db_and_tables()
+    with SessionLocal() as session:
+        documents = DocumentRepository(session)
+        processing = DocumentProcessingRepository(session)
+        fatigue_docs = []
+        for index, status in enumerate(
+            [DocumentStatus.UPLOADED, DocumentStatus.INDEXING, DocumentStatus.FAILED, DocumentStatus.DELETED]
+        ):
+            path = storage_root / f"fatigue-{index}.txt"
+            path.write_text(f"fatigue-{index}", encoding="utf-8")
+            fatigue_docs.append(
+                documents.create(
+                    owner_id=None,
+                        lightrag_domain_id=preview_domain_id,
+                    filename=path.name,
+                    content_type="text/plain",
+                    storage_path=str(path),
+                        metadata={"lightrag": {"domain_id": preview_domain_id}},
+                    status=status,
+                )
+            )
+        default_path = storage_root / "default-0.txt"
+        default_path.write_text("default", encoding="utf-8")
+        documents.create(
+            owner_id=None,
+            lightrag_domain_id="default",
+            filename=default_path.name,
+            content_type="text/plain",
+            storage_path=str(default_path),
+            metadata={"lightrag": {"domain_id": "default"}},
+            status=DocumentStatus.READY,
+        )
+        first_doc = fatigue_docs[0]
+        processing.save_structure(
+            DocumentStructure(
+                document_id=first_doc.id,
+                source_file=first_doc.storage_path,
+                pages=[DocumentPage(page_number=1, text="Page one")],
+                sections=[
+                    DocumentSection(
+                        section_id=f"{first_doc.id}-sec-1",
+                        document_id=first_doc.id,
+                        title="Section one",
+                        level=1,
+                    )
+                ],
+                blocks=[
+                    DocumentBlock(
+                        block_id=f"{first_doc.id}-block-1",
+                        document_id=first_doc.id,
+                        section_id=f"{first_doc.id}-sec-1",
+                        type="paragraph",
+                        text="block text",
+                    )
+                ],
+                source_chunks=[
+                    SourceChunk(
+                        chunk_id=f"{first_doc.id}-chunk-1",
+                        document_id=first_doc.id,
+                        section_id=f"{first_doc.id}-sec-1",
+                        block_ids=[f"{first_doc.id}-block-1"],
+                        text="chunk text",
+                    )
+                ],
+                assets=[
+                    DocumentAsset(
+                        asset_id=f"{first_doc.id}-asset-1",
+                        document_id=first_doc.id,
+                        section_id=f"{first_doc.id}-sec-1",
+                        block_id=f"{first_doc.id}-block-1",
+                        chunk_id=f"{first_doc.id}-chunk-1",
+                        asset_type="image",
+                        storage_path=f"documents/{first_doc.id}/assets/asset-1.png",
+                        thumbnail_path=f"documents/{first_doc.id}/assets/asset-1-thumb.png",
+                        content_hash="hash-1",
+                    )
+                ],
+            )
+        )
+
+    with TestClient(app) as client:
+        _seed_users()
+        admin_headers = _login(client, "admin@example.com")
+        preview = client.post(
+            f"/admin/lightrag/domains/{preview_domain_id}/purge-preview",
+            headers=admin_headers,
+        )
+
+    assert preview.status_code == 200
+    body = preview.json()
+    assert body["domain_id"] == preview_domain_id
+    assert body["documents"] == 4
+    assert body["original_uploads"] == 4
+    assert body["assets"] == 1
+    assert body["chunks"] == 1
+    assert body["pages"] == 1
+    assert body["sections"] == 1
+    assert body["blocks"] == 1
+    assert body["estimated_bytes"] > 0
+
+
+def test_lightrag_domain_purge_rejects_confirm_domain_id_mismatch(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("LIGHTRAG_ALLOW_PERMANENT_DELETE", "true")
+    _configure_lightrag_manifest(monkeypatch, tmp_path, {"fatigue": "Fatigue Manuals"})
+    create_db_and_tables()
+
+    with TestClient(app) as client:
+        _seed_users()
+        admin_headers = _login(client, "admin@example.com")
+        response = client.delete(
+            "/admin/lightrag/domains/fatigue/purge?confirm_domain_id=wrong",
+            headers=admin_headers,
+        )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "confirm_domain_id must match domain_id"
+
+
+def test_lightrag_domain_purge_requires_permanent_delete_opt_in(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("LIGHTRAG_ALLOW_PERMANENT_DELETE", "false")
+    _configure_lightrag_manifest(monkeypatch, tmp_path, {"fatigue": "Fatigue Manuals"})
+    create_db_and_tables()
+
+    with TestClient(app) as client:
+        _seed_users()
+        admin_headers = _login(client, "admin@example.com")
+        response = client.delete(
+            "/admin/lightrag/domains/fatigue/purge?confirm_domain_id=fatigue",
+            headers=admin_headers,
+        )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Permanent LightRAG domain delete is disabled"
+
+
+def test_lightrag_domain_purge_hard_deletes_domain_documents_and_artifacts(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    purge_domain_id = "fatiguepurge"
+    storage_root = tmp_path / "uploads"
+    storage_root.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
+    monkeypatch.setenv("LIGHTRAG_DEPLOY_ENABLED", "true")
+    monkeypatch.setenv("LIGHTRAG_ALLOW_PERMANENT_DELETE", "true")
+    monkeypatch.setenv("LIGHTRAG_DEPLOY_ROOT", str(tmp_path / "lightrag"))
+    monkeypatch.setenv("LIGHTRAG_DOMAINS_ROOT", str(tmp_path / "lightrag/domains"))
+    monkeypatch.setenv("LIGHTRAG_DOMAIN_REGISTRY", str(tmp_path / "lightrag/domains.json"))
+    monkeypatch.setenv("LIGHTRAG_COMPOSE_FILE", str(tmp_path / "lightrag/compose.yml"))
+    monkeypatch.setenv("LIGHTRAG_DELETED_ROOT", str(tmp_path / "lightrag/deleted"))
+    get_settings.cache_clear()
+
+    deploy_settings = LightRAGDeploySettings.from_app_settings(get_settings())
+    domain_service = LightRAGDomainService(settings=deploy_settings)
+    domain_service.create_domain(
+        LightRAGDomainCreateRequest(domain_id=purge_domain_id, display_name="Fatigue")
+    )
+    domain_service.create_domain(LightRAGDomainCreateRequest(domain_id="default", display_name="Default"))
+
+    create_db_and_tables()
+    with SessionLocal() as session:
+        documents = DocumentRepository(session)
+        processing = DocumentProcessingRepository(session)
+        jobs = JobRepository(session)
+
+        fatigue_path = storage_root / "fatigue.txt"
+        fatigue_path.write_text("fatigue", encoding="utf-8")
+        default_path = storage_root / "default.txt"
+        default_path.write_text("default", encoding="utf-8")
+
+        fatigue_doc = documents.create(
+            owner_id=None,
+            lightrag_domain_id=purge_domain_id,
+            filename="fatigue.txt",
+            content_type="text/plain",
+            storage_path=str(fatigue_path),
+            metadata={"lightrag": {"domain_id": purge_domain_id}},
+            status=DocumentStatus.READY,
+        )
+        default_doc = documents.create(
+            owner_id=None,
+            lightrag_domain_id="default",
+            filename="default.txt",
+            content_type="text/plain",
+            storage_path=str(default_path),
+            metadata={"lightrag": {"domain_id": "default"}},
+            status=DocumentStatus.READY,
+        )
+        processing.save_structure(
+            DocumentStructure(
+                document_id=fatigue_doc.id,
+                source_file=fatigue_doc.storage_path,
+                source_chunks=[
+                    SourceChunk(
+                        chunk_id=f"{fatigue_doc.id}-chunk-1",
+                        document_id=fatigue_doc.id,
+                        block_ids=[],
+                        text="chunk text",
+                    )
+                ],
+            )
+        )
+        artifact_root = DocumentStoragePaths(storage_root=storage_root).document_root(fatigue_doc.id)
+        artifact_file = artifact_root / "assets" / "artifact.png"
+        artifact_file.parent.mkdir(parents=True, exist_ok=True)
+        artifact_file.write_text("binary", encoding="utf-8")
+
+        fatigue_job = jobs.create(kind="document_ingest", document_id=fatigue_doc.id)
+        jobs.set_status(fatigue_job, JobStatus.RUNNING)
+        default_job = jobs.create(kind="document_ingest", document_id=default_doc.id)
+        jobs.set_status(default_job, JobStatus.QUEUED)
+        fatigue_doc_id = fatigue_doc.id
+        default_doc_id = default_doc.id
+        fatigue_job_id = fatigue_job.id
+        default_job_id = default_job.id
+
+    with TestClient(app) as client:
+        _seed_users()
+        admin_headers = _login(client, "admin@example.com")
+        response = client.delete(
+            f"/admin/lightrag/domains/{purge_domain_id}/purge?confirm_domain_id={purge_domain_id}",
+            headers=admin_headers,
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["domain_id"] == purge_domain_id
+    assert body["state"] == "purged"
+    assert body["purged_documents"] == 1
+    assert body["purged_original_uploads"] == 1
+    assert body["purged_artifact_roots"] == 1
+    assert body["canceled_jobs"] == 1
+    assert body["deleted_domain_root"] is True
+
+    with SessionLocal() as session:
+        documents = DocumentRepository(session)
+        jobs = JobRepository(session)
+        fatigue_after = documents.get(fatigue_doc_id)
+        default_after = documents.get(default_doc_id)
+        assert fatigue_after is None
+        assert default_after is not None
+        assert jobs.get(fatigue_job_id).document_id is None
+        assert jobs.get(default_job_id).document_id == default_doc_id
+
+    assert not fatigue_path.exists()
+    assert default_path.exists()
+    assert not artifact_root.exists()
+    assert not (tmp_path / f"lightrag/domains/{purge_domain_id}").exists()
+    assert (tmp_path / "lightrag/domains/default").exists()
+
+
+def test_archive_domain_is_non_destructive_and_blocks_user_document_reads(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    storage_root = tmp_path / "uploads"
+    storage_root.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
+    monkeypatch.setenv("LIGHTRAG_DEPLOY_ENABLED", "true")
+    monkeypatch.setenv("LIGHTRAG_DEPLOY_ROOT", str(tmp_path / "lightrag"))
+    monkeypatch.setenv("LIGHTRAG_DOMAINS_ROOT", str(tmp_path / "lightrag/domains"))
+    monkeypatch.setenv("LIGHTRAG_DOMAIN_REGISTRY", str(tmp_path / "lightrag/domains.json"))
+    monkeypatch.setenv("LIGHTRAG_COMPOSE_FILE", str(tmp_path / "lightrag/compose.yml"))
+    monkeypatch.setenv("LIGHTRAG_DELETED_ROOT", str(tmp_path / "lightrag/deleted"))
+    get_settings.cache_clear()
+
+    deploy_settings = LightRAGDeploySettings.from_app_settings(get_settings())
+    domain_service = LightRAGDomainService(settings=deploy_settings)
+    domain_service.create_domain(LightRAGDomainCreateRequest(domain_id="archivecase", display_name="Archive"))
+    create_db_and_tables()
+    with SessionLocal() as session:
+        documents = DocumentRepository(session)
+        document_path = storage_root / "archive.txt"
+        document_path.write_text("archive", encoding="utf-8")
+        document = documents.create(
+            owner_id=None,
+            lightrag_domain_id="archivecase",
+            filename="archive.txt",
+            content_type="text/plain",
+            storage_path=str(document_path),
+            metadata={"lightrag": {"domain_id": "archivecase"}},
+            status=DocumentStatus.READY,
+        )
+        artifact_root = DocumentStoragePaths(storage_root=storage_root).document_root(document.id)
+        artifact_file = artifact_root / "assets" / "artifact.png"
+        artifact_file.parent.mkdir(parents=True, exist_ok=True)
+        artifact_file.write_text("binary", encoding="utf-8")
+        document_id = document.id
+
+    with TestClient(app) as client:
+        _seed_users()
+        admin_headers = _login(client, "admin@example.com")
+        user_headers = _login(client, "user@example.com")
+        archive = client.delete("/admin/lightrag/domains/archivecase", headers=admin_headers)
+        user_detail = client.get(f"/documents/{document_id}", headers=user_headers)
+
+    assert archive.status_code == 200
+    assert archive.json()["archived"] is True
+    assert document_path.exists()
+    assert artifact_root.exists()
+    assert user_detail.status_code == 404
 
 
 def test_workspace_tree_requires_authentication() -> None:

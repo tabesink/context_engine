@@ -27,7 +27,8 @@ def test_env_example_declares_lightrag_deployment_settings() -> None:
         "LIGHTRAG_DEFAULT_CONTAINER_PORT",
         "LIGHTRAG_DOCKER_NETWORK",
         "LIGHTRAG_DOMAIN_ENV_FILENAME",
-        "LIGHTRAG_IMAGE",
+        "LIGHTRAG_DOCKERFILE",
+        "LIGHTRAG_BUILD_CONTEXT",
         "LIGHTRAG_DOCKER_EXECUTION_MODE",
         "LIGHTRAG_DOCKER_COMPOSE_BIN",
         "LIGHTRAG_DOCKER_TIMEOUT_SECONDS",
@@ -73,7 +74,8 @@ def test_settings_parse_lightrag_deployment_fields(tmp_path: Path) -> None:
         lightrag_default_container_port=9621,
         lightrag_docker_network="ce_lightrag",
         lightrag_domain_env_filename="domain.env",
-        lightrag_image="example/lightrag:test",
+        lightrag_dockerfile=Path("docker/lightrag.Dockerfile"),
+        lightrag_build_context=Path("."),
         lightrag_docker_execution_mode="socket",
         lightrag_docker_compose_bin="docker compose",
         lightrag_docker_timeout_seconds=30,
@@ -109,7 +111,8 @@ def test_settings_parse_lightrag_deployment_fields(tmp_path: Path) -> None:
     assert deploy.domains_root == tmp_path / "lightrag" / "domains"
     assert deploy.manifest_path == tmp_path / "lightrag" / "domains.json"
     assert deploy.default_port_start == 9700
-    assert deploy.image == "example/lightrag:test"
+    assert deploy.dockerfile == Path("docker/lightrag.Dockerfile")
+    assert deploy.build_context == Path(".")
     assert deploy.docker_execution_mode == "socket"
     assert deploy.postgres_host == "postgres"
     assert deploy.postgres_database_prefix == "lr"
@@ -136,6 +139,18 @@ def test_settings_parse_lightrag_deployment_fields(tmp_path: Path) -> None:
     assert deploy.openai_llm_max_completion_tokens == 1200
     assert deploy.openai_llm_temperature == 0.2
     assert deploy.openai_llm_extra_body == '{"top_p":0.95}'
+
+
+def test_settings_default_to_internal_lightrag_build_paths() -> None:
+    settings = Settings(
+        environment="test",
+        database_url="postgresql+psycopg://app_user:app_pw@localhost:5438/test_context_engine",
+    )
+
+    deploy = LightRAGDeploySettings.from_app_settings(settings)
+
+    assert deploy.dockerfile == Path("docker/lightrag.Dockerfile")
+    assert deploy.build_context == Path(".")
 
 
 def test_domain_path_resolver_creates_expected_domain_tree(tmp_path: Path) -> None:

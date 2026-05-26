@@ -23,7 +23,7 @@ type RetrievalSettingsPopoverProps = {
 
 const MODES: RetrievalQueryMode[] = ["global", "local", "hybrid", "naive", "mix"];
 const FIELD_DESCRIPTIONS = {
-  knowledgebase: "Healthy LightRAG knowledgebase discovered from the local domain manifest.",
+  knowledgebase: "Healthy Knowledge Graph domain discovered from the local domain manifest.",
   mode: "Use mix for normal chat: it combines KG retrieval with direct vector chunks. Global is relationship-driven.",
   top_k: "Number of KG items to retrieve. Represents entities in local mode and relationships in global mode.",
   chunk_top_k: "Number of text chunks to retrieve initially from vector search.",
@@ -54,7 +54,7 @@ export function RetrievalSettingsPopover({
           <div>
             <h2 className="text-sm font-medium text-[var(--foreground)]">Retrieval Settings</h2>
             <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
-              Choose one LightRAG knowledgebase and tune `/query/context`. Mix mode is recommended for question-specific chunks.
+              Choose one Knowledge Graph domain and tune `/query/context`. Mix mode is recommended for question-specific chunks.
             </p>
           </div>
 
@@ -141,7 +141,7 @@ function DomainSelect({ domains, selectedPort, onChange }: DomainSelectProps) {
       <div className="space-y-1.5">
         <FieldLabel label="Knowledgebase" description={FIELD_DESCRIPTIONS.knowledgebase} />
         <div className="rounded-md border border-[var(--border)] px-3 py-2 text-xs text-[var(--muted-foreground)]">
-          No healthy LightRAG knowledgebases found.
+          No healthy Knowledge Graph domains found.
         </div>
       </div>
     );

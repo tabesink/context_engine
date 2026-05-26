@@ -65,6 +65,7 @@ class DocumentService:
         }
         document = self.documents.create(
             owner_id=actor_id,
+            lightrag_domain_id=domain_id,
             filename=file.filename or path.name,
             content_type=file.content_type or "application/octet-stream",
             storage_path=str(path),

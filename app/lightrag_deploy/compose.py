@@ -131,18 +131,15 @@ class ComposeGenerator:
             f"  {domain.service_name}:",
             f"    container_name: {domain.container_name}",
         ]
-        if self.settings.build_context and self.settings.dockerfile:
-            build_context = self._host_path(path_to_posix(self.settings.build_context))
-            dockerfile = self._host_path(path_to_posix(self.settings.dockerfile))
-            lines.extend(
-                [
-                    "    build:",
-                    f"      context: {build_context}",
-                    f"      dockerfile: {dockerfile}",
-                ]
-            )
-        else:
-            lines.append(f"    image: {self.settings.image}")
+        build_context = self._host_path(path_to_posix(self.settings.build_context))
+        dockerfile = self._host_path(path_to_posix(self.settings.dockerfile))
+        lines.extend(
+            [
+                "    build:",
+                f"      context: {build_context}",
+                f"      dockerfile: {dockerfile}",
+            ]
+        )
         lines.extend(
             [
                 "    env_file:",

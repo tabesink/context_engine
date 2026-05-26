@@ -39,9 +39,8 @@ class Settings(BaseSettings):
     lightrag_default_container_port: int = 9621
     lightrag_docker_network: str = "context_engine_lightrag"
     lightrag_domain_env_filename: str = "domain.env"
-    lightrag_image: str = "ghcr.io/hkuds/lightrag:latest"
-    lightrag_dockerfile: Path | None = None
-    lightrag_build_context: Path | None = None
+    lightrag_dockerfile: Path = Path("docker/lightrag.Dockerfile")
+    lightrag_build_context: Path = Path(".")
     lightrag_postgres_url: str | None = None
     lightrag_postgres_host: str = "postgres"
     lightrag_postgres_port: int = 5432
@@ -116,22 +115,27 @@ class Settings(BaseSettings):
         if env != "test" and not database_url.startswith("postgresql"):
             raise ValueError("PostgreSQL is the only supported runtime database.")
 
-        if env == "production":
+        if env in {"production", "staging"}:
             weak_secret_keys = {
                 "dev-secret-change-me",
                 "change-me",
                 "change-me-in-production",
             }
             if self.secret_key in weak_secret_keys:
-                raise ValueError("SECRET_KEY must be set to a strong production value.")
+                raise ValueError("SECRET_KEY must be set to a strong production/staging value.")
             if self.allowed_origins == ["*"]:
-                raise ValueError("ALLOWED_ORIGINS cannot be '*' in production.")
+                raise ValueError("ALLOWED_ORIGINS cannot be '*' in production/staging.")
             weak_seed_passwords = {"admin", "admin123", "admin-password", "change-me"}
             if self.seed_admin_password in weak_seed_passwords:
-                raise ValueError("SEED_ADMIN_PASSWORD is too weak for production.")
+                raise ValueError("SEED_ADMIN_PASSWORD is too weak for production/staging.")
 
         if not self.lightrag_domain_registry:
             raise ValueError("LIGHTRAG_DOMAIN_REGISTRY must be configured.")
+        if self.lightrag_deploy_enabled:
+            if not self.lightrag_dockerfile:
+                raise ValueError("LIGHTRAG_DOCKERFILE must be configured when deploy is enabled.")
+            if not self.lightrag_build_context:
+                raise ValueError("LIGHTRAG_BUILD_CONTEXT must be configured when deploy is enabled.")
         return self
 
 

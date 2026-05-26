@@ -5,15 +5,11 @@ export type CurrentUser = {
   username: string;
   role: UserRole;
   is_active: boolean;
-  can_write?: boolean;
   created_at?: string | null;
   last_login_at?: string | null;
 };
 
-export type AdminUser = CurrentUser & {
-  can_write: boolean;
-  has_password: boolean;
-};
+export type AdminUser = CurrentUser;
 
 export type LoginPayload = {
   username: string;
@@ -24,18 +20,13 @@ export type CreateUserPayload = {
   username: string;
   password: string;
   role: UserRole;
-  can_write: boolean;
 };
 
 export type UpdateUserPayload = {
-  role?: UserRole;
-  can_write?: boolean;
+  role: UserRole;
 };
 
 export type ResetPasswordPayload = {
   new_password: string;
 };
 
-export type PendingCountResponse = {
-  count: number;
-};

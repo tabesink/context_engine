@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { LogIn, LogOut, Settings } from "lucide-react";
 import type { ReactNode } from "react";
 import { useAuthStore } from "@/stores/auth-store";
+import { openSettingsDialog, useSettingsDialogStore } from "@/stores/settings-dialog-store";
 
 type AppPageFrameProps = {
   children: ReactNode;
@@ -15,6 +16,7 @@ export function AppPageFrame({ children, contentClassName = "" }: AppPageFramePr
   const pathname = usePathname();
   const status = useAuthStore((state) => state.status);
   const logout = useAuthStore((state) => state.logout);
+  const settingsOpen = useSettingsDialogStore((state) => state.isOpen);
   const authenticated = status === "authenticated";
 
   return (
@@ -79,17 +81,18 @@ export function AppPageFrame({ children, contentClassName = "" }: AppPageFramePr
               <ellipse cx="12" cy="5" rx="9" ry="3" />
             </svg>
           </Link>
-          <Link
-            href="/settings/users"
+          <button
+            type="button"
+            onClick={() => openSettingsDialog("general")}
             aria-label="Settings"
             className={`inline-flex size-10 items-center justify-center rounded-xl transition-colors ${
-              pathname.startsWith("/settings")
+              settingsOpen || pathname.startsWith("/settings")
                 ? "bg-[var(--secondary)] text-[var(--foreground)]"
                 : "text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
             }`}
           >
             <Settings className="size-5" aria-hidden />
-          </Link>
+          </button>
           {authenticated ? (
             <button
               type="button"
