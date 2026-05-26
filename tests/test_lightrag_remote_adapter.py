@@ -15,19 +15,33 @@ from app.integrations.lightrag_remote_adapter import (
     LightRAGServiceUnavailable,
     LightRAGUpstreamError,
 )
+from app.services.lightrag_domain_registry import LightRAGDomainNotFoundError
 
 
-def test_domain_resolver_uses_settings_when_manifest_is_missing(tmp_path: Path) -> None:
+def test_domain_resolver_requires_registered_domain(tmp_path: Path) -> None:
     settings = Settings(
         environment="test",
         database_url="sqlite:///./.data/test_context_engine.db",
-        lightrag_base_url="http://lightrag.example",
-        lightrag_api_key="secret",
-        lightrag_domain="default",
-        lightrag_domain_manifest=tmp_path / "missing.json",
+        lightrag_domain_registry=tmp_path / "missing.json",
     )
 
-    domain = resolve_lightrag_domain(settings=settings)
+    with pytest.raises(LightRAGDomainNotFoundError, match="LightRAG domain 'default' does not exist"):
+        resolve_lightrag_domain(settings=settings, domain="default")
+
+
+def test_domain_resolver_uses_registered_runtime_connection(tmp_path: Path) -> None:
+    registry_path = tmp_path / "domains.json"
+    registry_path.write_text(
+        '{"domains":[{"id":"default","base_url":"http://lightrag.example","api_key":"secret","status":"ready"}]}',
+        encoding="utf-8",
+    )
+    settings = Settings(
+        environment="test",
+        database_url="sqlite:///./.data/test_context_engine.db",
+        lightrag_domain_registry=registry_path,
+    )
+
+    domain = resolve_lightrag_domain(settings=settings, domain="default")
 
     assert domain.name == "default"
     assert domain.base_url == "http://lightrag.example"

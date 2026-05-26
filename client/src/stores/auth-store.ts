@@ -1,7 +1,8 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { authApi, type ChangePasswordPayload } from "@/lib/api/auth";
+import { hasAccessToken, setAccessToken } from "@/lib/api/client";
+import { authApi } from "@/lib/api/auth";
 import type { CurrentUser } from "@/types/user";
 
 type AuthStatus = "idle" | "loading" | "authenticated" | "unauthenticated";
@@ -13,7 +14,6 @@ type AuthState = {
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
-  changePassword: (payload: ChangePasswordPayload) => Promise<void>;
 };
 
 const listeners = new Set<() => void>();
@@ -25,7 +25,6 @@ let state: AuthState = {
   login,
   logout,
   refresh,
-  changePassword,
 };
 
 function setState(patch: Partial<AuthState>) {
@@ -44,26 +43,40 @@ function getSnapshot() {
 
 async function bootstrap() {
   if (state.status === "loading" || state.status === "authenticated") return;
+  if (!hasAccessToken()) {
+    setState({ user: null, status: "unauthenticated" });
+    return;
+  }
   setState({ status: "loading" });
   try {
     const user = await authApi.me();
     setState({ user, status: "authenticated" });
   } catch (error) {
     void error;
+    setAccessToken(null);
     setState({ user: null, status: "unauthenticated" });
   }
 }
 
 async function login(username: string, password: string) {
   setState({ status: "loading" });
-  const user = await authApi.login({ username, password });
-  setState({ user, status: "authenticated" });
+  const token = await authApi.login({ username, password });
+  setAccessToken(token.access_token);
+  try {
+    const user = await authApi.me();
+    setState({ user, status: "authenticated" });
+  } catch (error) {
+    setAccessToken(null);
+    setState({ user: null, status: "unauthenticated" });
+    throw error;
+  }
 }
 
 async function logout() {
   try {
     await authApi.logout();
   } finally {
+    setAccessToken(null);
     setState({ user: null, status: "unauthenticated" });
     if (typeof window !== "undefined" && window.location.pathname !== "/login") {
       window.location.replace("/login");
@@ -72,12 +85,12 @@ async function logout() {
 }
 
 async function refresh() {
+  if (!hasAccessToken()) {
+    setState({ user: null, status: "unauthenticated" });
+    return;
+  }
   const user = await authApi.me();
   setState({ user, status: "authenticated" });
-}
-
-async function changePassword(payload: ChangePasswordPayload) {
-  await authApi.changePassword(payload);
 }
 
 export function useAuthStore<T = AuthState>(selector: (state: AuthState) => T = (value) => value as T): T {

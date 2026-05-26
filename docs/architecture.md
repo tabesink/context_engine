@@ -137,7 +137,7 @@ V1 document read policy: every authenticated user may read/query ready, non-dele
 
 Deployment secret boundaries:
 
-- `LIGHTRAG_API_KEY` (Context Engine -> LightRAG server auth) remains root app configuration and is not copied into manifests.
+- Per-domain registry `api_key` values authenticate Context Engine -> registered LightRAG server traffic.
 - Provider keys from `LIGHTRAG_LLM_BINDING_API_KEY` / `LIGHTRAG_EMBEDDING_BINDING_API_KEY` are emitted only to generated per-domain `domain.env` files.
 - Domain manifest and generated compose output do not inline provider secrets; compose references `env_file` paths instead.
 

@@ -36,6 +36,26 @@ def document_response(document) -> DocumentResponse:
     )
 
 
+def ingestion_status_response(document, structure) -> dict:
+    metadata = document.meta if isinstance(document.meta, dict) else {}
+    lightrag = metadata.get("lightrag")
+    lightrag_payload = dict(lightrag) if isinstance(lightrag, dict) else {}
+    # Keep provider correlation IDs private to backend workflows.
+    lightrag_payload.pop("track_id", None)
+    return {
+        "document_id": document.id,
+        "status": document.status,
+        "lightrag": lightrag_payload,
+        "structure": {
+            "has_pages": bool(structure and structure.pages),
+            "has_sections": bool(structure and structure.sections),
+            "has_chunks": bool(structure and structure.source_chunks),
+            "has_assets": bool(structure and structure.assets),
+        },
+        "error_message": document.error_message,
+    }
+
+
 @router.get("")
 def list_documents(
     user: UserRow = Depends(get_current_user),
@@ -117,23 +137,11 @@ def get_ingestion_status(
         user=user,
         document_id=document_id,
     )
-    metadata = document.meta if isinstance(document.meta, dict) else {}
     structure = DocumentProcessingRepository(session).get_structure(
         document_id,
         source_file=document.storage_path,
     )
-    return {
-        "document_id": document.id,
-        "status": document.status,
-        "lightrag": metadata.get("lightrag") or {},
-        "structure": {
-            "has_pages": bool(structure and structure.pages),
-            "has_sections": bool(structure and structure.sections),
-            "has_chunks": bool(structure and structure.source_chunks),
-            "has_assets": bool(structure and structure.assets),
-        },
-        "error_message": document.error_message,
-    }
+    return ingestion_status_response(document, structure)
 
 
 @router.get("/{document_id}/structure-quality")

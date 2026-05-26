@@ -19,9 +19,9 @@ Reuse ideas:
 Current adaptation:
 
 - Keep retrieval and graph communication HTTP-only in `app/integrations/lightrag_remote_adapter.py`.
-- Resolve optional domain-specific base URLs/API keys in `app/integrations/lightrag_domains.py`.
+- Resolve registered domain-specific base URLs/API keys through `app/services/lightrag_domain_registry.py`.
 - Convert remote chunks/references into the local `Evidence` model.
-- Queue admin uploads for LightRAG ingestion when `LIGHTRAG_BASE_URL=http://localhost:9621`.
+- Queue admin uploads for LightRAG ingestion when the selected `lightrag_domain_id` exists in `LIGHTRAG_DOMAIN_REGISTRY`.
 - Proxy read-only graph routes through `/graphs` and `/graph/label/...`.
 - Keep local navigation retrieval available for page/tree browsing and hybrid enrichment.
 - Manage optional domain deployment through local Context Engine code under `app/lightrag_deploy/`, using generated `.data/lightrag` manifest/env/compose files rather than importing LightRAG internals.

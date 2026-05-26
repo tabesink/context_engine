@@ -18,6 +18,18 @@ class DocumentAccessPolicy:
         del user
         return self.documents.list_ready()
 
+    def filter_readable_documents(
+        self,
+        user: UserRow,
+        documents: list[DocumentRow],
+    ) -> list[DocumentRow]:
+        del user
+        return [
+            document
+            for document in documents
+            if document.status == DocumentStatus.READY.value
+        ]
+
     def get_readable_document_or_404(self, *, user: UserRow, document_id: str) -> DocumentRow:
         del user
         document = self.documents.get(document_id)

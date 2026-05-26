@@ -2,10 +2,12 @@ from fastapi import APIRouter, Depends, Form, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_admin
-from app.api.routes.documents import document_response
+from app.api.routes.documents import document_response, ingestion_status_response
+from app.core.errors import not_found
 from app.schemas.documents import DocumentResponse, UploadResponse
 from app.services.document_service import DocumentService
 from app.storage.db import get_session
+from app.storage.repositories.document_processing import DocumentProcessingRepository
 from app.storage.repositories.documents import DocumentRepository
 from app.storage.repositories.logs import LogRepository
 from app.storage.tables import UserRow
@@ -42,6 +44,23 @@ def refresh_status(
     del admin
     document = DocumentService(session).refresh_lightrag_status(document_id=document_id)
     return document_response(document)
+
+
+@router.get("/documents/{document_id}/ingestion-status")
+def get_admin_ingestion_status(
+    document_id: str,
+    admin: UserRow = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> dict:
+    del admin
+    document = DocumentRepository(session).get(document_id)
+    if not document:
+        raise not_found("Document not found")
+    structure = DocumentProcessingRepository(session).get_structure(
+        document_id,
+        source_file=document.storage_path,
+    )
+    return ingestion_status_response(document, structure)
 
 
 @router.post("/documents/{document_id}/reingest")

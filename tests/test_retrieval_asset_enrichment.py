@@ -69,11 +69,17 @@ class FakeAssetMetadataStrategy:
         )
 
 
+class FakeDomainRegistry:
+    def validate_available(self, domain_id: str | None):
+        assert domain_id == "manuals"
+
+
 def _retrieval_service(session, strategy) -> RetrievalService:
     return RetrievalService(
         session,
         local_strategy=strategy,
         remote_strategy=strategy,
+        domain_registry=FakeDomainRegistry(),
     )
 
 
@@ -114,6 +120,7 @@ def test_retrieval_response_can_include_assets_linked_to_source_chunks() -> None
             request=RetrieveRequest(
                 query="show diagram",
                 mode=RetrievalMode.SEMANTIC,
+                lightrag_domain_id="manuals",
                 include_assets=True,
             ),
             user=user,
@@ -158,6 +165,7 @@ def test_retrieval_response_resolves_assets_from_lightrag_chunk_metadata() -> No
             request=RetrieveRequest(
                 query="show diagram",
                 mode=RetrievalMode.SEMANTIC,
+                lightrag_domain_id="manuals",
                 include_assets=True,
             ),
             user=user,
@@ -212,6 +220,7 @@ def test_retrieval_asset_enrichment_ranks_metadata_assets_and_applies_limit() ->
             request=RetrieveRequest(
                 query="show hydraulic diagram",
                 mode=RetrievalMode.SEMANTIC,
+                lightrag_domain_id="manuals",
                 include_assets=True,
                 max_assets=1,
             ),
@@ -231,6 +240,7 @@ def test_retrieval_asset_enrichment_is_opt_in() -> None:
             request=RetrieveRequest(
                 query="show diagram",
                 mode=RetrievalMode.SEMANTIC,
+                lightrag_domain_id="manuals",
                 include_assets=False,
             ),
             user=user,

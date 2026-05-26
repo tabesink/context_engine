@@ -41,7 +41,7 @@ from app.storage.repositories.jobs import JobRepository  # noqa: E402
 from app.storage.repositories.documents import DocumentRepository  # noqa: E402
 from app.storage.repositories.logs import LogRepository  # noqa: E402
 from app.storage.repositories.users import UserRepository  # noqa: E402
-from app.workers.tasks import run_document_ingest_job  # noqa: E402
+from app.workers.tasks import poll_lightrag_statuses, run_document_ingest_job  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -51,11 +51,15 @@ def _settings_cache(
     manifest_root = tmp_path_factory.mktemp("lightrag-manifest")
     manifest_path = manifest_root / "domains.json"
     manifest_path.write_text(
-        '{"domains":[{"id":"default","status":"ready"},{"id":"fatigue","status":"ready"}]}',
+        (
+            '{"domains":['
+            '{"id":"default","display_name":"Default","base_url":"http://lightrag-default.local","status":"ready"},'
+            '{"id":"fatigue","display_name":"Fatigue","base_url":"http://lightrag-fatigue.local","status":"ready"}'
+            "]}"
+        ),
         encoding="utf-8",
     )
-    monkeypatch.setenv("LIGHTRAG_DOMAIN_MANIFEST", str(manifest_path))
-    monkeypatch.setenv("LIGHTRAG_DOMAINS_MANIFEST", str(manifest_path))
+    monkeypatch.setenv("LIGHTRAG_DOMAIN_REGISTRY", str(manifest_path))
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
@@ -71,8 +75,8 @@ def _seed_users() -> None:
             users.create(email="user@example.com", password="secret", role=UserRole.USER)
 
 
-def _login(client: TestClient, email: str) -> dict[str, str]:
-    response = client.post("/auth/login", json={"email": email, "password": "secret"})
+def _login(client: TestClient, username: str) -> dict[str, str]:
+    response = client.post("/auth/login", json={"username": username, "password": "secret"})
     assert response.status_code == 200
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
@@ -96,8 +100,7 @@ def _configure_lightrag_manifest(
         service.create_domain(
             LightRAGDomainCreateRequest(domain_id=domain_id, display_name=display_name)
         )
-    monkeypatch.setenv("LIGHTRAG_DOMAIN_MANIFEST", str(settings.manifest_path))
-    monkeypatch.setenv("LIGHTRAG_DOMAINS_MANIFEST", str(settings.manifest_path))
+    monkeypatch.setenv("LIGHTRAG_DOMAIN_REGISTRY", str(settings.manifest_path))
     get_settings.cache_clear()
 
 
@@ -108,16 +111,163 @@ def test_health_returns_ok() -> None:
         assert response.json() == {"status": "ok"}
 
 
-def test_readiness_checks_dependencies() -> None:
+def test_auth_login_returns_bearer_token_contract() -> None:
+    with TestClient(app) as client:
+        _seed_users()
+        response = client.post(
+            "/auth/login",
+            json={"username": "admin@example.com", "password": "secret"},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert isinstance(body["access_token"], str)
+    assert body["access_token"]
+    assert body["token_type"] == "bearer"
+
+
+def test_auth_login_rejects_missing_username() -> None:
+    with TestClient(app) as client:
+        _seed_users()
+        response = client.post("/auth/login", json={"password": "secret"})
+
+    assert response.status_code == 422
+
+
+def test_auth_login_rejects_invalid_credentials() -> None:
+    with TestClient(app) as client:
+        _seed_users()
+        response = client.post(
+            "/auth/login",
+            json={"username": "admin@example.com", "password": "bad-password"},
+        )
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Invalid username or password"}
+
+
+def test_auth_me_requires_bearer_token() -> None:
+    with TestClient(app) as client:
+        _seed_users()
+        response = client.get("/auth/me")
+
+    assert response.status_code == 401
+
+
+def test_auth_me_rejects_invalid_token() -> None:
+    with TestClient(app) as client:
+        _seed_users()
+        response = client.get("/auth/me", headers={"Authorization": "Bearer not-a-valid-jwt"})
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Invalid authentication token"}
+
+
+def test_auth_me_returns_current_user_with_valid_token() -> None:
+    with TestClient(app) as client:
+        _seed_users()
+        headers = _login(client, "admin@example.com")
+        response = client.get("/auth/me", headers=headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert isinstance(body["id"], str)
+    assert body["id"]
+    assert body["username"] == "admin@example.com"
+    assert body["role"] == "admin"
+    assert body["is_active"] is True
+
+
+def test_auth_me_rejects_inactive_user() -> None:
+    with TestClient(app) as client:
+        _seed_users()
+        headers = _login(client, "user@example.com")
+        with SessionLocal() as session:
+            user = UserRepository(session).get_by_email("user@example.com")
+            assert user is not None
+            user.is_active = False
+            session.add(user)
+            session.commit()
+        response = client.get("/auth/me", headers=headers)
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "User is inactive or missing"}
+
+
+def test_readiness_checks_dependencies(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeHealthResponse:
+        status_code = 200
+
+    monkeypatch.setattr("app.services.readiness_service.httpx.get", lambda *args, **kwargs: FakeHealthResponse())
     with TestClient(app) as client:
         response = client.get("/health/readiness")
 
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ready"
-    assert body["checks"]["database"] == "ok"
-    assert body["checks"]["redis"] == "skipped"
-    assert body["checks"]["lightrag"] == "manifest"
+    assert body["services"]["database"] == "healthy"
+    assert body["services"]["redis"] == "healthy"
+    assert body["services"]["domain_registry"] == "healthy"
+    assert body["services"]["lightrag"] == "healthy"
+
+
+def test_readiness_reports_not_ready_when_default_lightrag_unhealthy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeHealthResponse:
+        status_code = 503
+
+    monkeypatch.setattr("app.services.readiness_service.httpx.get", lambda *args, **kwargs: FakeHealthResponse())
+    with TestClient(app) as client:
+        response = client.get("/health/readiness")
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["status"] == "not_ready"
+    assert body["services"]["database"] == "healthy"
+    assert body["services"]["domain_registry"] == "healthy"
+    assert body["services"]["lightrag"] == "unhealthy"
+
+
+def test_readiness_reports_not_ready_when_registry_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LIGHTRAG_DOMAIN_REGISTRY", str(Path(".data/missing-domains.json")))
+    get_settings.cache_clear()
+    with TestClient(app) as client:
+        response = client.get("/health/readiness")
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["status"] == "not_ready"
+    assert body["services"]["domain_registry"] == "unhealthy"
+    assert body["services"]["lightrag"] == "unhealthy"
+
+
+def test_readiness_reports_not_ready_when_redis_unhealthy_in_queue_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeHealthResponse:
+        status_code = 200
+
+    class BrokenRedis:
+        def ping(self) -> bool:
+            raise RuntimeError("redis down")
+
+    monkeypatch.setenv("INDEX_JOBS_INLINE", "false")
+    get_settings.cache_clear()
+    monkeypatch.setattr("app.services.readiness_service.httpx.get", lambda *args, **kwargs: FakeHealthResponse())
+    monkeypatch.setattr(
+        "app.services.readiness_service.redis.Redis.from_url",
+        lambda *args, **kwargs: BrokenRedis(),
+    )
+
+    with TestClient(app) as client:
+        response = client.get("/health/readiness")
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["status"] == "not_ready"
+    assert body["services"]["database"] == "healthy"
+    assert body["services"]["redis"] == "unhealthy"
 
 
 def test_admin_guardrails_and_document_retrieve_flow(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -145,6 +295,7 @@ def test_admin_guardrails_and_document_retrieve_flow(monkeypatch: pytest.MonkeyP
         upload = client.post(
             "/admin/documents/upload",
             headers=admin_headers,
+            data={"lightrag_domain_id": "default"},
             files={"file": ("manual.txt", b"Installation steps live on page one.", "text/plain")},
         )
         assert upload.status_code == 200
@@ -157,7 +308,12 @@ def test_admin_guardrails_and_document_retrieve_flow(monkeypatch: pytest.MonkeyP
         retrieve = client.post(
             "/retrieve",
             headers=user_headers,
-            json={"query": "where are installation steps", "mode": "navigation", "top_k": 3},
+            json={
+                "query": "where are installation steps",
+                "mode": "navigation",
+                "top_k": 3,
+                "lightrag_domain_id": "default",
+            },
         )
         assert retrieve.status_code == 200
         body = retrieve.json()
@@ -233,11 +389,11 @@ def test_retrieve_requires_authentication() -> None:
     assert response.status_code == 401
 
 
-def test_lightrag_settings_default_to_remote_required(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_lightrag_settings_default_to_registry_required(monkeypatch: pytest.MonkeyPatch) -> None:
     get_settings.cache_clear()
     settings = get_settings()
 
-    assert settings.lightrag_base_url
+    assert settings.lightrag_domain_registry.name == "domains.json"
 
 
 def test_settings_reject_sqlite_outside_test() -> None:
@@ -283,17 +439,17 @@ def test_production_settings_reject_unsafe_defaults() -> None:
         )
 
 
-def test_lightrag_settings_require_endpoint_or_manifest(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("LIGHTRAG_BASE_URL", "")
-    monkeypatch.setenv("LIGHTRAG_DOMAIN_MANIFEST", "")
-    monkeypatch.setenv("LIGHTRAG_DOMAINS_MANIFEST", "")
+def test_lightrag_settings_use_registry_without_base_url(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    registry_path = tmp_path / "domains.json"
+    monkeypatch.setenv("LIGHTRAG_DOMAIN_REGISTRY", str(registry_path))
     get_settings.cache_clear()
 
-    with pytest.raises(
-        ValidationError,
-        match="no LightRAG base URL or domain manifest is configured",
-    ):
-        get_settings()
+    settings = get_settings()
+
+    assert settings.lightrag_domain_registry == registry_path
 
 
 def test_user_document_reads_hide_non_ready_documents() -> None:
@@ -716,7 +872,7 @@ def test_user_can_list_document_chunks_assets_and_ingestion_status() -> None:
     assert assets.status_code == 200
     assert assets.json()[0]["asset_id"] == asset_id
     assert status.status_code == 200
-    assert status.json()["lightrag"]["track_id"] == "track-1"
+    assert "track_id" not in status.json()["lightrag"]
     assert status.json()["structure"] == {
         "has_pages": True,
         "has_sections": True,
@@ -724,6 +880,36 @@ def test_user_can_list_document_chunks_assets_and_ingestion_status() -> None:
         "has_assets": True,
     }
     assert "navigation" not in status.json()
+
+
+def test_admin_ingestion_status_available_while_document_is_indexing() -> None:
+    create_db_and_tables()
+    with SessionLocal() as session:
+        document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="indexing.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/indexing.txt",
+            metadata={
+                "lightrag": {"domain_id": "default", "track_id": "track-indexing", "status": "indexing"}
+            },
+            status=DocumentStatus.INDEXING,
+        )
+        document_id = document.id
+
+    with TestClient(app) as client:
+        _seed_users()
+        admin_headers = _login(client, "admin@example.com")
+        response = client.get(
+            f"/admin/documents/{document_id}/ingestion-status",
+            headers=admin_headers,
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["document_id"] == document_id
+    assert body["status"] == "indexing"
+    assert "track_id" not in body["lightrag"]
 
 
 def test_source_section_route_hides_missing_and_non_ready_documents() -> None:
@@ -1030,7 +1216,12 @@ def test_retrieve_uses_remote_lightrag(monkeypatch: pytest.MonkeyPatch) -> None:
         response = client.post(
             "/retrieve",
             headers=user_headers,
-            json={"query": "summarize remote context", "mode": "auto", "top_k": 3},
+            json={
+                "query": "summarize remote context",
+                "mode": "auto",
+                "top_k": 3,
+                "lightrag_domain_id": "default",
+            },
         )
 
     assert response.status_code == 200
@@ -1048,10 +1239,12 @@ def test_admin_upload_queues_lightrag_ingestion_when_enabled(
     tmp_path: Path,
 ) -> None:
     manifest_path = tmp_path / "domains.json"
-    manifest_path.write_text('{"domains":[{"id":"default","status":"ready"}]}', encoding="utf-8")
+    manifest_path.write_text(
+        '{"domains":[{"id":"default","display_name":"Default","base_url":"http://lightrag-default.local","status":"ready"}]}',
+        encoding="utf-8",
+    )
     monkeypatch.setenv("INDEX_JOBS_INLINE", "false")
-    monkeypatch.setenv("LIGHTRAG_DOMAIN_MANIFEST", str(manifest_path))
-    monkeypatch.setenv("LIGHTRAG_DOMAINS_MANIFEST", str(manifest_path))
+    monkeypatch.setenv("LIGHTRAG_DOMAIN_REGISTRY", str(manifest_path))
     get_settings.cache_clear()
 
     class FakeQueue:
@@ -1080,6 +1273,7 @@ def test_admin_upload_queues_lightrag_ingestion_when_enabled(
         response = client.post(
             "/admin/documents/upload",
             headers=admin_headers,
+            data={"lightrag_domain_id": "default"},
             files={"file": ("manual.txt", b"Remote document body.", "text/plain")},
         )
 
@@ -1097,9 +1291,8 @@ def test_admin_upload_queues_lightrag_ingestion_when_enabled(
         assert job.document_id == body["document"]["id"]
 
 
-def test_admin_upload_requires_lightrag_domain_manifest(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("LIGHTRAG_DOMAIN_MANIFEST", ".data/missing-lightrag-domains.json")
-    monkeypatch.setenv("LIGHTRAG_DOMAINS_MANIFEST", ".data/missing-lightrag-domains.json")
+def test_admin_upload_requires_lightrag_domain_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LIGHTRAG_DOMAIN_REGISTRY", ".data/missing-lightrag-domains.json")
     get_settings.cache_clear()
 
     with TestClient(app) as client:
@@ -1112,7 +1305,7 @@ def test_admin_upload_requires_lightrag_domain_manifest(monkeypatch: pytest.Monk
         )
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "LightRAG domain manifest is required for uploads."
+    assert response.json()["detail"] == "lightrag_domain_id is required"
 
 
 def test_admin_upload_to_selected_lightrag_domain_records_domain_metadata(
@@ -1131,8 +1324,7 @@ def test_admin_upload_to_selected_lightrag_domain_records_domain_metadata(
         LightRAGDomainCreateRequest(domain_id="fatigue", display_name="Fatigue Manuals")
     )
     monkeypatch.setenv("INDEX_JOBS_INLINE", "false")
-    monkeypatch.setenv("LIGHTRAG_DOMAIN_MANIFEST", str(settings.manifest_path))
-    monkeypatch.setenv("LIGHTRAG_DOMAINS_MANIFEST", str(settings.manifest_path))
+    monkeypatch.setenv("LIGHTRAG_DOMAIN_REGISTRY", str(settings.manifest_path))
     get_settings.cache_clear()
 
     class FakeQueue:
@@ -1259,6 +1451,40 @@ def test_admin_refresh_lightrag_status_marks_document_ready(monkeypatch: pytest.
     assert body["metadata"]["lightrag"]["document_id"] == "remote-doc"
 
 
+def test_poller_refreshes_pending_lightrag_statuses(monkeypatch: pytest.MonkeyPatch) -> None:
+    create_db_and_tables()
+    get_settings.cache_clear()
+
+    def fake_document_status(self: LightRAGRemoteAdapter, track_id: str) -> dict:
+        del self
+        assert track_id == "track-1"
+        return {"document_id": "remote-doc", "track_id": track_id, "status": "ready"}
+
+    monkeypatch.setattr(LightRAGRemoteAdapter, "document_status", fake_document_status)
+    with SessionLocal() as session:
+        document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="manual.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/manual.txt",
+            metadata={
+                "semantic_engine": "lightrag",
+                "lightrag": {"domain_id": "default", "track_id": "track-1", "status": "indexing"},
+            },
+            status=DocumentStatus.INDEXING,
+        )
+        document_id = document.id
+
+    poll_lightrag_statuses()
+
+    with SessionLocal() as session:
+        refreshed = DocumentRepository(session).get(document_id)
+
+    assert refreshed is not None
+    assert refreshed.status == "ready"
+    assert refreshed.meta["lightrag"]["status"] == "ready"
+
+
 def test_admin_refresh_lightrag_status_rejects_unknown_upstream_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1312,8 +1538,7 @@ def test_admin_upload_to_missing_lightrag_domain_fails_before_forwarding(
     LightRAGDomainService(settings=settings).create_domain(
         LightRAGDomainCreateRequest(domain_id="fatigue")
     )
-    monkeypatch.setenv("LIGHTRAG_DOMAIN_MANIFEST", str(settings.manifest_path))
-    monkeypatch.setenv("LIGHTRAG_DOMAINS_MANIFEST", str(settings.manifest_path))
+    monkeypatch.setenv("LIGHTRAG_DOMAIN_REGISTRY", str(settings.manifest_path))
     get_settings.cache_clear()
 
     with TestClient(app) as client:
@@ -1326,7 +1551,7 @@ def test_admin_upload_to_missing_lightrag_domain_fails_before_forwarding(
             files={"file": ("manual.txt", b"Remote document body.", "text/plain")},
         )
 
-    assert response.status_code == 400
+    assert response.status_code == 404
     assert response.json()["detail"] == "LightRAG domain 'missing' does not exist"
 
 
@@ -1362,6 +1587,28 @@ def test_retrieve_uses_selected_lightrag_domain(monkeypatch: pytest.MonkeyPatch)
     assert seen_domains == ["fatigue"]
 
 
+def test_retrieve_rejects_unknown_lightrag_domain(monkeypatch: pytest.MonkeyPatch) -> None:
+    get_settings.cache_clear()
+
+    def fake_retrieve(self: LightRAGRemoteAdapter, **kwargs):
+        del self, kwargs
+        pytest.fail("retrieve should not call LightRAG for an unknown domain")
+
+    monkeypatch.setattr(LightRAGRemoteAdapter, "retrieve", fake_retrieve)
+
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        response = client.post(
+            "/retrieve",
+            headers=user_headers,
+            json={"query": "fatigue limits", "mode": "semantic", "lightrag_domain_id": "missing"},
+        )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "LightRAG domain 'missing' does not exist"
+
+
 def test_retrieve_empty_evidence_is_successful_empty_result(monkeypatch: pytest.MonkeyPatch) -> None:
     get_settings.cache_clear()
 
@@ -1377,7 +1624,12 @@ def test_retrieve_empty_evidence_is_successful_empty_result(monkeypatch: pytest.
         response = client.post(
             "/retrieve",
             headers=user_headers,
-            json={"query": "missing evidence", "mode": "semantic", "include_assets": True},
+            json={
+                "query": "missing evidence",
+                "mode": "semantic",
+                "include_assets": True,
+                "lightrag_domain_id": "default",
+            },
         )
 
     assert response.status_code == 200
@@ -1387,6 +1639,20 @@ def test_retrieve_empty_evidence_is_successful_empty_result(monkeypatch: pytest.
     assert body["evidence"] == []
     assert body["assets"] == []
     assert body["debug"] is None
+
+
+def test_retrieve_requires_lightrag_domain_id() -> None:
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        response = client.post(
+            "/retrieve",
+            headers=user_headers,
+            json={"query": "missing evidence", "mode": "semantic"},
+        )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "lightrag_domain_id is required"
 
 
 def test_retrieve_debug_is_admin_only(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1406,12 +1672,22 @@ def test_retrieve_debug_is_admin_only(monkeypatch: pytest.MonkeyPatch) -> None:
         user_response = client.post(
             "/retrieve",
             headers=user_headers,
-            json={"query": "debug details", "mode": "semantic", "include_debug": True},
+            json={
+                "query": "debug details",
+                "mode": "semantic",
+                "include_debug": True,
+                "lightrag_domain_id": "default",
+            },
         )
         admin_response = client.post(
             "/retrieve",
             headers=admin_headers,
-            json={"query": "debug details", "mode": "semantic", "include_debug": True},
+            json={
+                "query": "debug details",
+                "mode": "semantic",
+                "include_debug": True,
+                "lightrag_domain_id": "default",
+            },
         )
 
     assert user_response.status_code == 200
@@ -1486,6 +1762,26 @@ def test_lightrag_graph_proxy_uses_upstream_route_names(monkeypatch: pytest.Monk
     assert seen_paths == ["/graphs", "/graph/label/list"]
 
 
+def test_lightrag_graph_proxy_rejects_unknown_domain_before_proxy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    get_settings.cache_clear()
+
+    def fake_for_domain(cls, domain: str):
+        del cls, domain
+        pytest.fail("graph proxy should not resolve an adapter for an unknown domain")
+
+    monkeypatch.setattr(LightRAGRemoteAdapter, "for_domain", classmethod(fake_for_domain))
+
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        response = client.get("/lightrag/domains/missing/graphs?label=Pump", headers=user_headers)
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "LightRAG domain 'missing' does not exist"
+
+
 def test_lightrag_failures_return_stable_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     get_settings.cache_clear()
 
@@ -1503,7 +1799,11 @@ def test_lightrag_failures_return_stable_errors(monkeypatch: pytest.MonkeyPatch)
         response = client.post(
             "/retrieve",
             headers=user_headers,
-            json={"query": "summarize remote context", "mode": "semantic"},
+            json={
+                "query": "summarize remote context",
+                "mode": "semantic",
+                "lightrag_domain_id": "default",
+            },
         )
 
     assert response.status_code == 503
@@ -1545,7 +1845,7 @@ def test_lightrag_domain_admin_api_create_list_and_operate(
     monkeypatch.setenv("LIGHTRAG_DEPLOY_ENABLED", "true")
     monkeypatch.setenv("LIGHTRAG_DEPLOY_ROOT", str(tmp_path / "lightrag"))
     monkeypatch.setenv("LIGHTRAG_DOMAINS_ROOT", str(tmp_path / "lightrag/domains"))
-    monkeypatch.setenv("LIGHTRAG_DOMAINS_MANIFEST", str(tmp_path / "lightrag/domains.json"))
+    monkeypatch.setenv("LIGHTRAG_DOMAIN_REGISTRY", str(tmp_path / "lightrag/domains.json"))
     monkeypatch.setenv("LIGHTRAG_COMPOSE_FILE", str(tmp_path / "lightrag/compose.yml"))
     monkeypatch.setenv("LIGHTRAG_DELETED_ROOT", str(tmp_path / "lightrag/deleted"))
     get_settings.cache_clear()
@@ -1693,7 +1993,7 @@ def test_lightrag_admin_and_user_domain_responses_do_not_leak_provider_secrets(
     monkeypatch.setenv("LIGHTRAG_DEPLOY_ENABLED", "true")
     monkeypatch.setenv("LIGHTRAG_DEPLOY_ROOT", str(tmp_path / "lightrag"))
     monkeypatch.setenv("LIGHTRAG_DOMAINS_ROOT", str(tmp_path / "lightrag/domains"))
-    monkeypatch.setenv("LIGHTRAG_DOMAINS_MANIFEST", str(tmp_path / "lightrag/domains.json"))
+    monkeypatch.setenv("LIGHTRAG_DOMAIN_REGISTRY", str(tmp_path / "lightrag/domains.json"))
     monkeypatch.setenv("LIGHTRAG_COMPOSE_FILE", str(tmp_path / "lightrag/compose.yml"))
     monkeypatch.setenv("LIGHTRAG_DELETED_ROOT", str(tmp_path / "lightrag/deleted"))
     monkeypatch.setenv("LIGHTRAG_LLM_BINDING_HOST", "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1")
@@ -1742,7 +2042,7 @@ def test_lightrag_domain_user_safe_list_hides_paths_and_container_details(
     LightRAGDomainService(settings=settings).create_domain(
         LightRAGDomainCreateRequest(domain_id="fatigue", display_name="Fatigue Manuals")
     )
-    monkeypatch.setenv("LIGHTRAG_DOMAINS_MANIFEST", str(settings.manifest_path))
+    monkeypatch.setenv("LIGHTRAG_DOMAIN_REGISTRY", str(settings.manifest_path))
     get_settings.cache_clear()
 
     with TestClient(app) as client:
@@ -1758,6 +2058,7 @@ def test_lightrag_domain_user_safe_list_hides_paths_and_container_details(
         "display_name": "Fatigue Manuals",
         "is_healthy": None,
         "is_default": True,
+        "status": "configured",
     }
     assert "paths" not in domain
     assert "container_name" not in domain
@@ -1933,6 +2234,117 @@ def test_workspace_tree_filters_domain_and_returns_structure_references(
     assert asset_node["kind"] == "asset"
     assert asset_node["asset_id"] == "asset-1"
     assert asset_node["thumbnail_url"] == f"/documents/{manual_id}/assets/asset-1/thumbnail"
+
+
+def test_workspace_tree_supports_depth_and_asset_query_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    create_db_and_tables()
+    _configure_lightrag_manifest(monkeypatch, tmp_path, {"contracttree": "Contract Tree"})
+    with SessionLocal() as session:
+        documents = DocumentRepository(session)
+        manual = documents.create(
+            owner_id=None,
+            filename="contract-manual.pdf",
+            content_type="application/pdf",
+            storage_path=".data/uploads/contract-manual.pdf",
+            metadata={"lightrag": {"domain_id": "contracttree"}},
+            status=DocumentStatus.READY,
+        )
+        DocumentProcessingRepository(session).save_structure(
+            DocumentStructure(
+                document_id=manual.id,
+                source_file=manual.storage_path,
+                pages=[
+                    DocumentPage(
+                        page_number=1,
+                        text="Full page text must stay out of workspace tree",
+                        metadata={"text": "Page metadata text must also stay out"},
+                    )
+                ],
+                sections=[
+                    DocumentSection(
+                        section_id="overview",
+                        document_id=manual.id,
+                        title="Overview",
+                        level=1,
+                        page_start=1,
+                        page_end=1,
+                    )
+                ],
+                source_chunks=[
+                    SourceChunk(
+                        chunk_id="contract-chunk",
+                        document_id=manual.id,
+                        section_id="overview",
+                        block_ids=[],
+                        text=(
+                            "Compact label for navigation with enough harmless words before the "
+                            "hidden tail marker appears in the source chunk. "
+                            "SECRET_DEPTH_CONTRACT_TAIL_SHOULD_NOT_APPEAR"
+                        ),
+                        page_start=1,
+                        page_end=1,
+                    )
+                ],
+                assets=[
+                    DocumentAsset(
+                        asset_id="contract-asset",
+                        document_id=manual.id,
+                        asset_type="figure",
+                        storage_path=".data/assets/contract-asset.png",
+                        thumbnail_path=".data/assets/contract-asset-thumb.png",
+                        mime_type="image/png",
+                        content_hash="hash-contract-asset",
+                        page_number=1,
+                        section_id="overview",
+                        caption="Contract figure",
+                    )
+                ],
+            )
+        )
+
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        default_response = client.get(
+            "/lightrag/domains/contracttree/workspace-tree",
+            headers=user_headers,
+        )
+        depth_response = client.get(
+            "/lightrag/domains/contracttree/workspace-tree?depth=2&include_assets=true",
+            headers=user_headers,
+        )
+        no_assets_response = client.get(
+            "/lightrag/domains/contracttree/workspace-tree?include_assets=false",
+            headers=user_headers,
+        )
+
+    assert default_response.status_code == 200
+    default_body = default_response.json()
+    default_document = default_body["root"]["children"][0]
+    default_section = default_document["children"][0]
+    default_page = default_section["children"][0]
+    assert default_page["children"][0]["kind"] == "chunk"
+    assert default_page["children"][1]["kind"] == "asset"
+    assert "SECRET_DEPTH_CONTRACT_TAIL_SHOULD_NOT_APPEAR" not in default_response.text
+    assert "Full page text must stay out of workspace tree" not in default_response.text
+    assert "Page metadata text must also stay out" not in default_response.text
+
+    assert depth_response.status_code == 200
+    depth_document = depth_response.json()["root"]["children"][0]
+    assert depth_document["kind"] == "document"
+    assert [child["kind"] for child in depth_document["children"]] == ["section"]
+    assert depth_document["children"][0]["children"] == []
+    assert "contract-chunk" not in depth_response.text
+    assert "contract-asset" not in depth_response.text
+
+    assert no_assets_response.status_code == 200
+    no_assets_document = no_assets_response.json()["root"]["children"][0]
+    no_assets_page = no_assets_document["children"][0]["children"][0]
+    assert [child["kind"] for child in no_assets_page["children"]] == ["chunk"]
+    assert "contract-asset" not in no_assets_response.text
 
 
 def test_document_ingest_job_can_be_enqueued_without_running_inline() -> None:

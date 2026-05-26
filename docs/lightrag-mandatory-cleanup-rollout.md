@@ -20,9 +20,9 @@ Hybrid retrieval = remote LightRAG semantic evidence + local navigation enrichme
 
 ### Slice 1 — Config hard requirement
 
-- Remote LightRAG is required by configuration; startup fails when neither `LIGHTRAG_BASE_URL` nor a readable domain manifest is configured.
-- Startup fails when neither `LIGHTRAG_BASE_URL` nor a readable domain manifest is configured.
-- Tests cover default-on behavior and both validation failures.
+- Remote LightRAG runtime resolution uses the single `LIGHTRAG_DOMAIN_REGISTRY` path.
+- There is no runtime fallback to `LIGHTRAG_BASE_URL` or `LIGHTRAG_DOMAIN`.
+- Tests cover registry-backed behavior and required `lightrag_domain_id` validation.
 
 **Primary files:** `app/core/config.py`, `.env.example`, `tests/test_api.py`
 

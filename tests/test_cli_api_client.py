@@ -27,7 +27,7 @@ def test_api_client_records_sanitized_json_request_metadata(monkeypatch) -> None
     monkeypatch.setattr("cli.api_client.request.urlopen", fake_urlopen)
     client = ApiClient("http://api.example", token="client-token")
 
-    response = client.post("/auth/login", {"email": "admin@example.com", "password": "secret"})
+    response = client.post("/auth/login", {"username": "admin@example.com", "password": "secret"})
 
     assert response["status"] == "ok"
     assert client.last_request is not None

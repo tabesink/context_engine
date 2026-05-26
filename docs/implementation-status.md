@@ -60,7 +60,7 @@ Runtime behavior:
 - The retrieval API is evidence-only and does not compose natural-language answers in backend responses.
 - Document ACLs are deferred; authenticated users can read ready documents.
 - LightRAG domain deployment control is opt-in and generates a separate `.data/lightrag/docker-compose.lightrag-domains.yml`; generated domain services share the root Docker network.
-- `LIGHTRAG_API_KEY` and `LIGHTRAG_LLM_BINDING_API_KEY` have distinct responsibilities: the former authenticates Context Engine -> LightRAG server traffic, while the latter authenticates LightRAG -> model provider traffic.
+- Registry entry `api_key` values and `LIGHTRAG_LLM_BINDING_API_KEY` have distinct responsibilities: the former authenticates Context Engine -> a registered LightRAG server, while the latter authenticates LightRAG -> model provider traffic.
 
 ## Next Hardening Items
 

@@ -10,6 +10,7 @@ from app.lightrag_deploy.models import (
     LightRAGDomainRemoveResponse,
 )
 from app.lightrag_deploy.service import LightRAGDomainService
+from app.services.lightrag_domain_registry import LightRAGDomainRegistry
 from app.storage.db import get_session
 from app.storage.repositories.logs import LogRepository
 from app.storage.tables import UserRow
@@ -19,6 +20,10 @@ router = APIRouter(tags=["lightrag-domains"])
 
 def get_domain_service() -> LightRAGDomainService:
     return LightRAGDomainService()
+
+
+def get_domain_registry() -> LightRAGDomainRegistry:
+    return LightRAGDomainRegistry()
 
 
 @router.get("/admin/lightrag/domains")
@@ -139,7 +144,7 @@ def remove_domain(
 @router.get("/lightrag/domains")
 def list_user_domains(
     user: UserRow = Depends(get_current_user),
-    service: LightRAGDomainService = Depends(get_domain_service),
+    registry: LightRAGDomainRegistry = Depends(get_domain_registry),
 ) -> dict[str, list[dict]]:
     del user
     return {
@@ -149,8 +154,9 @@ def list_user_domains(
                 "display_name": domain.display_name,
                 "is_healthy": domain.is_healthy,
                 "is_default": domain.is_default,
+                "status": domain.status,
             }
-            for domain in service.list_domains()
+            for domain in registry.list_domains()
         ]
     }
 

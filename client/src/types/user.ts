@@ -4,12 +4,14 @@ export type CurrentUser = {
   id: string;
   username: string;
   role: UserRole;
-  can_write: boolean;
-  created_at: string | null;
-  last_login_at: string | null;
+  is_active: boolean;
+  can_write?: boolean;
+  created_at?: string | null;
+  last_login_at?: string | null;
 };
 
 export type AdminUser = CurrentUser & {
+  can_write: boolean;
   has_password: boolean;
 };
 

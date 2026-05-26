@@ -12,6 +12,11 @@ from app.retrieval.rich_navigation_engine import RichNavigationEngine
 from app.retrieval.routing_policy import RetrievalBackend, RetrievalRoutingPolicy
 from app.retrieval.strategies import LightRAGRetrievalStrategy, LocalRetrievalStrategy, RetrievalStrategy
 from app.schemas.retrieval import RetrieveRequest, RetrieveResponse
+from app.services.lightrag_domain_registry import (
+    LightRAGDomainRegistry,
+    LightRAGDomainRegistryError,
+    lightrag_domain_http_exception,
+)
 from app.services.retrieval_asset_resolver import RetrievalAssetResolver
 from app.storage.repositories.document_processing import DocumentProcessingRepository
 from app.storage.repositories.documents import DocumentRepository
@@ -27,10 +32,12 @@ class RetrievalService:
         routing_policy: RetrievalRoutingPolicy | None = None,
         local_strategy: RetrievalStrategy | None = None,
         remote_strategy: RetrievalStrategy | None = None,
+        domain_registry: LightRAGDomainRegistry | None = None,
     ):
         self.session = session
         self.navigation_engine = RichNavigationEngine(session)
         self.remote_engine = LightRAGRemoteRetrievalEngine()
+        self.domain_registry = domain_registry or LightRAGDomainRegistry()
         self.routing_policy = routing_policy or RetrievalRoutingPolicy()
         self.strategies = {
             RetrievalBackend.LOCAL: local_strategy or LocalRetrievalStrategy(self.navigation_engine),
@@ -68,6 +75,10 @@ class RetrievalService:
         return result
 
     def _retrieve_result(self, *, request: RetrieveRequest, user: UserRow) -> RetrievalResult:
+        try:
+            self.domain_registry.validate_available(request.lightrag_domain_id)
+        except LightRAGDomainRegistryError as exc:
+            raise lightrag_domain_http_exception(exc) from exc
         self._validate_lightrag_document_filter(request)
         route = self.routing_policy.resolve(mode=request.mode)
         return self.strategies[route.backend].retrieve(

@@ -212,7 +212,7 @@ Before proposing the implementation, answer these:
 5. What backend route names should be added?
 6. What CLI commands should mirror those routes?
 7. What stable JSON response shapes should the future frontend consume?
-8. What database or manifest changes are needed beyond the current read-only `LIGHTRAG_DOMAIN_MANIFEST` support?
+8. What database or registry changes are needed beyond the current read-only `LIGHTRAG_DOMAIN_REGISTRY` support?
 9. Should deployment state live in database tables, manifest files, or both?
 10. What minimum background job/status model is needed for long-running deployment operations?
 11. What should happen if Docker is unavailable?

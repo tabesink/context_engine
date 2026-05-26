@@ -6,6 +6,11 @@ from app.integrations.lightrag_remote_adapter import (
     LightRAGRemoteAdapter,
     lightrag_http_exception,
 )
+from app.services.lightrag_domain_registry import (
+    LightRAGDomainRegistry,
+    LightRAGDomainRegistryError,
+    lightrag_domain_http_exception,
+)
 from app.storage.tables import UserRow
 
 router = APIRouter(tags=["lightrag"])
@@ -56,6 +61,9 @@ def search_graph_labels(
 
 def _proxy_get(path: str, *, domain_id: str, params: dict | None = None):
     try:
+        LightRAGDomainRegistry().validate_available(domain_id)
         return LightRAGRemoteAdapter.for_domain(domain_id).get_json(path, params=params)
+    except LightRAGDomainRegistryError as exc:
+        raise lightrag_domain_http_exception(exc) from exc
     except LightRAGAdapterError as exc:
         raise lightrag_http_exception(exc) from exc

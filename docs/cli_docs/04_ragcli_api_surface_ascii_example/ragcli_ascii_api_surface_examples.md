@@ -742,8 +742,8 @@ Reason:
   The backend returned a disabled-service response.
 
 Next:
-  Enable LIGHTRAG_BASE_URL=http://localhost:9621 in the backend environment.
-  Confirm the backend can reach the configured LightRAG service.
+  Register the LightRAG service in LIGHTRAG_DOMAIN_REGISTRY.
+  Confirm the backend can reach the registered LightRAG service.
 ```
 
 ---

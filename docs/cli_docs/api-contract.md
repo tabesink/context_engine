@@ -59,6 +59,7 @@ This capability is surfaced as **`Graphs`** in the root TUI menu.
 | TUI capability | Backend | Role | Status |
 | --- | --- | --- | --- |
 | Retrieval domain picker | `GET /lightrag/domains` | authenticated | supported |
+| Workspace navigation tree | `GET /lightrag/domains/{domain_id}/workspace-tree?depth=2&include_assets=true` | authenticated | supported |
 | Domain overview | `GET /admin/lightrag/domains` | admin | supported |
 | Create domain | `POST /admin/lightrag/domains` | admin | supported |
 | Start domain | `POST /admin/lightrag/domains/{domain_id}/up` | admin | supported |
@@ -78,13 +79,31 @@ Create accepts:
 }
 ```
 
-Admin domain routes require **`LIGHTRAG_DEPLOY_ENABLED=true`**. Runtime graph/retrieval behavior remains controlled separately by **`LIGHTRAG_BASE_URL`**, optional **`LIGHTRAG_API_KEY`**, and the domain manifest. The runtime **`LIGHTRAG_DOMAIN_MANIFEST`** and deploy **`LIGHTRAG_DOMAINS_MANIFEST`** default to the same file path but are separate settings.
+Admin domain routes require **`LIGHTRAG_DEPLOY_ENABLED=true`**. Runtime graph/retrieval behavior is controlled by the single **`LIGHTRAG_DOMAIN_REGISTRY`** file. Every upload, retrieve, graph, and workspace-tree request must use a registered `lightrag_domain_id`; there is no `LIGHTRAG_BASE_URL` or default-domain fallback path.
+
+Workspace-tree is a compact navigation contract for frontend sidebars. The recommended first WebUI call is:
+
+```text
+GET /lightrag/domains/{domain_id}/workspace-tree?depth=2&include_assets=true
+```
+
+`depth` is optional. When omitted, the backend preserves the existing full-tree response. Depth is measured from the root domain node (`domain` = 0, `document` = 1). `include_assets` defaults to `true`; pass `false` to omit asset nodes from the tree. The response contains only navigation references with node kinds `domain`, `document`, `section`, `page`, `chunk`, and `asset`; full page text and full chunk text are intentionally excluded.
+
+Load detailed content lazily from document routes after a tree node is selected:
+
+```text
+GET /documents/{document_id}/structure
+GET /documents/{document_id}/sections/{section_id}
+GET /documents/{document_id}/pages/{page_number}
+GET /documents/{document_id}/chunks/{chunk_id}
+```
 
 ## Admin documents
 
 | TUI capability | Backend | Role | Status |
 | --- | --- | --- | --- |
 | Upload | `POST /admin/documents/upload` (`multipart/form-data`, field `file`) | admin | supported |
+| Ingestion status | `GET /admin/documents/{document_id}/ingestion-status` | admin | supported |
 | Reingest | `POST /admin/documents/{document_id}/reingest` | admin | supported |
 | Refresh status | `POST /admin/documents/{document_id}/refresh-status` | admin | supported |
 | Delete | `DELETE /admin/documents/{document_id}` | admin | supported |

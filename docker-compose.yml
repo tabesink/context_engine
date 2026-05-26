@@ -76,6 +76,26 @@ services:
     networks:
       - context_engine_lightrag
 
+  status-poller:
+    build: .
+    command: python -m app.workers.status_poller
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-context_engine}:${POSTGRES_PASSWORD:-context_engine}@postgres:5432/${POSTGRES_DB:-context_engine}
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - uploads:/app/.data/uploads
+    depends_on:
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - context_engine_lightrag
+
 volumes:
   postgres-data:
   uploads:

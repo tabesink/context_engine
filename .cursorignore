@@ -1,0 +1,3 @@
+# Local CLI (deprecated) — exclude from Cursor indexing
+cli/
+docs/cli_docs/

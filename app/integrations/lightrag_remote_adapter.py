@@ -49,13 +49,15 @@ class LightRAGRemoteAdapter:
         client: httpx.Client | None = None,
     ):
         settings = get_settings()
-        self.base_url = (base_url or settings.lightrag_base_url).rstrip("/")
-        self.api_key = api_key if api_key is not None else settings.lightrag_api_key
+        if base_url is None and client is None:
+            raise ValueError("LightRAG base_url must come from a registered domain")
+        self.base_url = (base_url or str(client.base_url)).rstrip("/") if client else base_url.rstrip("/")
+        self.api_key = api_key
         self.timeout_seconds = timeout_seconds or settings.lightrag_timeout_seconds
         self.client = client or httpx.Client(base_url=self.base_url, timeout=self.timeout_seconds)
 
     @classmethod
-    def for_domain(cls, domain: str | None = None) -> "LightRAGRemoteAdapter":
+    def for_domain(cls, domain: str) -> "LightRAGRemoteAdapter":
         resolved = resolve_lightrag_domain(domain=domain)
         return cls(base_url=resolved.base_url, api_key=resolved.api_key)
 

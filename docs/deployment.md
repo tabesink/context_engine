@@ -1,6 +1,6 @@
 # Deployment Notes
 
-The supported local deployment uses Docker Compose with PostgreSQL, Redis, the API, and one worker. Context Engine can also manage same-machine LightRAG domain containers through admin-only deployment-control APIs; generated LightRAG services share the same Docker network and use per-domain PostgreSQL databases.
+The supported local deployment uses Docker Compose with PostgreSQL, Redis, the API, one ingestion worker, and one LightRAG status poller. Context Engine can also manage same-machine LightRAG domain containers through admin-only deployment-control APIs; generated LightRAG services share the same Docker network and use per-domain PostgreSQL databases.
 
 ## Required Environment
 
@@ -17,20 +17,19 @@ Important settings:
 - `DATABASE_URL`: required SQLAlchemy URL. PostgreSQL is the only supported runtime database for local development, staging, and production. Compose injects the in-network value `postgresql+psycopg://context_engine:context_engine@postgres:5432/context_engine` into containers.
 - `REDIS_URL`: Redis URL. `.env.example` uses the host URL; Compose injects `redis://redis:6379/0` into API/worker containers.
 - `CONTEXT_ENGINE_API_BASE_URL` (optional): default base URL the `context-engine` terminal client uses when `--api-base-url` is omitted. Keep this aligned with `API_PORT`.
+- `NEXT_PUBLIC_BACKEND_BASE_URL` (optional): frontend base URL for browser calls. Set this to the same backend origin (for example `http://127.0.0.1:8000`) when running the web client.
 - `INDEX_JOBS_INLINE`: `false` for worker-backed indexing; `true` only for deterministic local tests/dev flows.
+- `LIGHTRAG_STATUS_POLL_INTERVAL_SECONDS`: interval for background LightRAG status synchronization.
 - `STORAGE_ROOT`: persistent mounted upload directory.
 - `SEED_ADMIN_USERNAME` and `SEED_ADMIN_PASSWORD`: first admin credentials for `scripts.seed_admin`.
 - `ALLOWED_ORIGINS`: comma-separated CORS origins, or `*` for local development.
-- `LIGHTRAG_BASE_URL`: base URL of the external LightRAG service, default `http://localhost:9621`. Startup also requires either this URL or a readable domain manifest path.
-- `LIGHTRAG_DOMAIN_MANIFEST` / `LIGHTRAG_DOMAINS_MANIFEST`: domain manifest used for upload validation and per-domain routing. Admin uploads fail with HTTP `400` when the manifest file is missing.
-- `LIGHTRAG_API_KEY`: optional API key sent to LightRAG with the `X-API-Key` header.
-- `LIGHTRAG_DOMAIN`: default LightRAG domain name.
+- `LIGHTRAG_DOMAIN_REGISTRY`: required LightRAG domain registry path. Every upload, retrieve, graph, and workspace-tree request must target a domain registered in this file.
 - `LIGHTRAG_TIMEOUT_SECONDS`: HTTP timeout for LightRAG calls.
 - `QUERY_LOG_STORE_TEXT` and `QUERY_LOG_RETENTION_DAYS`: query log text persistence and retention controls.
 - `LIGHTRAG_DEPLOY_ENABLED`: gates **mutating** LightRAG domain deployment APIs (`/admin/lightrag/domains...`). The read-only `GET /lightrag/domains` listing remains available to authenticated users so clients can choose `lightrag_domain_id` when manifests exist. Use `.env.lightrag-deploy.example` only when Context Engine manages LightRAG containers.
 - LightRAG provider settings (`LIGHTRAG_LLM_*`, `LIGHTRAG_EMBEDDING_*`) live in `.env.lightrag-provider.example` because they are written into generated LightRAG domain env files, not needed for fixed external LightRAG retrieval.
 
-In `app/core/config.py`, LightRAG is required by the presence of `LIGHTRAG_BASE_URL` or a readable domain manifest, not by a separate enable/disable flag. `lightrag_deploy_enabled` remains `false` by default so domain lifecycle control stays opt-in.
+In `app/core/config.py`, LightRAG runtime resolution uses only the domain registry. `lightrag_deploy_enabled` remains `false` by default so domain lifecycle control stays opt-in.
 
 ## First Run With Compose
 
@@ -53,6 +52,7 @@ docker compose exec api python -m scripts.seed_admin
 Alternatively, `docker compose run --rm api python -m scripts.seed_admin` works before the stack is fully up; use whichever fits your workflow.
 
 The `worker` service must stay up when `INDEX_JOBS_INLINE=false`. It consumes indexing jobs and moves them through `queued`, `running`, `succeeded`, or `failed`.
+The `status-poller` service should also stay up in that mode so documents that remain `indexing` in LightRAG can transition to `ready`/`failed` without manual refresh calls.
 
 For bind mounts and API reload during local development, layer the dev override on top:
 
@@ -98,19 +98,30 @@ context-engine
 
 The UI calls the backend over HTTP via `cli/api_client.py` and helpers in `cli/services/`; screen layout builders under `cli/screens/` and `cli/renderers/` are composed into the Rich TUI under `cli/tui/`, not a second transport.
 
+## Auth Contract (Frozen)
+
+The backend auth API contract is intentionally fixed:
+
+- `POST /auth/login` with body `{ "username": string, "password": string }`
+- Response `{ "access_token": string, "token_type": "bearer" }`
+- `GET /auth/me` requires `Authorization: Bearer <access_token>`
+
+No `/api/v1/auth/*` compatibility aliases are provided. Clients should configure API base URLs and endpoint maps to call `/auth/*` directly.
+
 ## LightRAG Runtime
 
 LightRAG is the semantic retrieval runtime:
 
 ```env
-LIGHTRAG_BASE_URL=http://localhost:9621
-LIGHTRAG_API_KEY=
+LIGHTRAG_DOMAIN_REGISTRY=.data/lightrag/domains.json
 ```
 
 - `auto`, `semantic`, and `hybrid` query modes use remote LightRAG.
+- Requests must include `lightrag_domain_id`; Context Engine rejects unknown domains before proxying to LightRAG.
 - `hybrid` may add local navigation evidence when available.
 - `navigation` query mode remains local page/tree retrieval.
 - Admin uploads enqueue `document_ingest`; the worker builds canonical structure/source chunks, ingests chunks to LightRAG, polls status, and updates `documents.metadata.lightrag`.
+- Admin/WebUI status flow should poll `GET /jobs/{job_id}` and `GET /admin/documents/{document_id}/ingestion-status` until document status reaches a terminal state.
 - Structure-processing failures fail ingestion explicitly (no raw LightRAG upload fallback).
 - Unknown upstream LightRAG statuses surface as integration errors instead of silently normalizing to `indexing`.
 - `/lightrag/domains/{domain_id}/graphs` and `/lightrag/domains/{domain_id}/graph/labels...` proxy to LightRAG.

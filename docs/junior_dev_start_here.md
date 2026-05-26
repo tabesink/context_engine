@@ -20,7 +20,7 @@ For model providers in managed domains:
 
 - Keep LightRAG bindings as `openai` unless you are explicitly changing bindings end-to-end.
 - Bedrock OpenAI-compatible mode is configured with `LIGHTRAG_LLM_BINDING=openai` and `LIGHTRAG_LLM_BINDING_HOST=https://bedrock-runtime.<region>.amazonaws.com/openai/v1`.
-- Do not confuse `LIGHTRAG_API_KEY` (Context Engine -> LightRAG auth) with `LIGHTRAG_LLM_BINDING_API_KEY` (LightRAG -> model provider auth).
+- Do not confuse per-domain registry `api_key` values (Context Engine -> LightRAG auth) with `LIGHTRAG_LLM_BINDING_API_KEY` (LightRAG -> model provider auth).
 
 ## Read Files in This Order
 

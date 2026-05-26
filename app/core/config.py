@@ -15,22 +15,21 @@ class Settings(BaseSettings):
     database_url: str
     redis_url: str = "redis://localhost:6379/0"
     index_jobs_inline: bool = False
+    lightrag_status_poll_interval_seconds: float = 10.0
     storage_root: Path = Path(".data/uploads")
     allowed_origins: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["*"])
     seed_admin_username: str = "admin"
     seed_admin_password: str = "admin-password"
     # Semantic retrieval is remote-LightRAG-only in this service.
-    lightrag_base_url: str = "http://localhost:9621"
-    lightrag_api_key: str | None = None
-    lightrag_domain: str = "default"
-    lightrag_domain_manifest: Path | None = Path(".data/lightrag/domains.json")
+    lightrag_domain_registry: Path = Field(
+        default=Path(".data/lightrag/domains.json"),
+    )
     lightrag_timeout_seconds: float = 10.0
     query_log_store_text: bool = False
     query_log_retention_days: int = 30
     lightrag_deploy_enabled: bool = False
     lightrag_deploy_root: Path = Path(".data/lightrag")
     lightrag_domains_root: Path = Path(".data/lightrag/domains")
-    lightrag_domains_manifest: Path = Path(".data/lightrag/domains.json")
     lightrag_compose_file: Path = Path(".data/lightrag/docker-compose.lightrag-domains.yml")
     lightrag_deleted_root: Path = Path(".data/lightrag/deleted")
     lightrag_default_port_start: int = 9621
@@ -79,6 +78,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        populate_by_name=True,
     )
 
     @field_validator("allowed_origins", mode="before")
@@ -127,15 +127,8 @@ class Settings(BaseSettings):
             if self.seed_admin_password in weak_seed_passwords:
                 raise ValueError("SEED_ADMIN_PASSWORD is too weak for production.")
 
-        has_base_url = bool((self.lightrag_base_url or "").strip())
-        has_domain_manifest = bool(
-            (self.lightrag_domain_manifest and self.lightrag_domain_manifest.is_file())
-            or (self.lightrag_domains_manifest and self.lightrag_domains_manifest.is_file())
-        )
-        if not has_base_url and not has_domain_manifest:
-            raise ValueError(
-                "LightRAG is required but no LightRAG base URL or domain manifest is configured."
-            )
+        if not self.lightrag_domain_registry:
+            raise ValueError("LIGHTRAG_DOMAIN_REGISTRY must be configured.")
         return self
 
 

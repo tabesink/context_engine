@@ -60,7 +60,7 @@ class LightRAGDeploySettings:
             enabled=settings.lightrag_deploy_enabled,
             deploy_root=settings.lightrag_deploy_root,
             domains_root=settings.lightrag_domains_root,
-            manifest_path=settings.lightrag_domains_manifest,
+            manifest_path=settings.lightrag_domain_registry,
             compose_file=settings.lightrag_compose_file,
             deleted_root=settings.lightrag_deleted_root,
             default_port_start=settings.lightrag_default_port_start,

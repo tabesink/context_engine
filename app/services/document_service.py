@@ -1,4 +1,3 @@
-import json
 from datetime import UTC, datetime
 
 from fastapi import HTTPException, UploadFile
@@ -12,6 +11,11 @@ from app.integrations.lightrag_remote_adapter import (
     LightRAGRemoteAdapter,
     lightrag_http_exception,
 )
+from app.services.lightrag_domain_registry import (
+    LightRAGDomainRegistry,
+    LightRAGDomainRegistryError,
+    lightrag_domain_http_exception,
+)
 from app.services.file_storage import FileStorage
 from app.services.job_service import JobService
 from app.storage.repositories.documents import DocumentRepository
@@ -24,6 +28,7 @@ class DocumentService:
         self.settings = get_settings()
         self.documents = DocumentRepository(session)
         self.storage = FileStorage()
+        self.domain_registry = LightRAGDomainRegistry(settings=self.settings)
 
     def upload(
         self,
@@ -45,8 +50,8 @@ class DocumentService:
         file: UploadFile,
         lightrag_domain_id: str | None = None,
     ) -> tuple[DocumentRow, str | None]:
-        domain_id = lightrag_domain_id or self.settings.lightrag_domain
-        self._validate_lightrag_domain(domain_id)
+        domain = self._validate_lightrag_domain(lightrag_domain_id)
+        domain_id = domain.id
         path = self.storage.save_upload(file)
         metadata = {
             "original_filename": file.filename,
@@ -76,32 +81,11 @@ class DocumentService:
         )
         return document, job_id
 
-    def _validate_lightrag_domain(self, domain_id: str) -> None:
-        path = self.settings.lightrag_domain_manifest or self.settings.lightrag_domains_manifest
-        if not path or not path.is_file():
-            raise HTTPException(
-                status_code=400,
-                detail="LightRAG domain manifest is required for uploads.",
-            )
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        domains = payload.get("domains", [])
-        if isinstance(domains, dict):
-            entry = domains.get(domain_id)
-        else:
-            entry = next(
-                (
-                    item
-                    for item in domains
-                    if isinstance(item, dict)
-                    and (item.get("id") == domain_id or item.get("name") == domain_id)
-                ),
-                None,
-            )
-        if not isinstance(entry, dict):
-            raise HTTPException(status_code=400, detail=f"LightRAG domain '{domain_id}' does not exist")
-        status = str(entry.get("status") or "").lower()
-        if status in {"stopped", "unhealthy", "archived", "error"}:
-            raise HTTPException(status_code=400, detail=f"LightRAG domain '{domain_id}' is not available")
+    def _validate_lightrag_domain(self, domain_id: str | None):
+        try:
+            return self.domain_registry.validate_available(domain_id)
+        except LightRAGDomainRegistryError as exc:
+            raise lightrag_domain_http_exception(exc) from exc
 
     def get_ready_or_404(self, document_id: str) -> DocumentRow:
         document = self.documents.get(document_id)
@@ -132,7 +116,10 @@ class DocumentService:
         if not domain_id or not track_id:
             raise HTTPException(status_code=400, detail="Document has no LightRAG track status")
         try:
+            self.domain_registry.validate_available(str(domain_id))
             status_payload = LightRAGRemoteAdapter.for_domain(str(domain_id)).document_status(str(track_id))
+        except LightRAGDomainRegistryError as exc:
+            raise lightrag_domain_http_exception(exc) from exc
         except LightRAGAdapterError as exc:
             raise lightrag_http_exception(exc) from exc
 

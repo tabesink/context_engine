@@ -23,7 +23,7 @@ Edit `.env` if your database or Redis URLs differ. Admin login is configured wit
 
 ## Option A: Docker Compose
 
-Runs PostgreSQL, Redis, the API, and the worker together.
+Runs PostgreSQL, Redis, the API, the worker, and the LightRAG status poller together.
 
 ```powershell
 docker compose up --build
@@ -45,7 +45,8 @@ Health check:
 curl http://localhost:8000/health
 ```
 
-With `INDEX_JOBS_INLINE=false` (as in `.env.example`), uploads and reindex requests enqueue jobs; the `worker` service processes them. Set `INDEX_JOBS_INLINE=true` if you want indexing in-process without a worker.
+With `INDEX_JOBS_INLINE=false` (as in `.env.example`), uploads and reindex requests enqueue jobs; the `worker` service processes them and the `status-poller` service keeps pending LightRAG indexing states synchronized.
+Set `INDEX_JOBS_INLINE=true` if you want indexing in-process without a worker.
 
 For live-reload development inside Compose, run with the dev override:
 
@@ -85,12 +86,24 @@ If `INDEX_JOBS_INLINE=false`, run a worker in another terminal (same as the Comp
 python -m app.workers.worker
 ```
 
-Or set `INDEX_JOBS_INLINE=true` in `.env` for local development without a separate worker.
+Run a second terminal for the status poller:
+
+```powershell
+python -m app.workers.status_poller
+```
+
+Or set `INDEX_JOBS_INLINE=true` in `.env` for local development without separate worker/poller processes.
 
 Health check:
 
 ```powershell
 curl http://localhost:8000/health
+```
+
+Readiness check:
+
+```powershell
+curl http://localhost:8000/health/readiness
 ```
 
 ---
