@@ -1,11 +1,14 @@
 "use client";
 
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { Settings, UserRound, Workflow, X } from "lucide-react";
+import * as React from "react";
+import { Bot, Settings, UserRound, Workflow, X } from "lucide-react";
+import { AIModelSettingsPanel } from "@/components/settings/panels/AIModelSettingsPanel";
 import { Button } from "@/components/ui/button";
 import { AccountSettingsPanel } from "@/components/settings/panels/AccountSettingsPanel";
 import { GeneralSettingsPanel } from "@/components/settings/panels/GeneralSettingsPanel";
 import { KnowledgeGraphSettingsPanel } from "@/components/settings/panels/KnowledgeGraphSettingsPanel";
+import { selectIsAdmin, useAuthStore } from "@/stores/auth-store";
 import {
   closeSettingsDialog,
   setSettingsDialogOpen,
@@ -19,12 +22,18 @@ const ROUTES: Array<{ id: SettingsRoute; label: string; icon: ComponentType<{ cl
   { id: "general", label: "General", icon: Settings },
   { id: "account", label: "Account", icon: UserRound },
   { id: "knowledge-graph", label: "Knowledge Graph", icon: Workflow },
+  { id: "ai-models", label: "AI Models", icon: Bot },
 ];
 
 export function SettingsDialog() {
   const isOpen = useSettingsDialogStore((state) => state.isOpen);
   const route = useSettingsDialogStore((state) => state.route);
-  const activeRouteLabel = ROUTES.find((item) => item.id === route)?.label ?? "General";
+  const isAdmin = useAuthStore(selectIsAdmin);
+  const allowedRoutes = React.useMemo(
+    () => ROUTES.filter((item) => item.id !== "ai-models" || isAdmin),
+    [isAdmin],
+  );
+  const activeRouteLabel = allowedRoutes.find((item) => item.id === route)?.label ?? "General";
 
   return (
     <DialogPrimitive.Root open={isOpen} onOpenChange={setSettingsDialogOpen}>
@@ -48,7 +57,7 @@ export function SettingsDialog() {
                 <p className="sr-only">Settings</p>
               </div>
               <nav className="space-y-1" aria-label="Settings sections">
-                {ROUTES.map((item) => {
+                {allowedRoutes.map((item) => {
                   const Icon = item.icon;
                   const active = route === item.id;
                   return (
@@ -78,6 +87,7 @@ export function SettingsDialog() {
               {route === "general" ? <GeneralSettingsPanel /> : null}
               {route === "account" ? <AccountSettingsPanel embedded /> : null}
               {route === "knowledge-graph" ? <KnowledgeGraphSettingsPanel /> : null}
+              {route === "ai-models" ? <AIModelSettingsPanel /> : null}
             </section>
           </div>
         </DialogPrimitive.Content>

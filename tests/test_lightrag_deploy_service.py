@@ -11,6 +11,56 @@ from app.lightrag_deploy.service import LightRAGDomainService
 from app.lightrag_deploy.settings import LightRAGDeploySettings
 
 
+class FakeProfile:
+    def __init__(
+        self,
+        *,
+        profile_id: str,
+        provider: str,
+        binding: str,
+        base_url: str,
+        model: str,
+        dimensions: int,
+    ) -> None:
+        self.id = profile_id
+        self.kind = "embedding"
+        self.provider = provider
+        self.binding = binding
+        self.base_url = base_url
+        self.api_key_env_var = None
+        self.model = model
+        self.dimensions = dimensions
+        self.token_limit = 8192
+        self.send_dimensions = False
+        self.use_base64 = True
+        self.is_enabled = True
+
+
+class FakeProfileResolver:
+    def __init__(self) -> None:
+        self.default = FakeProfile(
+            profile_id="openai-text-embedding-3-small",
+            provider="openai",
+            binding="openai",
+            base_url="https://api.openai.com/v1",
+            model="text-embedding-3-small",
+            dimensions=1536,
+        )
+        self.alt = FakeProfile(
+            profile_id="openai-text-embedding-3-large",
+            provider="openai",
+            binding="openai",
+            base_url="https://api.openai.com/v1",
+            model="text-embedding-3-large",
+            dimensions=3072,
+        )
+
+    def resolve_embedding_profile(self, embedding_profile_id: str | None = None) -> FakeProfile:
+        if embedding_profile_id == self.alt.id:
+            return self.alt
+        return self.default
+
+
 class FakeRunner:
     def __init__(self, fail: bool = False) -> None:
         self.fail = fail
@@ -47,7 +97,6 @@ def _settings(tmp_path: Path, *, allow_permanent_delete: bool = False) -> LightR
         compose_file=tmp_path / "lightrag" / "docker-compose.lightrag-domains.yml",
         deleted_root=tmp_path / "lightrag" / "deleted",
         allow_permanent_delete=allow_permanent_delete,
-        image="example/lightrag:test",
     )
 
 
@@ -153,6 +202,36 @@ def test_create_domain_auto_selects_next_available_port(tmp_path: Path) -> None:
     assert second.host_port == 9622
 
 
+def test_create_domain_persists_custom_retrieval_defaults(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+
+    domain = service.create_domain(
+        LightRAGDomainCreateRequest(
+            domain_id="fatigue",
+            top_k=24,
+            chunk_top_k=12,
+            chunk_rerank_top_k=8,
+            max_token_for_text_unit=2048,
+            max_token_for_global_context=1536,
+            max_token_for_local_context=1024,
+        )
+    )
+    env_text = (tmp_path / "lightrag/domains/fatigue/domain.env").read_text(encoding="utf-8")
+
+    assert domain.retrieval_defaults.top_k == 24
+    assert domain.retrieval_defaults.chunk_top_k == 12
+    assert domain.retrieval_defaults.chunk_rerank_top_k == 8
+    assert domain.retrieval_defaults.max_token_for_text_unit == 2048
+    assert domain.retrieval_defaults.max_token_for_global_context == 1536
+    assert domain.retrieval_defaults.max_token_for_local_context == 1024
+    assert "TOP_K=24" in env_text
+    assert "CHUNK_TOP_K=12" in env_text
+    assert "CHUNK_RERANK_TOP_K=8" in env_text
+    assert "MAX_TOKEN_TEXT_CHUNK=2048" in env_text
+    assert "MAX_TOKEN_RELATION_DESC=1536" in env_text
+    assert "MAX_TOKEN_ENTITY_DESC=1024" in env_text
+
+
 def test_show_missing_domain_raises_typed_error(tmp_path: Path) -> None:
     with pytest.raises(DomainNotFoundError):
         _service(tmp_path).get_domain("missing")
@@ -235,3 +314,45 @@ def test_docker_error_returns_failed_operation_result(tmp_path: Path) -> None:
 
     assert result.status == "failed"
     assert result.message == "docker failed"
+
+
+def test_create_domain_persists_embedding_snapshot(tmp_path: Path) -> None:
+    resolver = FakeProfileResolver()
+    service = LightRAGDomainService(
+        settings=_settings(tmp_path),
+        runner=FakeRunner(),
+        profile_resolver=resolver,
+        now=lambda: datetime(2026, 5, 18, 14, 30, tzinfo=UTC),
+    )
+
+    domain = service.create_domain(
+        LightRAGDomainCreateRequest(
+            domain_id="fatigue",
+            embedding_profile_id="openai-text-embedding-3-large",
+        )
+    )
+
+    assert domain.embedding is not None
+    assert domain.embedding.profile_id == "openai-text-embedding-3-large"
+    assert domain.embedding.model == "text-embedding-3-large"
+    assert domain.embedding.dimensions == 3072
+
+
+def test_changing_default_embedding_does_not_mutate_existing_snapshot(tmp_path: Path) -> None:
+    resolver = FakeProfileResolver()
+    service = LightRAGDomainService(
+        settings=_settings(tmp_path),
+        runner=FakeRunner(),
+        profile_resolver=resolver,
+        now=lambda: datetime(2026, 5, 18, 14, 30, tzinfo=UTC),
+    )
+    created = service.create_domain(LightRAGDomainCreateRequest(domain_id="fatigue"))
+    assert created.embedding is not None
+    assert created.embedding.profile_id == "openai-text-embedding-3-small"
+
+    resolver.default = resolver.alt
+    service.regenerate("fatigue")
+    domain = service.get_domain("fatigue")
+
+    assert domain.embedding is not None
+    assert domain.embedding.profile_id == "openai-text-embedding-3-small"

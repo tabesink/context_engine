@@ -166,3 +166,52 @@ class QueryLogRow(Base):
     evidence_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
 
+
+class AIModelProfileRow(Base):
+    __tablename__ = "ai_model_profiles"
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    model: Mapped[str] = mapped_column(String(255), nullable=False)
+    base_url: Mapped[str] = mapped_column(String(1024), nullable=False)
+    api_key_env_var: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    binding: Mapped[str] = mapped_column(String(64), nullable=False)
+    dimensions: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    token_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    send_dimensions: Mapped[bool] = mapped_column(Boolean, default=False)
+    use_base64: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    extra: Mapped[dict] = mapped_column(json_type(), default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class AIModelSettingsRow(Base):
+    __tablename__ = "ai_model_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    default_llm_profile_id: Mapped[str] = mapped_column(
+        String(128), ForeignKey("ai_model_profiles.id"), nullable=False
+    )
+    default_embedding_profile_id: Mapped[str] = mapped_column(
+        String(128), ForeignKey("ai_model_profiles.id"), nullable=False
+    )
+    updated_by_user_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("users.id"), nullable=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class AIProviderSecretRow(Base):
+    __tablename__ = "ai_provider_secrets"
+
+    secret_name: Mapped[str] = mapped_column(String(128), primary_key=True)
+    encrypted_value: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_by_user_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("users.id"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+

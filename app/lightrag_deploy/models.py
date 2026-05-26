@@ -4,11 +4,41 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
+class DomainRetrievalDefaults(BaseModel):
+    top_k: int = Field(default=10, ge=1)
+    chunk_top_k: int = Field(default=10, ge=1)
+    chunk_rerank_top_k: int = Field(default=10, ge=1)
+    max_token_for_text_unit: int = Field(default=4000, ge=1)
+    max_token_for_global_context: int = Field(default=4000, ge=1)
+    max_token_for_local_context: int = Field(default=4000, ge=1)
+
+
 class LightRAGDomainCreateRequest(BaseModel):
     domain_id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{1,62}$")
     display_name: str | None = None
     host_port: int | None = Field(default=None, ge=1, le=65535)
+    embedding_profile_id: str | None = None
     make_default: bool = False
+    top_k: int = Field(default=10, ge=1)
+    chunk_top_k: int = Field(default=10, ge=1)
+    chunk_rerank_top_k: int = Field(default=10, ge=1)
+    max_token_for_text_unit: int = Field(default=4000, ge=1)
+    max_token_for_global_context: int = Field(default=4000, ge=1)
+    max_token_for_local_context: int = Field(default=4000, ge=1)
+
+
+class DomainEmbeddingSnapshot(BaseModel):
+    profile_id: str
+    provider: str
+    binding: str
+    base_url: str
+    api_key_env_var: str | None = None
+    model: str
+    dimensions: int | None = None
+    token_limit: int | None = None
+    send_dimensions: bool = False
+    use_base64: bool = True
+    fingerprint: str
 
 
 class LightRAGDomain(BaseModel):
@@ -27,6 +57,8 @@ class LightRAGDomain(BaseModel):
     service_name: str
     status: str = "configured"
     paths: dict[str, str]
+    embedding: DomainEmbeddingSnapshot | None = None
+    retrieval_defaults: DomainRetrievalDefaults = Field(default_factory=DomainRetrievalDefaults)
     is_default: bool = False
     is_healthy: bool | None = None
     created_at: datetime

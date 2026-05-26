@@ -135,5 +135,5 @@ Tests set `INDEX_JOBS_INLINE=true` so indexing completes without a Redis worker.
 
 # GitNexus 
 Run webui for gitnexus using cmd:
-    npx gitnexus server 
+    npx gitnexus serve
 

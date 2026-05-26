@@ -81,6 +81,9 @@ def test_alembic_head_creates_schema_on_fresh_database(
     assert "jobs" in tables
     assert "audit_logs" in tables
     assert "query_logs" in tables
+    assert "ai_model_profiles" in tables
+    assert "ai_model_settings" in tables
+    assert "ai_provider_secrets" in tables
     assert "document_pages" in tables
     assert "lightrag_domain_lifecycle" in tables
     assert "lightrag_domain_id" in columns

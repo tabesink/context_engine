@@ -102,6 +102,14 @@ def test_manifest_writes_deterministic_domain_list(tmp_path: Path) -> None:
         f'        "rag_storage": "{(tmp_path / "lightrag/domains/fatigue/rag_storage").as_posix()}",\n'
         f'        "root": "{(tmp_path / "lightrag/domains/fatigue").as_posix()}"\n'
         "      },\n"
+        '      "retrieval_defaults": {\n'
+        '        "chunk_rerank_top_k": 10,\n'
+        '        "chunk_top_k": 10,\n'
+        '        "max_token_for_global_context": 4000,\n'
+        '        "max_token_for_local_context": 4000,\n'
+        '        "max_token_for_text_unit": 4000,\n'
+        '        "top_k": 10\n'
+        "      },\n"
         '      "service_name": "lightrag_fatigue",\n'
         '      "status": "configured",\n'
         '      "updated_at": "2026-05-18T14:30:00Z"\n'
@@ -140,6 +148,12 @@ def test_domain_env_is_generated_with_lightrag_runtime_keys(tmp_path: Path) -> N
         "INPUT_DIR=/app/data/inputs\n"
         "WORKING_DIR=/app/data/rag_storage\n"
         "LOG_DIR=/app/data/logs\n"
+        "TOP_K=10\n"
+        "CHUNK_TOP_K=10\n"
+        "CHUNK_RERANK_TOP_K=10\n"
+        "MAX_TOKEN_TEXT_CHUNK=4000\n"
+        "MAX_TOKEN_RELATION_DESC=4000\n"
+        "MAX_TOKEN_ENTITY_DESC=4000\n"
         "\n"
         "# Model provider configuration\n"
         "LLM_BINDING=openai\n"

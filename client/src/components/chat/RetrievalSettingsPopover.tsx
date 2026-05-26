@@ -1,10 +1,8 @@
 "use client";
 
-import type React from "react";
-import { CircleHelp } from "lucide-react";
+import { ArrowLeft, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -18,12 +16,11 @@ type RetrievalSettingsPopoverProps = {
   settings: RetrievalSettings;
   onChange: (settings: RetrievalSettings) => void;
   lightragDomains: LightRagDomain[];
-  trigger: React.ReactNode;
+  onBack?: () => void;
 };
 
-const MODES: RetrievalQueryMode[] = ["global", "local", "hybrid", "naive", "mix"];
 const FIELD_DESCRIPTIONS = {
-  knowledgebase: "Healthy Knowledge Graph domain discovered from the local domain manifest.",
+  knowledgebase: "Select from deployed healthy Knowledge Graph domains.",
   mode: "Use mix for normal chat: it combines KG retrieval with direct vector chunks. Global is relationship-driven.",
   top_k: "Number of KG items to retrieve. Represents entities in local mode and relationships in global mode.",
   chunk_top_k: "Number of text chunks to retrieve initially from vector search.",
@@ -32,98 +29,108 @@ const FIELD_DESCRIPTIONS = {
   max_token_for_global_context: "Maximum number of tokens allocated for relationship descriptions in global retrieval.",
   max_token_for_local_context: "Maximum number of tokens allocated for entity descriptions in local retrieval.",
 };
+const MODES: RetrievalQueryMode[] = ["global", "local", "hybrid", "naive", "mix"];
 
 export function RetrievalSettingsPopover({
   settings,
   onChange,
   lightragDomains,
-  trigger,
+  onBack,
 }: RetrievalSettingsPopoverProps) {
-  const setNumber = (key: NumberSettingKey, value: string) => {
-    const parsed = parsePositiveInteger(value);
-    onChange({ ...settings, [key]: parsed });
-  };
-
-  const selectedDomain = lightragDomains.find((domain) => domain.port === settings.lightrag_port);
+  const healthyDomains = lightragDomains.filter((domain) => domain.is_healthy === true);
+  const selectedDomain = healthyDomains.find((domain) => domain.port === settings.lightrag_port);
 
   return (
-    <Popover>
-      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-      <PopoverContent className="max-h-[min(32rem,calc(100vh-2rem))] w-72 overflow-y-auto p-3" align="start" side="top">
-        <div className="space-y-3">
-          <div>
-            <h2 className="text-sm font-medium text-[var(--foreground)]">Retrieval Settings</h2>
-            <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
-              Choose one Knowledge Graph domain and tune `/query/context`. Mix mode is recommended for question-specific chunks.
-            </p>
-          </div>
-
-          <DomainSelect
-            domains={lightragDomains}
-            selectedPort={selectedDomain?.port}
-            onChange={(port) => onChange({ ...settings, lightrag_port: port })}
-          />
-
-          <div className="space-y-1.5">
-            <FieldLabel label="Query Mode" description={FIELD_DESCRIPTIONS.mode} />
-            <Select
-              value={settings.mode}
-              onValueChange={(value) => onChange({ ...settings, mode: value as RetrievalQueryMode })}
+    <div className="space-y-3">
+      <div>
+        <div className="flex items-center gap-1">
+          {onBack ? (
+            <button
+              type="button"
+              onClick={onBack}
+              className="inline-flex size-7 items-center justify-center rounded-full border border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+              aria-label="Back to actions"
             >
-              <SelectTrigger className="h-8 w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {MODES.map((mode) => (
-                  <SelectItem key={mode} value={mode}>
-                    {toTitleCase(mode)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <NumberField
-              label="Top K Results"
-              description={FIELD_DESCRIPTIONS.top_k}
-              value={settings.top_k}
-              onChange={(value) => setNumber("top_k", value)}
-            />
-            <NumberField
-              label="Chunk Top K"
-              description={FIELD_DESCRIPTIONS.chunk_top_k}
-              value={settings.chunk_top_k}
-              onChange={(value) => setNumber("chunk_top_k", value)}
-            />
-            <NumberField
-              label="Rerank Top K"
-              description={FIELD_DESCRIPTIONS.chunk_rerank_top_k}
-              value={settings.chunk_rerank_top_k}
-              onChange={(value) => setNumber("chunk_rerank_top_k", value)}
-            />
-            <NumberField
-              label="Text Unit Tokens"
-              description={FIELD_DESCRIPTIONS.max_token_for_text_unit}
-              value={settings.max_token_for_text_unit}
-              onChange={(value) => setNumber("max_token_for_text_unit", value)}
-            />
-            <NumberField
-              label="Global Tokens"
-              description={FIELD_DESCRIPTIONS.max_token_for_global_context}
-              value={settings.max_token_for_global_context}
-              onChange={(value) => setNumber("max_token_for_global_context", value)}
-            />
-            <NumberField
-              label="Local Tokens"
-              description={FIELD_DESCRIPTIONS.max_token_for_local_context}
-              value={settings.max_token_for_local_context}
-              onChange={(value) => setNumber("max_token_for_local_context", value)}
-            />
-          </div>
+              <ArrowLeft className="size-3.5" aria-hidden />
+            </button>
+          ) : null}
+          <h2 className="text-sm font-medium text-[var(--foreground)]">Retrieval</h2>
         </div>
-      </PopoverContent>
-    </Popover>
+        <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
+          Choose which deployed Knowledge Graph to query and tune retrieval behavior for the current chat.
+        </p>
+      </div>
+
+      <DomainSelect
+        domains={healthyDomains}
+        selectedPort={selectedDomain?.port}
+        onChange={(port) => onChange({ ...settings, lightrag_port: port })}
+      />
+
+      <div className="space-y-1.5">
+        <FieldLabel label="Query Mode" description={FIELD_DESCRIPTIONS.mode} />
+        <Select
+          value={settings.mode}
+          onValueChange={(value) => onChange({ ...settings, mode: value as RetrievalQueryMode })}
+        >
+          <SelectTrigger className="h-9 w-full rounded-full border-[var(--border)] bg-[var(--background)] shadow-none">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="rounded-[12px] border-[var(--border)] shadow-none">
+            {MODES.map((mode) => (
+              <SelectItem key={mode} value={mode}>
+                {toTitleCase(mode)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <details className="group rounded-[12px] border border-[var(--border)] bg-[var(--background)] px-3 py-2">
+        <summary className="flex cursor-pointer list-none items-center justify-between text-xs font-medium text-[var(--foreground)]">
+          <span>Advanced Retrieval</span>
+          <ChevronDown className="size-3.5 text-[var(--muted-foreground)] group-open:rotate-180" />
+        </summary>
+        <div className="mt-2 space-y-2">
+          <NumberField
+            label="Top K Results"
+            description={FIELD_DESCRIPTIONS.top_k}
+            value={settings.top_k}
+            onChange={(value) => setNumber("top_k", value, settings, onChange)}
+          />
+          <NumberField
+            label="Chunk Top K"
+            description={FIELD_DESCRIPTIONS.chunk_top_k}
+            value={settings.chunk_top_k}
+            onChange={(value) => setNumber("chunk_top_k", value, settings, onChange)}
+          />
+          <NumberField
+            label="Rerank Top K"
+            description={FIELD_DESCRIPTIONS.chunk_rerank_top_k}
+            value={settings.chunk_rerank_top_k}
+            onChange={(value) => setNumber("chunk_rerank_top_k", value, settings, onChange)}
+          />
+          <NumberField
+            label="Text Unit Tokens"
+            description={FIELD_DESCRIPTIONS.max_token_for_text_unit}
+            value={settings.max_token_for_text_unit}
+            onChange={(value) => setNumber("max_token_for_text_unit", value, settings, onChange)}
+          />
+          <NumberField
+            label="Global Tokens"
+            description={FIELD_DESCRIPTIONS.max_token_for_global_context}
+            value={settings.max_token_for_global_context}
+            onChange={(value) => setNumber("max_token_for_global_context", value, settings, onChange)}
+          />
+          <NumberField
+            label="Local Tokens"
+            description={FIELD_DESCRIPTIONS.max_token_for_local_context}
+            value={settings.max_token_for_local_context}
+            onChange={(value) => setNumber("max_token_for_local_context", value, settings, onChange)}
+          />
+        </div>
+      </details>
+    </div>
   );
 }
 
@@ -139,9 +146,9 @@ function DomainSelect({ domains, selectedPort, onChange }: DomainSelectProps) {
   if (domains.length === 0) {
     return (
       <div className="space-y-1.5">
-        <FieldLabel label="Knowledgebase" description={FIELD_DESCRIPTIONS.knowledgebase} />
-        <div className="rounded-md border border-[var(--border)] px-3 py-2 text-xs text-[var(--muted-foreground)]">
-          No healthy Knowledge Graph domains found.
+        <FieldLabel label="Knowledge Graph" description={FIELD_DESCRIPTIONS.knowledgebase} />
+        <div className="rounded-[12px] border border-[var(--border)] px-3 py-2 text-xs text-[var(--muted-foreground)]">
+          No deployed healthy Knowledge Graphs are available.
         </div>
       </div>
     );
@@ -149,12 +156,12 @@ function DomainSelect({ domains, selectedPort, onChange }: DomainSelectProps) {
 
   return (
     <div className="space-y-1.5">
-      <FieldLabel label="Knowledgebase" description={FIELD_DESCRIPTIONS.knowledgebase} />
+      <FieldLabel label="Knowledge Graph" description={FIELD_DESCRIPTIONS.knowledgebase} />
       <Select value={selectedPort ? String(selectedPort) : undefined} onValueChange={(value) => onChange(Number(value))}>
-        <SelectTrigger className="h-8 w-full">
-          <SelectValue placeholder="Choose a knowledgebase" />
+        <SelectTrigger className="h-9 w-full rounded-full border-[var(--border)] bg-[var(--background)] shadow-none">
+          <SelectValue placeholder="Choose a deployed knowledge graph" />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="rounded-[12px] border-[var(--border)] shadow-none">
           {domains.map((domain) => (
             <SelectItem key={domain.domain_id} value={String(domain.port)}>
               {domain.workspace} ({domain.port})
@@ -182,7 +189,7 @@ function NumberField({ label, description, value, onChange }: NumberFieldProps) 
         min={1}
         value={value ?? ""}
         onChange={(event) => onChange(event.target.value)}
-        className="h-8 text-xs"
+        className="h-9 rounded-full border-[var(--border)] bg-[var(--background)] text-xs shadow-none"
       />
     </div>
   );
@@ -195,12 +202,20 @@ type FieldLabelProps = {
 
 function FieldLabel({ label, description }: FieldLabelProps) {
   return (
-    <Label className="flex items-center gap-1.5 text-xs text-[var(--foreground)]" title={description}>
-      <span>{label}</span>
-      <CircleHelp className="size-3 text-[var(--muted-foreground)]" aria-hidden />
-      <span className="sr-only">{description}</span>
+    <Label className="text-xs text-[var(--foreground)]" title={description}>
+      {label}
     </Label>
   );
+}
+
+function setNumber(
+  key: NumberSettingKey,
+  value: string,
+  settings: RetrievalSettings,
+  onChange: (settings: RetrievalSettings) => void,
+) {
+  const parsed = parsePositiveInteger(value);
+  onChange({ ...settings, [key]: parsed });
 }
 
 function parsePositiveInteger(value: string) {

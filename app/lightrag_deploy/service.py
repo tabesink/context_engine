@@ -14,6 +14,8 @@ from app.lightrag_deploy.docker_runner import (
 from app.lightrag_deploy.errors import DomainNotFoundError, PermanentDeleteDisabledError
 from app.lightrag_deploy.manifest import DomainManifestStore
 from app.lightrag_deploy.models import (
+    DomainEmbeddingSnapshot,
+    DomainRetrievalDefaults,
     LightRAGDomain,
     LightRAGDomainCreateRequest,
     LightRAGDomainOperationResult,
@@ -21,6 +23,7 @@ from app.lightrag_deploy.models import (
 )
 from app.lightrag_deploy.paths import DomainPathResolver
 from app.lightrag_deploy.settings import LightRAGDeploySettings
+from app.services.model_profile_resolver import ModelProfileResolver
 
 
 class LightRAGDomainService:
@@ -29,6 +32,7 @@ class LightRAGDomainService:
         *,
         settings: LightRAGDeploySettings | None = None,
         runner: DockerComposeRunner | None = None,
+        profile_resolver: ModelProfileResolver | None = None,
         now: Callable[[], datetime] | None = None,
     ):
         self.settings = settings or LightRAGDeploySettings.from_app_settings(get_settings())
@@ -40,6 +44,7 @@ class LightRAGDomainService:
             compose_bin=self.settings.docker_compose_bin,
             timeout_seconds=self.settings.docker_timeout_seconds,
         )
+        self.profile_resolver = profile_resolver
         self.now = now or (lambda: datetime.now(UTC))
 
     def list_domains(self) -> list[LightRAGDomain]:
@@ -62,6 +67,28 @@ class LightRAGDomainService:
         host_base_url = f"http://{self.settings.host}:{host_port}"
         container_base_url = f"http://{service_name}:{self.settings.default_container_port}"
         base_url = container_base_url if self.settings.docker_execution_mode == "socket" else host_base_url
+        embedding_profile = (
+            self.profile_resolver.resolve_embedding_profile(request.embedding_profile_id)
+            if self.profile_resolver
+            else None
+        )
+        embedding_snapshot = (
+            DomainEmbeddingSnapshot(
+                profile_id=embedding_profile.id,
+                provider=embedding_profile.provider,
+                binding=embedding_profile.binding,
+                base_url=embedding_profile.base_url,
+                api_key_env_var=embedding_profile.api_key_env_var,
+                model=embedding_profile.model,
+                dimensions=embedding_profile.dimensions,
+                token_limit=embedding_profile.token_limit,
+                send_dimensions=embedding_profile.send_dimensions,
+                use_base64=embedding_profile.use_base64,
+                fingerprint=f"{embedding_profile.provider}:{embedding_profile.model}:{embedding_profile.dimensions or 'unknown'}",
+            )
+            if embedding_profile
+            else None
+        )
         domain = LightRAGDomain(
             id=domain_id,
             display_name=request.display_name or domain_id,
@@ -78,11 +105,20 @@ class LightRAGDomainService:
             service_name=service_name,
             status="configured",
             paths=paths.as_manifest_paths(),
+            embedding=embedding_snapshot,
+            retrieval_defaults=DomainRetrievalDefaults(
+                top_k=request.top_k,
+                chunk_top_k=request.chunk_top_k,
+                chunk_rerank_top_k=request.chunk_rerank_top_k,
+                max_token_for_text_unit=request.max_token_for_text_unit,
+                max_token_for_global_context=request.max_token_for_global_context,
+                max_token_for_local_context=request.max_token_for_local_context,
+            ),
             is_default=request.make_default or not any(domain.is_default for domain in existing),
             created_at=timestamp,
             updated_at=timestamp,
         )
-        write_domain_env(domain, self.settings, paths)
+        write_domain_env(domain, self.settings, paths, self._provider_secrets_for_domain(domain))
         self.manifest.add_domain(domain)
         self.compose.write(self.list_domains())
         return domain
@@ -90,7 +126,12 @@ class LightRAGDomainService:
     def regenerate(self, domain_id: str | None = None) -> None:
         domains = [self.get_domain(domain_id)] if domain_id else self.list_domains()
         for domain in domains:
-            write_domain_env(domain, self.settings, self.paths.ensure_domain_paths(domain.id))
+            write_domain_env(
+                domain,
+                self.settings,
+                self.paths.ensure_domain_paths(domain.id),
+                self._provider_secrets_for_domain(domain),
+            )
         self.compose.write(self.list_domains())
 
     def up(self, domain_id: str) -> LightRAGDomainOperationResult:
@@ -144,6 +185,16 @@ class LightRAGDomainService:
         while port in used_ports:
             port += 1
         return port
+
+    def _provider_secrets_for_domain(self, domain: LightRAGDomain) -> dict[str, str] | None:
+        if not self.profile_resolver or not domain.embedding or not domain.embedding.api_key_env_var:
+            return None
+        if not hasattr(self.profile_resolver, "get_provider_secret_value"):
+            return None
+        secret_value = self.profile_resolver.get_provider_secret_value(domain.embedding.api_key_env_var)
+        if not secret_value:
+            return None
+        return {domain.embedding.api_key_env_var: secret_value}
 
     def _archive_path(self, domain_id: str) -> Path:
         timestamp = self.now().strftime("%Y-%m-%d-%H%M%S")

@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import (
     admin,
+    ai_settings,
     auth,
     documents,
     health,
@@ -41,6 +42,7 @@ def create_app() -> FastAPI:
     app.include_router(auth.router)
     app.include_router(documents.router)
     app.include_router(admin.router)
+    app.include_router(ai_settings.router)
     app.include_router(retrieve.router)
     app.include_router(lightrag.router)
     app.include_router(lightrag_admin.router)

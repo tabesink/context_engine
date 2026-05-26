@@ -36,9 +36,11 @@ class LightRAGDomainRegistryInvalidError(LightRAGDomainRegistryError):
 class LightRAGDomainSummary:
     id: str
     display_name: str
+    host_port: int | None
     is_default: bool
     is_healthy: bool | None
     status: str | None
+    retrieval_defaults: dict[str, int]
 
 
 @dataclass(frozen=True)
@@ -75,9 +77,11 @@ class LightRAGDomainRegistry:
                 LightRAGDomainSummary(
                     id=domain_id,
                     display_name=str(domain.get("display_name") or domain_id),
+                    host_port=_optional_int(domain.get("host_port")),
                     is_default=bool(domain.get("is_default", False)),
                     is_healthy=domain.get("is_healthy"),
                     status=_optional_string(domain.get("status")),
+                    retrieval_defaults=_coerce_retrieval_defaults(domain.get("retrieval_defaults")),
                 )
             )
         return domains
@@ -170,3 +174,34 @@ def _optional_string(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    return None
+
+
+def _coerce_retrieval_defaults(value: Any) -> dict[str, int]:
+    defaults = {
+        "top_k": 10,
+        "chunk_top_k": 10,
+        "chunk_rerank_top_k": 10,
+        "max_token_for_text_unit": 4000,
+        "max_token_for_global_context": 4000,
+        "max_token_for_local_context": 4000,
+    }
+    if not isinstance(value, dict):
+        return defaults
+    parsed = defaults.copy()
+    for key in defaults:
+        next_value = value.get(key)
+        if isinstance(next_value, int) and next_value > 0:
+            parsed[key] = next_value
+    return parsed

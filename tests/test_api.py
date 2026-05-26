@@ -2401,9 +2401,18 @@ def test_lightrag_domain_user_safe_list_hides_paths_and_container_details(
     assert domain == {
         "id": "fatigue",
         "display_name": "Fatigue Manuals",
+        "host_port": 9621,
         "is_healthy": None,
         "is_default": True,
         "status": "configured",
+        "retrieval_defaults": {
+            "top_k": 10,
+            "chunk_top_k": 10,
+            "chunk_rerank_top_k": 10,
+            "max_token_for_text_unit": 4000,
+            "max_token_for_global_context": 4000,
+            "max_token_for_local_context": 4000,
+        },
     }
     assert "paths" not in domain
     assert "container_name" not in domain

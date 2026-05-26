@@ -49,6 +49,7 @@ export function LightRagChatShell() {
   const [sidePanelOpen, setSidePanelOpen] = useState(false);
   const lightragDomains = useLightRagDomainStore((domainState) => domainState.domains);
   const selectedPort = useLightRagDomainStore((domainState) => domainState.selectedPort);
+  const selectedDomain = useLightRagDomainStore((domainState) => domainState.selectedDomain);
   const domainStatus = useLightRagDomainStore((domainState) => domainState.status);
   const domainError = useLightRagDomainStore((domainState) => domainState.error);
   const loadDomains = useLightRagDomainStore((domainState) => domainState.loadDomains);
@@ -78,6 +79,20 @@ export function LightRagChatShell() {
   useEffect(() => {
     void loadDomains();
   }, [loadDomains]);
+
+  useEffect(() => {
+    const defaults = selectedDomain?.retrieval_defaults;
+    if (!defaults) return;
+    setRetrievalSettings((current) => ({
+      ...current,
+      top_k: defaults.top_k,
+      chunk_top_k: defaults.chunk_top_k,
+      chunk_rerank_top_k: defaults.chunk_rerank_top_k,
+      max_token_for_text_unit: defaults.max_token_for_text_unit,
+      max_token_for_global_context: defaults.max_token_for_global_context,
+      max_token_for_local_context: defaults.max_token_for_local_context,
+    }));
+  }, [selectedDomain]);
 
   const effectiveRetrievalSettings: RetrievalSettings = useMemo(
     () => ({

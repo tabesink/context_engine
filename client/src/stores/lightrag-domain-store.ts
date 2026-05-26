@@ -54,8 +54,10 @@ async function loadDomains() {
 
   try {
     const domains = await fetchLightRagDomains();
-    const selectedIsHealthy = domains.some((domain) => domain.port === state.selectedPort);
-    const selectedPort = selectedIsHealthy ? state.selectedPort : domains[0]?.port ?? state.selectedPort;
+    const healthyDomains = domains.filter((domain) => domain.is_healthy === true);
+    const selectableDomains = healthyDomains.length > 0 ? healthyDomains : domains;
+    const selectedIsHealthy = selectableDomains.some((domain) => domain.port === state.selectedPort);
+    const selectedPort = selectedIsHealthy ? state.selectedPort : selectableDomains[0]?.port ?? state.selectedPort;
     setState({ domains, selectedPort, status: "ready" });
   } catch (error) {
     setState({

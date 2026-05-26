@@ -12,9 +12,12 @@ from app.lightrag_deploy.models import (
     LightRAGDomainRemoveResponse,
 )
 from app.lightrag_deploy.service import LightRAGDomainService
+from app.services.ai_model_settings_service import AIModelSettingsService
 from app.services.domain_purge_service import DomainPurgeService
 from app.services.lightrag_domain_registry import LightRAGDomainRegistry
+from app.services.model_profile_resolver import ModelProfileResolver
 from app.storage.db import get_session
+from app.storage.repositories.ai_model_settings import AIModelSettingsRepository
 from app.storage.repositories.logs import LogRepository
 from app.storage.repositories.lightrag_domain_lifecycle import LightRAGDomainLifecycleRepository
 from app.storage.tables import UserRow
@@ -22,8 +25,9 @@ from app.storage.tables import UserRow
 router = APIRouter(tags=["lightrag-domains"])
 
 
-def get_domain_service() -> LightRAGDomainService:
-    return LightRAGDomainService()
+def get_domain_service(session: Session = Depends(get_session)) -> LightRAGDomainService:
+    profile_service = AIModelSettingsService(AIModelSettingsRepository(session))
+    return LightRAGDomainService(profile_resolver=ModelProfileResolver(profile_service))
 
 
 def get_domain_registry() -> LightRAGDomainRegistry:
@@ -205,9 +209,11 @@ def list_user_domains(
             {
                 "id": domain.id,
                 "display_name": domain.display_name,
+                "host_port": domain.host_port,
                 "is_healthy": domain.is_healthy,
                 "is_default": domain.is_default,
                 "status": domain.status,
+                "retrieval_defaults": domain.retrieval_defaults,
             }
             for domain in registry.list_domains()
         ]

@@ -70,6 +70,12 @@ class Settings(BaseSettings):
     lightrag_openai_llm_max_completion_tokens: int | None = None
     lightrag_openai_llm_temperature: float | None = None
     lightrag_openai_llm_extra_body: str | None = None
+    openai_api_key: str | None = None
+    aws_bearer_token_bedrock: str | None = None
+    ollama_base_url: str = "http://host.docker.internal:11434/v1"
+    default_openai_base_url: str = "https://api.openai.com/v1"
+    default_bedrock_openai_base_url: str | None = None
+    ai_secret_encryption_key: str | None = None
     lightrag_archive_deleted_domains: bool = True
     lightrag_allow_permanent_delete: bool = False
     lightrag_docker_execution_mode: str = "host"

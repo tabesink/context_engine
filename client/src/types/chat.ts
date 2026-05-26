@@ -45,6 +45,14 @@ export type LightRagDomain = {
   status?: string;
   is_healthy?: boolean;
   is_default?: boolean;
+  retrieval_defaults?: {
+    top_k: number;
+    chunk_top_k: number;
+    chunk_rerank_top_k: number;
+    max_token_for_text_unit: number;
+    max_token_for_global_context: number;
+    max_token_for_local_context: number;
+  };
 };
 
 export type RetrievalChunkMetadata = {
