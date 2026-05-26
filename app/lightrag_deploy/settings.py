@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 from app.core.config import Settings
 
@@ -14,6 +15,7 @@ class LightRAGDeploySettings:
     deleted_root: Path = Path(".data/lightrag/deleted")
     default_port_start: int = 9621
     default_container_port: int = 9621
+    host: str = "127.0.0.1"
     docker_network: str = "context_engine_lightrag"
     domain_env_filename: str = "domain.env"
     image: str = "ghcr.io/hkuds/lightrag:latest"
@@ -25,6 +27,9 @@ class LightRAGDeploySettings:
     postgres_database_prefix: str = "lightrag"
     postgres_user_prefix: str = "lightrag"
     postgres_password: str = "lightrag"
+    runtime_postgres_database: str = "context_engine"
+    runtime_postgres_user: str = "context_engine"
+    runtime_postgres_password: str = "context_engine"
     redis_url: str | None = None
     neo4j_uri: str | None = None
     neo4j_username: str | None = None
@@ -56,6 +61,9 @@ class LightRAGDeploySettings:
 
     @classmethod
     def from_app_settings(cls, settings: Settings) -> "LightRAGDeploySettings":
+        runtime_database, runtime_user, runtime_password = _runtime_postgres_credentials(
+            settings.database_url
+        )
         return cls(
             enabled=settings.lightrag_deploy_enabled,
             deploy_root=settings.lightrag_deploy_root,
@@ -65,6 +73,7 @@ class LightRAGDeploySettings:
             deleted_root=settings.lightrag_deleted_root,
             default_port_start=settings.lightrag_default_port_start,
             default_container_port=settings.lightrag_default_container_port,
+            host=settings.lightrag_host,
             docker_network=settings.lightrag_docker_network,
             domain_env_filename=settings.lightrag_domain_env_filename,
             image=settings.lightrag_image,
@@ -76,6 +85,9 @@ class LightRAGDeploySettings:
             postgres_database_prefix=settings.lightrag_postgres_database_prefix,
             postgres_user_prefix=settings.lightrag_postgres_user_prefix,
             postgres_password=settings.lightrag_postgres_password,
+            runtime_postgres_database=runtime_database,
+            runtime_postgres_user=runtime_user,
+            runtime_postgres_password=runtime_password or settings.lightrag_postgres_password,
             redis_url=settings.lightrag_redis_url,
             neo4j_uri=settings.lightrag_neo4j_uri,
             neo4j_username=settings.lightrag_neo4j_username,
@@ -105,3 +117,13 @@ class LightRAGDeploySettings:
             docker_compose_bin=settings.lightrag_docker_compose_bin,
             docker_timeout_seconds=settings.lightrag_docker_timeout_seconds,
         )
+
+
+def _runtime_postgres_credentials(database_url: str) -> tuple[str, str, str | None]:
+    parsed = urlparse(database_url)
+    if not parsed.scheme.startswith("postgresql"):
+        return "context_engine", "context_engine", None
+    database = parsed.path.lstrip("/") or "context_engine"
+    user = unquote(parsed.username) if parsed.username else "context_engine"
+    password = unquote(parsed.password) if parsed.password else None
+    return database, user, password

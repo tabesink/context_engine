@@ -42,6 +42,9 @@ export type LightRagDomain = {
   port: number;
   service: string;
   base_url: string;
+  status?: string;
+  is_healthy?: boolean;
+  is_default?: boolean;
 };
 
 export type RetrievalChunkMetadata = {

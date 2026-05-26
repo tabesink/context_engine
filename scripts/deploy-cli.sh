@@ -60,6 +60,24 @@ if [[ ! -f .env && -f .env.example ]]; then
   printf '%s\n' "Created .env from .env.example - edit if needed."
 fi
 
+read_env_value() {
+  local key="$1"
+  local file="$2"
+  if [[ ! -f "$file" ]]; then
+    return
+  fi
+  local line
+  line="$(sed -nE "s/^[[:space:]]*${key}[[:space:]]*=(.*)$/\\1/p" "$file" | sed -n '1p' || true)"
+  if [[ -z "$line" ]]; then
+    return
+  fi
+  line="$(printf '%s' "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+  if [[ -z "$line" ]]; then
+    return
+  fi
+  printf '%s' "$line"
+}
+
 venv_dir=".venv"
 venv_python="$venv_dir/bin/python"
 venv_cli="$venv_dir/bin/context-engine"
@@ -99,17 +117,11 @@ if [[ "$needs_install" == true ]]; then
 fi
 
 if [[ -z "$api_base_url" ]]; then
-  api_port="8000"
-  if [[ -f .env ]]; then
-    api_port_line="$(sed -nE 's/^[[:space:]]*API_PORT[[:space:]]*=(.*)$/\1/p' .env | sed -n '1p' || true)"
-    if [[ -n "$api_port_line" ]]; then
-      value="$(printf '%s' "$api_port_line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-      if [[ -n "$value" ]]; then
-        api_port="$value"
-      fi
-    fi
-  fi
-  api_base_url="http://127.0.0.1:$api_port"
+  api_port="${API_PORT:-$(read_env_value API_PORT .env)}"
+  api_port="${api_port:-8010}"
+  api_host="${API_HOST:-$(read_env_value API_HOST .env)}"
+  api_host="${api_host:-127.0.0.1}"
+  api_base_url="http://${api_host}:$api_port"
 fi
 
 if [[ ! -x "$venv_cli" ]]; then

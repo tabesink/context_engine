@@ -15,7 +15,7 @@
 
 .PARAMETER ApiBaseUrl
   Override API base URL. If omitted, reads API_PORT from .env and falls back
-  to http://127.0.0.1:8000.
+  to http://127.0.0.1:8010.
 #>
 param(
     [switch]$Dev,
@@ -34,6 +34,15 @@ if (-not $uv) {
 if (-not (Test-Path .env) -and (Test-Path .env.example)) {
     Copy-Item .env.example .env
     Write-Host "Created .env from .env.example - edit if needed."
+}
+
+function Get-EnvValue([string]$Key, [string]$Path = ".env") {
+    if (-not (Test-Path $Path)) { return $null }
+    $line = Select-String -Path $Path -Pattern "^\s*$Key\s*=" | Select-Object -First 1
+    if (-not $line) { return $null }
+    $value = ($line.Line -split '=', 2)[1].Trim()
+    if ([string]::IsNullOrWhiteSpace($value)) { return $null }
+    return $value
 }
 
 $venvDir = '.venv'
@@ -68,15 +77,11 @@ if ($needsInstall) {
 }
 
 if (-not $ApiBaseUrl) {
-    $apiPort = '8000'
-    if (Test-Path .env) {
-        $apiPortLine = Select-String -Path '.env' -Pattern '^\s*API_PORT\s*=' | Select-Object -First 1
-        if ($apiPortLine) {
-            $value = ($apiPortLine.Line -split '=', 2)[1].Trim()
-            if ($value) { $apiPort = $value }
-        }
-    }
-    $ApiBaseUrl = "http://127.0.0.1:$apiPort"
+    $apiPort = if ($env:API_PORT) { $env:API_PORT } else { Get-EnvValue -Key 'API_PORT' }
+    if (-not $apiPort) { $apiPort = '8010' }
+    $apiHost = if ($env:API_HOST) { $env:API_HOST } else { Get-EnvValue -Key 'API_HOST' }
+    if (-not $apiHost) { $apiHost = '127.0.0.1' }
+    $ApiBaseUrl = "http://$apiHost:$apiPort"
 }
 
 if (-not (Test-Path $venvCli)) {

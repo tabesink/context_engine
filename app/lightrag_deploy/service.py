@@ -59,7 +59,7 @@ class LightRAGDomainService:
         timestamp = self.now()
         service_name = f"lightrag_{domain_id}"
         postgres_suffix = self._postgres_identifier(domain_id)
-        host_base_url = f"http://127.0.0.1:{host_port}"
+        host_base_url = f"http://{self.settings.host}:{host_port}"
         container_base_url = f"http://{service_name}:{self.settings.default_container_port}"
         base_url = container_base_url if self.settings.docker_execution_mode == "socket" else host_base_url
         domain = LightRAGDomain(
@@ -68,7 +68,7 @@ class LightRAGDomainService:
             workspace=domain_id,
             postgres_database=f"{self.settings.postgres_database_prefix}_{postgres_suffix}",
             postgres_user=f"{self.settings.postgres_user_prefix}_{postgres_suffix}",
-            host="127.0.0.1",
+            host=self.settings.host,
             host_port=host_port,
             container_port=self.settings.default_container_port,
             base_url=base_url,

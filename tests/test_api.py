@@ -53,7 +53,7 @@ def _settings_cache(
     manifest_path.write_text(
         (
             '{"domains":['
-            '{"id":"default","display_name":"Default","base_url":"http://lightrag-default.local","status":"ready"},'
+            '{"id":"default","display_name":"Default","base_url":"http://lightrag-default.local","status":"ready","is_default":true},'
             '{"id":"fatigue","display_name":"Fatigue","base_url":"http://lightrag-fatigue.local","status":"ready"}'
             "]}"
         ),
@@ -207,8 +207,18 @@ def test_readiness_checks_dependencies(monkeypatch: pytest.MonkeyPatch) -> None:
     assert body["status"] == "ready"
     assert body["services"]["database"] == "healthy"
     assert body["services"]["redis"] == "healthy"
-    assert body["services"]["domain_registry"] == "healthy"
     assert body["services"]["lightrag"] == "healthy"
+    assert body["services"]["domain_registry"] == "healthy"
+    assert list(body["services"].keys()) == ["database", "redis", "lightrag", "domain_registry"]
+    assert list(body["details"].keys()) == ["database", "redis", "lightrag", "domain_registry"]
+    assert body["details"]["database"]["status"] == "healthy"
+    assert body["details"]["database"]["reason"] is None
+    assert isinstance(body["details"]["database"]["latency_ms"], int)
+    assert body["details"]["database"]["latency_ms"] >= 0
+    assert isinstance(body["details"]["database"]["checked_at"], str)
+    assert body["details"]["database"]["checked_at"]
+    assert body["details"]["redis"]["status"] == "healthy"
+    assert body["details"]["redis"]["reason"] == "Redis check skipped because inline jobs are enabled."
 
 
 def test_readiness_reports_not_ready_when_default_lightrag_unhealthy(
@@ -227,6 +237,31 @@ def test_readiness_reports_not_ready_when_default_lightrag_unhealthy(
     assert body["services"]["database"] == "healthy"
     assert body["services"]["domain_registry"] == "healthy"
     assert body["services"]["lightrag"] == "unhealthy"
+    assert body["details"]["lightrag"]["status"] == "unhealthy"
+    assert body["details"]["lightrag"]["reason"] == "LightRAG health endpoint returned HTTP 503."
+
+
+def test_readiness_reports_not_ready_when_database_unhealthy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeHealthResponse:
+        status_code = 200
+
+    def broken_execute(*args, **kwargs):
+        del args, kwargs
+        raise RuntimeError("db is down")
+
+    monkeypatch.setattr("app.services.readiness_service.httpx.get", lambda *args, **kwargs: FakeHealthResponse())
+    monkeypatch.setattr("sqlalchemy.orm.session.Session.execute", broken_execute)
+    with TestClient(app) as client:
+        response = client.get("/health/readiness")
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["status"] == "not_ready"
+    assert body["services"]["database"] == "unhealthy"
+    assert body["details"]["database"]["status"] == "unhealthy"
+    assert body["details"]["database"]["reason"] == "Database query failed: RuntimeError (db is down)"
 
 
 def test_readiness_reports_not_ready_when_registry_missing(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -240,6 +275,9 @@ def test_readiness_reports_not_ready_when_registry_missing(monkeypatch: pytest.M
     assert body["status"] == "not_ready"
     assert body["services"]["domain_registry"] == "unhealthy"
     assert body["services"]["lightrag"] == "unhealthy"
+    assert body["details"]["domain_registry"]["status"] == "unhealthy"
+    assert body["details"]["domain_registry"]["reason"].startswith("Domain registry is unavailable:")
+    assert body["details"]["lightrag"]["reason"] == "Default LightRAG domain is unavailable."
 
 
 def test_readiness_reports_not_ready_when_redis_unhealthy_in_queue_mode(
@@ -268,6 +306,8 @@ def test_readiness_reports_not_ready_when_redis_unhealthy_in_queue_mode(
     assert body["status"] == "not_ready"
     assert body["services"]["database"] == "healthy"
     assert body["services"]["redis"] == "unhealthy"
+    assert body["details"]["redis"]["status"] == "unhealthy"
+    assert body["details"]["redis"]["reason"] == "Redis ping failed: RuntimeError (redis down)"
 
 
 def test_admin_guardrails_and_document_retrieve_flow(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1745,7 +1785,33 @@ def test_lightrag_graph_proxy_uses_upstream_route_names(monkeypatch: pytest.Monk
     def fake_get_json(self: LightRAGRemoteAdapter, path: str, *, params: dict | None = None):
         del self, params
         seen_paths.append(path)
-        return {"path": path, "nodes": [], "edges": []}
+        if path == "/graphs":
+            return {
+                "nodes": [
+                    {
+                        "id": "n1",
+                        "labels": ["Pump"],
+                        "properties": {"entity_id": "Pump", "entity_type": "equipment"},
+                    }
+                ],
+                "edges": [
+                    {
+                        "id": "e1",
+                        "source": "n1",
+                        "target": "n2",
+                        "type": "connects",
+                        "properties": {"weight": 2, "description": "connects to"},
+                    }
+                ],
+                "is_truncated": True,
+            }
+        if path == "/graph/label/list":
+            return ["Pump", "Valve"]
+        if path == "/graph/label/popular":
+            return ["Pump"]
+        if path == "/graph/label/search":
+            return ["Pump"]
+        return {}
 
     monkeypatch.setattr(LightRAGRemoteAdapter, "for_domain", classmethod(fake_for_domain))
     monkeypatch.setattr(LightRAGRemoteAdapter, "get_json", fake_get_json)
@@ -1755,11 +1821,41 @@ def test_lightrag_graph_proxy_uses_upstream_route_names(monkeypatch: pytest.Monk
         user_headers = _login(client, "user@example.com")
         graph = client.get("/lightrag/domains/fatigue/graphs?label=Pump", headers=user_headers)
         labels = client.get("/lightrag/domains/fatigue/graph/labels", headers=user_headers)
+        popular = client.get("/lightrag/domains/fatigue/graph/labels/popular?limit=2", headers=user_headers)
+        search = client.get("/lightrag/domains/fatigue/graph/labels/search?q=Pu&limit=2", headers=user_headers)
 
     assert graph.status_code == 200
     assert labels.status_code == 200
-    assert seen_domains == ["fatigue", "fatigue"]
-    assert seen_paths == ["/graphs", "/graph/label/list"]
+    assert popular.status_code == 200
+    assert search.status_code == 200
+    assert seen_domains == ["fatigue", "fatigue", "fatigue", "fatigue"]
+    assert seen_paths == ["/graphs", "/graph/label/list", "/graph/label/popular", "/graph/label/search"]
+    assert graph.json() == {
+        "nodes": [
+            {
+                "id": "n1",
+                "labels": ["Pump"],
+                "display_label": "Pump",
+                "entity_type": "equipment",
+                "properties": {"entity_id": "Pump", "entity_type": "equipment"},
+            }
+        ],
+        "edges": [
+            {
+                "id": "e1",
+                "source": "n1",
+                "target": "n2",
+                "relation": "connects",
+                "weight": 2.0,
+                "description": "connects to",
+                "properties": {"weight": 2, "description": "connects to"},
+            }
+        ],
+        "truncated": True,
+    }
+    assert labels.json() == {"labels": ["Pump", "Valve"]}
+    assert popular.json() == {"labels": ["Pump"]}
+    assert search.json() == {"query": "Pu", "limit": 2, "labels": ["Pump"]}
 
 
 def test_lightrag_graph_proxy_rejects_unknown_domain_before_proxy(

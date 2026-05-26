@@ -155,7 +155,41 @@ class FakeTuiClient:
         if path == "/health":
             return self._record("GET", path, None, {"status": "ok"})
         if path == "/health/readiness":
-            return self._record("GET", path, None, {"status": "ready"})
+            return self._record("GET", path, None, {
+                "status": "ready",
+                "services": {
+                    "database": "healthy",
+                    "redis": "healthy",
+                    "lightrag": "healthy",
+                    "domain_registry": "healthy",
+                },
+                "details": {
+                    "database": {
+                        "status": "healthy",
+                        "reason": None,
+                        "latency_ms": 1,
+                        "checked_at": "2026-01-01T00:00:00Z",
+                    },
+                    "redis": {
+                        "status": "healthy",
+                        "reason": "Redis check skipped because inline jobs are enabled.",
+                        "latency_ms": 1,
+                        "checked_at": "2026-01-01T00:00:00Z",
+                    },
+                    "lightrag": {
+                        "status": "healthy",
+                        "reason": None,
+                        "latency_ms": 1,
+                        "checked_at": "2026-01-01T00:00:00Z",
+                    },
+                    "domain_registry": {
+                        "status": "healthy",
+                        "reason": None,
+                        "latency_ms": 1,
+                        "checked_at": "2026-01-01T00:00:00Z",
+                    },
+                },
+            })
         raise AssertionError(f"unexpected GET {path}")
 
     def post(self, path: str, payload: dict[str, Any] | None = None) -> Any:

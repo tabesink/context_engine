@@ -84,9 +84,9 @@ def render_domain_env(
                 "LIGHTRAG_VECTOR_STORAGE=PGVectorStorage",
                 f"POSTGRES_HOST={(settings.postgres_host if settings else 'postgres')}",
                 f"POSTGRES_PORT={(settings.postgres_port if settings else 5432)}",
-                f"POSTGRES_DATABASE={domain.postgres_database}",
-                f"POSTGRES_USER={domain.postgres_user}",
-                f"POSTGRES_PASSWORD={(settings.postgres_password if settings else 'lightrag')}",
+                f"POSTGRES_DATABASE={settings.runtime_postgres_database if settings else domain.postgres_database}",
+                f"POSTGRES_USER={settings.runtime_postgres_user if settings else domain.postgres_user}",
+                f"POSTGRES_PASSWORD={(settings.runtime_postgres_password if settings else 'lightrag')}",
                 "POSTGRES_VECTOR_INDEX_TYPE=HNSW",
             ]
         )
@@ -122,16 +122,23 @@ class ComposeGenerator:
 
     def _service_lines(self, domain: LightRAGDomain) -> list[str]:
         paths = domain.paths
+        env_file = self._host_path(paths["env_file"])
+        inputs = self._host_path(paths["inputs"])
+        rag_storage = self._host_path(paths["rag_storage"])
+        artifacts = self._host_path(paths["artifacts"])
+        logs = self._host_path(paths["logs"])
         lines = [
             f"  {domain.service_name}:",
             f"    container_name: {domain.container_name}",
         ]
         if self.settings.build_context and self.settings.dockerfile:
+            build_context = self._host_path(path_to_posix(self.settings.build_context))
+            dockerfile = self._host_path(path_to_posix(self.settings.dockerfile))
             lines.extend(
                 [
                     "    build:",
-                    f"      context: {path_to_posix(self.settings.build_context)}",
-                    f"      dockerfile: {path_to_posix(self.settings.dockerfile)}",
+                    f"      context: {build_context}",
+                    f"      dockerfile: {dockerfile}",
                 ]
             )
         else:
@@ -139,19 +146,26 @@ class ComposeGenerator:
         lines.extend(
             [
                 "    env_file:",
-                f"      - {paths['env_file']}",
+                f"      - {env_file}",
                 "    ports:",
                 f'      - "{domain.host}:{domain.host_port}:{domain.container_port}"',
                 "    volumes:",
-                f"      - {paths['inputs']}:/app/data/inputs",
-                f"      - {paths['rag_storage']}:/app/data/rag_storage",
-                f"      - {paths['artifacts']}:/app/data/artifacts",
-                f"      - {paths['logs']}:/app/data/logs",
+                f"      - {inputs}:/app/data/inputs",
+                f"      - {rag_storage}:/app/data/rag_storage",
+                f"      - {artifacts}:/app/data/artifacts",
+                f"      - {logs}:/app/data/logs",
                 "    networks:",
                 f"      - {self.settings.docker_network}",
             ]
         )
         return lines
+
+    @staticmethod
+    def _host_path(raw_path: str) -> str:
+        candidate = Path(raw_path).expanduser()
+        if candidate.is_absolute():
+            return candidate.resolve().as_posix()
+        return (Path.cwd() / candidate).resolve().as_posix()
 
 
 def path_to_posix(path: str | Path) -> str:

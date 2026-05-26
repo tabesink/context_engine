@@ -94,7 +94,7 @@ def test_create_domain_generates_manifest_env_and_compose(tmp_path: Path) -> Non
     )
 
 
-def test_create_domain_renders_postgres_owned_lightrag_storage_without_manifest_secrets(
+def test_create_domain_renders_shared_postgres_storage_without_manifest_secrets(
     tmp_path: Path,
 ) -> None:
     service = _service(tmp_path)
@@ -111,9 +111,9 @@ def test_create_domain_renders_postgres_owned_lightrag_storage_without_manifest_
     assert "LIGHTRAG_GRAPH_STORAGE=PGGraphStorage" in env_text
     assert "LIGHTRAG_VECTOR_STORAGE=PGVectorStorage" in env_text
     assert "POSTGRES_HOST=postgres" in env_text
-    assert "POSTGRES_DATABASE=lightrag_manual_domain" in env_text
-    assert "POSTGRES_USER=lightrag_manual_domain" in env_text
-    assert "POSTGRES_PASSWORD=" in env_text
+    assert "POSTGRES_DATABASE=context_engine" in env_text
+    assert "POSTGRES_USER=context_engine" in env_text
+    assert "POSTGRES_PASSWORD=context_engine" in env_text
     assert "postgres_database" in manifest_text
     assert "POSTGRES_PASSWORD" not in manifest_text
 

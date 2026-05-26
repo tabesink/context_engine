@@ -4,9 +4,12 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 RUN pip install --no-cache-dir \
+    "lightrag-hku[api]" \
     fastapi \
     "uvicorn[standard]" \
     gunicorn \
+    "PyJWT>=2,<3" \
+    bcrypt \
     python-multipart \
     httpx \
     pydantic \

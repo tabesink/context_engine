@@ -259,8 +259,51 @@ def test_compose_generation_can_build_lightrag_from_local_source(tmp_path: Path)
     domain = _domain(tmp_path)
 
     output = ComposeGenerator(settings).render([domain])
+    root = Path.cwd().resolve().as_posix()
 
     assert "build:" in output
-    assert "context: ." in output
-    assert "dockerfile: docker/lightrag.Dockerfile" in output
+    assert f"context: {root}" in output
+    assert f"dockerfile: {root}/docker/lightrag.Dockerfile" in output
     assert "image: " not in output
+
+
+def test_compose_generation_resolves_relative_domain_paths_for_env_and_volumes() -> None:
+    settings = LightRAGDeploySettings(
+        enabled=True,
+        deploy_root=Path(".data/lightrag"),
+        domains_root=Path(".data/lightrag/domains"),
+        manifest_path=Path(".data/lightrag/domains.json"),
+        compose_file=Path(".data/lightrag/docker-compose.lightrag-domains.yml"),
+        deleted_root=Path(".data/lightrag/deleted"),
+    )
+    timestamp = datetime(2026, 5, 18, 14, 30, tzinfo=UTC)
+    domain = LightRAGDomain(
+        id="smokegraph",
+        display_name="Smoke Graph",
+        host="127.0.0.1",
+        host_port=9622,
+        container_port=9621,
+        base_url="http://127.0.0.1:9622",
+        host_base_url="http://127.0.0.1:9622",
+        container_base_url="http://lightrag_smokegraph:9621",
+        container_name="context_engine_lightrag_smokegraph",
+        service_name="lightrag_smokegraph",
+        status="configured",
+        paths={
+            "root": ".data/lightrag/domains/smokegraph",
+            "env_file": ".data/lightrag/domains/smokegraph/domain.env",
+            "inputs": ".data/lightrag/domains/smokegraph/inputs",
+            "rag_storage": ".data/lightrag/domains/smokegraph/rag_storage",
+            "artifacts": ".data/lightrag/domains/smokegraph/artifacts",
+            "logs": ".data/lightrag/domains/smokegraph/logs",
+        },
+        is_default=True,
+        created_at=timestamp,
+        updated_at=timestamp,
+    )
+
+    output = ComposeGenerator(settings).render([domain])
+    root = Path.cwd().resolve().as_posix()
+
+    assert f"- {root}/.data/lightrag/domains/smokegraph/domain.env" in output
+    assert f"- {root}/.data/lightrag/domains/smokegraph/inputs:/app/data/inputs" in output

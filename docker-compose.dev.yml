@@ -4,7 +4,7 @@ services:
       - .:/app
 
   api:
-    command: uvicorn app.main:create_app --factory --host 0.0.0.0 --port ${API_PORT:-8000} --reload
+    command: uvicorn app.main:create_app --factory --host 0.0.0.0 --port ${API_PORT:-8010} --reload
     volumes:
       - .:/app
       - uploads:/app/.data/uploads

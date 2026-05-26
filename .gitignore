@@ -50,6 +50,8 @@ docs/brainstorm/
 # IDE and OS
 .idea/
 .vscode/
+.claude/
+.gitnexus/
 *.swp
 *.swo
 *~

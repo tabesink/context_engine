@@ -4,7 +4,7 @@ import { useSyncExternalStore } from "react";
 import { fetchLightRagDomains } from "@/lib/lightrag-client";
 import type { LightRagDomain } from "@/types/chat";
 
-const DEFAULT_LIGHTRAG_PORT = 9621;
+const DEFAULT_LIGHTRAG_PORT = Number(process.env.NEXT_PUBLIC_LIGHTRAG_DEFAULT_PORT ?? "9621");
 
 type LightRagDomainState = {
   domains: LightRagDomain[];
@@ -77,6 +77,10 @@ export function useLightRagDomainStore<T = LightRagDomainState>(
 
 export function getSelectedLightRagPort() {
   return state.selectedPort;
+}
+
+export function getSelectedLightRagDomainId() {
+  return state.selectedDomain?.domain_id ?? "default";
 }
 
 export { DEFAULT_LIGHTRAG_PORT };

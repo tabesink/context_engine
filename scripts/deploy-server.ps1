@@ -30,12 +30,19 @@ if (-not (Test-Path .env)) {
     Write-Host "Created .env from .env.example - edit if needed."
 }
 
-$apiPort = '8000'
-$apiPortLine = Select-String -Path '.env' -Pattern '^\s*API_PORT\s*=' | Select-Object -First 1
-if ($apiPortLine) {
-    $value = ($apiPortLine.Line -split '=', 2)[1].Trim()
-    if ($value) { $apiPort = $value }
+function Get-EnvValue([string]$Key, [string]$Path = ".env") {
+    if (-not (Test-Path $Path)) { return $null }
+    $line = Select-String -Path $Path -Pattern "^\s*$Key\s*=" | Select-Object -First 1
+    if (-not $line) { return $null }
+    $value = ($line.Line -split '=', 2)[1].Trim()
+    if ([string]::IsNullOrWhiteSpace($value)) { return $null }
+    return $value
 }
+
+$apiPort = if ($env:API_PORT) { $env:API_PORT } else { Get-EnvValue -Key 'API_PORT' }
+if (-not $apiPort) { $apiPort = '8010' }
+$apiHost = if ($env:API_HOST) { $env:API_HOST } else { Get-EnvValue -Key 'API_HOST' }
+if (-not $apiHost) { $apiHost = '127.0.0.1' }
 
 if (-not $NoDocker) {
     docker compose up postgres redis -d
@@ -74,4 +81,4 @@ if ($needsInstall) {
 }
 
 & $venvPython -m scripts.seed_admin
-& $venvPython -m uvicorn app.main:create_app --factory --reload --port $apiPort
+& $venvPython -m uvicorn app.main:create_app --factory --reload --host $apiHost --port $apiPort

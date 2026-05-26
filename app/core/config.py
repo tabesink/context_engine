@@ -10,6 +10,9 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 class Settings(BaseSettings):
     app_name: str = "Context Engine"
     environment: str = "local"
+    api_host: str = "127.0.0.1"
+    client_host: str = "127.0.0.1"
+    lightrag_host: str = "127.0.0.1"
     secret_key: str = "dev-secret-change-me"
     access_token_minutes: int = 60
     database_url: str

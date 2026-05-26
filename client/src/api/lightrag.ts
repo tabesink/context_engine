@@ -1,6 +1,6 @@
 import { resolveApiBase } from "@/lib/api/client";
 import { popularLabelsDefaultLimit, searchLabelsDefaultLimit } from "@/lib/constants";
-import { getSelectedLightRagPort } from "@/stores/lightrag-domain-store";
+import { getSelectedLightRagDomainId } from "@/stores/lightrag-domain-store";
 
 export type LightragNodeType = {
   id: string;
@@ -13,13 +13,16 @@ export type LightragEdgeType = {
   source: string;
   target: string;
   type?: string;
+  relation?: string;
+  weight?: number;
+  description?: string;
   properties: Record<string, unknown>;
 };
 
 export type LightragGraphType = {
   nodes: LightragNodeType[];
   edges: LightragEdgeType[];
-  is_truncated?: boolean;
+  truncated?: boolean;
 };
 
 export type EntityUpdateResponse = {
@@ -69,28 +72,18 @@ export async function queryGraphs(label: string, maxDepth: number, maxNodes: num
 }
 
 export async function fetchGraphEntityTypes(): Promise<string[]> {
-  const response = await fetch(`${resolveApiBase()}/api/lightrag/entity-types`, {
-    credentials: "include",
-    headers: {
-      Accept: "application/json",
-    },
-  });
-
-  if (!response.ok) {
-    const detail = await readErrorDetail(response);
-    throw new Error(`${response.status} ${response.statusText}${detail ? `: ${detail}` : ""}`);
-  }
-
-  return (await response.json()) as string[];
+  return [];
 }
 
 export async function getPopularLabels(limit: number = popularLabelsDefaultLimit): Promise<string[]> {
-  return request<string[]>(`/graph/label/popular?limit=${limit}`);
+  const response = await request<{ labels: string[] }>(`/graph/labels/popular?limit=${limit}`);
+  return response.labels;
 }
 
 export async function searchLabels(query: string, limit: number = searchLabelsDefaultLimit): Promise<string[]> {
   const params = new URLSearchParams({ q: query, limit: String(limit) });
-  return request<string[]>(`/graph/label/search?${params.toString()}`);
+  const response = await request<{ labels: string[] }>(`/graph/labels/search?${params.toString()}`);
+  return response.labels;
 }
 
 export async function checkEntityNameExists(entityName: string): Promise<boolean> {
@@ -132,12 +125,14 @@ export async function updateRelation(
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const port = getSelectedLightRagPort();
-  const response = await fetch(`${resolveApiBase()}/api/lightrag/domains/${port}${path}`, {
+  const domainId = getSelectedLightRagDomainId();
+  const token = typeof window === "undefined" ? null : window.localStorage.getItem("context_engine_access_token");
+  const response = await fetch(`${resolveApiBase()}/lightrag/domains/${encodeURIComponent(domainId)}${path}`, {
     ...init,
-    credentials: "include",
+    credentials: "omit",
     headers: {
       Accept: "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init.body ? { "Content-Type": "application/json" } : {}),
       ...init.headers,
     },

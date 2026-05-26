@@ -48,8 +48,12 @@ export default function useLightragGraph() {
     useBackendState.getState().setPipelineBusy(true);
 
     try {
-      const entityTypes = await fetchGraphEntityTypes();
-      configurePromptEntityTypes(entityTypes);
+      try {
+        const entityTypes = await fetchGraphEntityTypes();
+        configurePromptEntityTypes(entityTypes);
+      } catch {
+        // Graph rendering should continue even if optional type metadata is unavailable.
+      }
       const graph = await queryGraphs(label, maxDepth, maxNodes);
       const { rawGraph } = toRawGraph(graph);
       const sigmaGraph = toSigmaGraph(rawGraph);
@@ -60,7 +64,7 @@ export default function useLightragGraph() {
       useGraphStore.getState().setSearchEngine(searchEngine);
       useGraphStore.getState().setGraphIsEmpty(rawGraph.nodes.length === 0);
       useGraphStore.getState().setLastSuccessfulQueryLabel(label);
-      if (graph.is_truncated) {
+      if (graph.truncated) {
         toast.info(`Graph was truncated to ${maxNodes} nodes.`);
       }
     } catch (error) {
@@ -166,12 +170,14 @@ export default function useLightragGraph() {
           }
 
           const properties = isRecord(edge.properties) ? edge.properties : {};
-          const weight = Number(properties.weight ?? properties.keywords?.toString().length ?? 1);
+          const weight = Number(
+            edge.weight ?? properties.weight ?? properties.keywords?.toString().length ?? 1,
+          );
           const dynamicId = `${id}-${rawGraph.edges.length + addedEdgeCount}`;
           if (sigmaGraph.hasEdge(dynamicId)) continue;
 
           sigmaGraph.addDirectedEdgeWithKey(dynamicId, source, target, {
-            label: String(properties.description ?? edge.type ?? ""),
+            label: String(edge.description ?? properties.description ?? edge.type ?? edge.relation ?? ""),
             originalWeight: Number.isFinite(weight) ? weight : 1,
             size: 1,
             color: edgeColorLightTheme,
@@ -181,7 +187,11 @@ export default function useLightragGraph() {
             id,
             source,
             target,
-            ...(typeof edge.type === "string" ? { type: edge.type } : {}),
+            ...(typeof edge.type === "string"
+              ? { type: edge.type }
+              : typeof edge.relation === "string"
+                ? { type: edge.relation }
+                : {}),
             properties,
             dynamicId,
           });
@@ -285,7 +295,11 @@ function toRawGraph(
       id,
       source,
       target,
-      ...(typeof edge.type === "string" ? { type: edge.type } : {}),
+      ...(typeof edge.type === "string"
+        ? { type: edge.type }
+        : typeof edge.relation === "string"
+          ? { type: edge.relation }
+          : {}),
       properties: isRecord(edge.properties) ? edge.properties : {},
       dynamicId: `${id}-${index}`,
     });

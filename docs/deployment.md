@@ -10,14 +10,24 @@ Copy `.env.example` and change production-sensitive values before running outsid
 cp .env.example .env
 ```
 
+Append optional overlays only when needed:
+
+```bash
+# Enable admin-managed LightRAG domain lifecycle:
+cat .env.lightrag-deploy.example >> .env
+
+# Include provider settings written into generated domain.env files:
+cat .env.lightrag-provider.example >> .env
+```
+
 Important settings:
 
 - `SECRET_KEY`: strong random value; never use the development default in production.
-- `PUBLISH_POSTGRES_PORT`, `PUBLISH_REDIS_PORT`, `API_PORT`: host port mappings exposed by Compose. `.env.example` is host-first and maps PostgreSQL to `5438`, Redis to `6386`, and the API to `8000`.
+- `PUBLISH_POSTGRES_PORT`, `PUBLISH_REDIS_PORT`, `API_PORT`: host port mappings exposed by Compose. `.env.example` is host-first and maps PostgreSQL to `5438`, Redis to `6386`, and the API to `8010`.
 - `DATABASE_URL`: required SQLAlchemy URL. PostgreSQL is the only supported runtime database for local development, staging, and production. Compose injects the in-network value `postgresql+psycopg://context_engine:context_engine@postgres:5432/context_engine` into containers.
 - `REDIS_URL`: Redis URL. `.env.example` uses the host URL; Compose injects `redis://redis:6379/0` into API/worker containers.
 - `CONTEXT_ENGINE_API_BASE_URL` (optional): default base URL the `context-engine` terminal client uses when `--api-base-url` is omitted. Keep this aligned with `API_PORT`.
-- `NEXT_PUBLIC_BACKEND_BASE_URL` (optional): frontend base URL for browser calls. Set this to the same backend origin (for example `http://127.0.0.1:8000`) when running the web client.
+- `NEXT_PUBLIC_BACKEND_BASE_URL` (optional): frontend base URL for browser calls. Set this to the same backend origin (for example `http://127.0.0.1:8010`) when running the web client.
 - `INDEX_JOBS_INLINE`: `false` for worker-backed indexing; `true` only for deterministic local tests/dev flows.
 - `LIGHTRAG_STATUS_POLL_INTERVAL_SECONDS`: interval for background LightRAG status synchronization.
 - `STORAGE_ROOT`: persistent mounted upload directory.
@@ -72,7 +82,7 @@ The baseline revision records the schema that existed before document-structure 
 
 ## Published Ports And `.env.example`
 
-Compose maps **host** ports from your `.env` (`PUBLISH_POSTGRES_PORT`, `PUBLISH_REDIS_PORT`, `API_PORT`). The checked-in `.env.example` publishes PostgreSQL and Redis on alternate localhost ports while keeping the API on `8000`. Set `DATABASE_URL` and `REDIS_URL` to those same localhost ports when you run tooling on the host; services **inside** the Compose network use hostnames `postgres` and `redis` with container ports `5432` and `6379`.
+Compose maps **host** ports from your `.env` (`PUBLISH_POSTGRES_PORT`, `PUBLISH_REDIS_PORT`, `API_PORT`). The checked-in `.env.example` publishes PostgreSQL and Redis on alternate localhost ports while keeping the API on `8010`. Set `DATABASE_URL` and `REDIS_URL` to those same localhost ports when you run tooling on the host; services **inside** the Compose network use hostnames `postgres` and `redis` with container ports `5432` and `6379`.
 
 ## Local Non-Compose Run
 
@@ -80,7 +90,7 @@ For a quick local API run, install the package and run Uvicorn from the reposito
 
 ```bash
 python -m pip install -e ".[dev]"
-uvicorn app.main:create_app --factory --reload
+uvicorn app.main:create_app --factory --reload --port 8010
 ```
 
 `DATABASE_URL` must be configured. Local non-compose runs should point at the PostgreSQL service started above; the app no longer falls back to a hidden sqlite file database.
@@ -146,7 +156,7 @@ When enabled, admins can manage domains through `/admin/lightrag/domains...` or 
 
 Context Engine generates a separate LightRAG domains compose file and invokes `docker compose -f ...` through a fakeable runner. The generated services connect to the shared network from the root compose stack. Permanent delete remains disabled unless `LIGHTRAG_ALLOW_PERMANENT_DELETE=true`.
 
-Each domain env selects PostgreSQL-backed LightRAG storage (`PGKVStorage`, `PGDocStatusStorage`, `PGGraphStorage`, `PGVectorStorage`) and uses a domain-specific database name such as `lightrag_manuals`. The root PostgreSQL image must support both `vector` and Apache `AGE`; `migrations/0002_smoke_lightrag_postgres_extensions.sql` is the smoke check for that requirement.
+Each domain env selects PostgreSQL-backed LightRAG storage (`PGKVStorage`, `PGDocStatusStorage`, `PGGraphStorage`, `PGVectorStorage`) and uses shared runtime PostgreSQL credentials, while `WORKSPACE` in `domain.env` remains domain-specific for logical isolation. The root PostgreSQL image must support both `vector` and Apache `AGE`; `migrations/0002_smoke_lightrag_postgres_extensions.sql` is the smoke check for that requirement.
 
 ## Backup
 

@@ -15,9 +15,17 @@ First-time setup for both options:
 copy .env.example .env
 ```
 
+Optional overlays for LightRAG deployment/provider settings are available in `.env.lightrag-deploy.example` and `.env.lightrag-provider.example`.
+
 Edit `.env` if your database or Redis URLs differ. Admin login is configured with `SEED_ADMIN_USERNAME` and `SEED_ADMIN_PASSWORD`.
 
 `DATABASE_URL` is required. Context Engine supports PostgreSQL as the runtime database for local development, staging, and production; sqlite is reserved only for explicit isolated tests.
+
+Port and host settings are centralized in root `.env` for local runs:
+- `API_HOST` / `API_PORT`
+- `CLIENT_HOST` / `CLIENT_PORT`
+- `LIGHTRAG_HOST`
+- `NEXT_PUBLIC_API_URL` (canonical frontend API base URL; `NEXT_PUBLIC_BACKEND_BASE_URL` remains a compatibility alias)
 
 ---
 
@@ -29,7 +37,7 @@ Runs PostgreSQL, Redis, the API, the worker, and the LightRAG status poller toge
 docker compose up --build
 ```
 
-- API: `http://localhost:8000`
+- API: `http://localhost:8010`
 - PostgreSQL: `localhost:5438`
 - Redis: `localhost:6386` (host port; container still listens on 6379)
 
@@ -42,7 +50,7 @@ docker compose exec api python -m scripts.seed_admin
 Health check:
 
 ```powershell
-curl http://localhost:8000/health
+curl http://localhost:8010/health
 ```
 
 With `INDEX_JOBS_INLINE=false` (as in `.env.example`), uploads and reindex requests enqueue jobs; the `worker` service processes them and the `status-poller` service keeps pending LightRAG indexing states synchronized.
@@ -71,7 +79,7 @@ docker compose up postgres redis -d
 ```powershell
 python -m pip install --user -e .
 python -m scripts.seed_admin
-uvicorn app.main:create_app --factory --reload
+uvicorn app.main:create_app --factory --reload --port 8010
 ```
 
 For tests and dev tooling, install with optional dependencies:
@@ -97,13 +105,13 @@ Or set `INDEX_JOBS_INLINE=true` in `.env` for local development without separate
 Health check:
 
 ```powershell
-curl http://localhost:8000/health
+curl http://localhost:8010/health
 ```
 
 Readiness check:
 
 ```powershell
-curl http://localhost:8000/health/readiness
+curl http://localhost:8010/health/readiness
 ```
 
 ---
@@ -131,3 +139,9 @@ python -m pytest -q
 ```
 
 Tests set `INDEX_JOBS_INLINE=true` so indexing completes without a Redis worker.
+
+
+# GitNexus 
+Run webui for gitnexus using cmd:
+    npx gitnexus server 
+

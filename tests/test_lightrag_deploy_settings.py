@@ -62,7 +62,7 @@ def test_env_example_declares_lightrag_deployment_settings() -> None:
 def test_settings_parse_lightrag_deployment_fields(tmp_path: Path) -> None:
     settings = Settings(
         environment="test",
-        database_url="sqlite:///./.data/test_context_engine.db",
+        database_url="postgresql+psycopg://app_user:app_pw@localhost:5438/test_context_engine",
         lightrag_deploy_enabled=True,
         lightrag_domain_registry=tmp_path / "lightrag" / "domains.json",
         lightrag_deploy_root=tmp_path / "lightrag",
@@ -114,6 +114,9 @@ def test_settings_parse_lightrag_deployment_fields(tmp_path: Path) -> None:
     assert deploy.postgres_host == "postgres"
     assert deploy.postgres_database_prefix == "lr"
     assert deploy.postgres_user_prefix == "lr_user"
+    assert deploy.runtime_postgres_database == "test_context_engine"
+    assert deploy.runtime_postgres_user == "app_user"
+    assert deploy.runtime_postgres_password == "app_pw"
     assert deploy.llm_binding == "openai"
     assert deploy.llm_binding_host == "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1"
     assert deploy.llm_binding_api_key == "bedrock-key"
