@@ -102,7 +102,7 @@ That means:
 ```text
 CONTEXT ENGINE
 
-Backend: http://127.0.0.1:8010
+Backend: http://127.0.0.1:8000
 Session: admin@example.com
 Role:    admin
 
@@ -123,7 +123,7 @@ Role:    admin
 ```text
 CONTEXT ENGINE
 
-Backend: http://127.0.0.1:8010
+Backend: http://127.0.0.1:8000
 Session: user@example.com
 Role:    user
 
@@ -229,7 +229,7 @@ Root
 ```text
 ┌──────────────────────────────────────────────────────────────┐
 │ CONTEXT ENGINE / Documents                                   │
-│ Backend: http://127.0.0.1:8010   User: admin@example.com      │
+│ Backend: http://127.0.0.1:8000   User: admin@example.com      │
 ├──────────────────────────────────────────────────────────────┤
 │ Summary / Data                                               │
 │                                                              │
@@ -903,7 +903,7 @@ ERROR
 code:    connection_failed
 message: Could not connect to backend
 route:   GET /auth/me
-backend: http://127.0.0.1:8010
+backend: http://127.0.0.1:8000
 
 Next:
 - Start the backend.

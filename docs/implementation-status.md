@@ -38,7 +38,7 @@ This file records what the current codebase implements. For the intended build s
 
 ## LightRAG Runtime Behavior
 
-`LIGHTRAG_ENABLED=true` is the required integration runtime. Tests may inject/fake the remote adapter boundary, but runtime semantic retrieval has no local fallback.
+Remote LightRAG is the required integration runtime. Tests may inject/fake the remote adapter boundary, but runtime semantic retrieval has no local fallback.
 
 Runtime behavior:
 

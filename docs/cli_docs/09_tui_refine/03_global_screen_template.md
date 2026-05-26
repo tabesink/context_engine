@@ -5,7 +5,7 @@
 ```text
 ┌──────────────────────────────────────────────────────────────┐
 │ CONTEXT ENGINE / Documents                                   │
-│ Backend: http://127.0.0.1:8010   User: admin@example.com      │
+│ Backend: http://127.0.0.1:8000   User: admin@example.com      │
 ├──────────────────────────────────────────────────────────────┤
 │ Summary / Data                                               │
 │                                                              │

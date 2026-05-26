@@ -20,7 +20,7 @@ Hybrid retrieval = remote LightRAG semantic evidence + local navigation enrichme
 
 ### Slice 1 — Config hard requirement
 
-- `LIGHTRAG_ENABLED` defaults to `true` and startup fails when set to `false`.
+- Remote LightRAG is required by configuration; startup fails when neither `LIGHTRAG_BASE_URL` nor a readable domain manifest is configured.
 - Startup fails when neither `LIGHTRAG_BASE_URL` nor a readable domain manifest is configured.
 - Tests cover default-on behavior and both validation failures.
 

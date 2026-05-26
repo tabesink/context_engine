@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_admin
@@ -27,11 +27,13 @@ def job_response(job) -> JobResponse:
 
 @router.get("")
 def list_jobs(
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     admin: UserRow = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> list[JobResponse]:
     del admin
-    return [job_response(job) for job in JobRepository(session).list()]
+    return [job_response(job) for job in JobRepository(session).list(limit=limit, offset=offset)]
 
 
 @router.get("/{job_id}")

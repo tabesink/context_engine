@@ -7,7 +7,7 @@ These are the target ASCII views for document browsing and retrieval.
 ```text
 CONTEXT ENGINE
 
-Backend: http://127.0.0.1:8010
+Backend: http://127.0.0.1:8000
 Session: admin@example.com
 
 > Documents

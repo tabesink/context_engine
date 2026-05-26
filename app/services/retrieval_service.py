@@ -3,6 +3,7 @@ from time import perf_counter
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.domain.models import RetrievalResult
 from app.integrations.lightrag_remote_adapter import LightRAGAdapterError, lightrag_http_exception
 from app.retrieval.evidence_mapper import to_evidence_response
@@ -55,12 +56,14 @@ class RetrievalService:
         except LightRAGAdapterError as exc:
             raise lightrag_http_exception(exc) from exc
         latency_ms = int((perf_counter() - started) * 1000)
+        settings = get_settings()
         LogRepository(self.session).record_query(
             user_id=user.id,
-            query=request.query,
+            query=request.query if settings.query_log_store_text else None,
             mode=result.mode.value,
             latency_ms=latency_ms,
             evidence_count=len(result.evidence),
+            retention_days=settings.query_log_retention_days,
         )
         return result
 

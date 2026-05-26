@@ -65,11 +65,21 @@ class DocumentRepository:
                 matched.append(document)
         return matched
 
-    def list_all(self) -> list[DocumentRow]:
-        return list(self.session.scalars(select(DocumentRow).order_by(DocumentRow.created_at.desc())))
+    def list_all(self, *, limit: int = 50, offset: int = 0) -> list[DocumentRow]:
+        return list(
+            self.session.scalars(
+                select(DocumentRow).order_by(DocumentRow.created_at.desc()).limit(limit).offset(offset)
+            )
+        )
 
     def list_lightrag_indexing(self) -> list[DocumentRow]:
-        documents = self.list_all()
+        documents = list(
+            self.session.scalars(
+                select(DocumentRow)
+                .where(DocumentRow.status == DocumentStatus.INDEXING.value)
+                .order_by(DocumentRow.created_at.desc())
+            )
+        )
         pending: list[DocumentRow] = []
         for document in documents:
             lightrag = document.meta.get("lightrag", {}) if isinstance(document.meta, dict) else {}

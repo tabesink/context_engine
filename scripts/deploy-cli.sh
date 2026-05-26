@@ -101,10 +101,9 @@ fi
 if [[ -z "$api_base_url" ]]; then
   api_port="8000"
   if [[ -f .env ]]; then
-    api_port_line="$(rg '^\s*API_PORT\s*=' .env -N -m 1 || true)"
+    api_port_line="$(sed -nE 's/^[[:space:]]*API_PORT[[:space:]]*=(.*)$/\1/p' .env | sed -n '1p' || true)"
     if [[ -n "$api_port_line" ]]; then
-      value="${api_port_line#*=}"
-      value="$(printf '%s' "$value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+      value="$(printf '%s' "$api_port_line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
       if [[ -n "$value" ]]; then
         api_port="$value"
       fi

@@ -22,7 +22,7 @@ Then start the interactive client:
 
 ```bash
 context-engine
-context-engine --api-base-url http://127.0.0.1:8010
+context-engine --api-base-url http://127.0.0.1:8000
 ```
 
 Launcher options (see `cli/config.py`):
@@ -54,7 +54,7 @@ Rough map to menus in the UI (exact labels follow `cli/tui/`):
 - Health / readiness shortcuts where wired
 - Backend gaps: documented in `docs/cli_docs/backend_gaps.md`; not exposed as a root TUI screen
 
-LightRAG domain administration is TUI-first for human operators and REST-first for automation. Domain deployment requires backend settings such as **`LIGHTRAG_DEPLOY_ENABLED=true`** plus the Docker/image/storage variables documented in **`.env.example`**. Runtime LightRAG is mandatory: **`LIGHTRAG_ENABLED=true`**, plus **`LIGHTRAG_BASE_URL`** or a readable domain manifest, and optional **`LIGHTRAG_API_KEY`**.
+LightRAG domain administration is TUI-first for human operators and REST-first for automation. Domain deployment requires backend settings such as **`LIGHTRAG_DEPLOY_ENABLED=true`** plus the Docker/image/storage variables documented in **`.env.lightrag-deploy.example`**. Runtime LightRAG is mandatory through **`LIGHTRAG_BASE_URL`** or a readable domain manifest, with optional **`LIGHTRAG_API_KEY`**.
 
 API-backed screens keep default views clean. Use **`I`** for Inspect API, **`J`** for Raw JSON, **`F`** for full IDs, and **`R`** to refresh. Inspect/raw views redact secrets and never show multipart file bytes.
 

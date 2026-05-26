@@ -5,6 +5,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 os.environ["DATABASE_URL"] = "sqlite:///./.data/test_context_engine.db"
+os.environ["ENVIRONMENT"] = "test"
+Path(".data").mkdir(parents=True, exist_ok=True)
 Path(".data/test_context_engine.db").unlink(missing_ok=True)
 
 from app.document_processing.models import (  # noqa: E402

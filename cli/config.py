@@ -46,11 +46,36 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _api_base_url_from_dotenv() -> str | None:
+    env_path = Path(".env")
+    if not env_path.exists():
+        return None
+
+    try:
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            if stripped.startswith("API_PORT"):
+                key, sep, value = stripped.partition("=")
+                if sep and key.strip() == "API_PORT":
+                    port = value.strip().strip("'\"")
+                    if port:
+                        return f"http://127.0.0.1:{port}"
+    except OSError:
+        return None
+    return None
+
+
 def load_cli_settings(argv: list[str] | None = None) -> CliSettings:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
-    env_api_base_url = os.getenv("CONTEXT_ENGINE_API_BASE_URL", "http://127.0.0.1:8000")
+    env_api_base_url = (
+        os.getenv("CONTEXT_ENGINE_API_BASE_URL")
+        or _api_base_url_from_dotenv()
+        or "http://127.0.0.1:8000"
+    )
     raw_api_base_url = args.api_base_url or env_api_base_url
     api_base_url = str(raw_api_base_url).rstrip("/")
 

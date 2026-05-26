@@ -14,6 +14,7 @@ def test_alembic_document_processing_revision_upgrades_existing_baseline(
 ) -> None:
     database_path = tmp_path / "migration.db"
     database_url = f"sqlite:///{database_path}"
+    monkeypatch.setenv("ENVIRONMENT", "test")
     monkeypatch.setenv("DATABASE_URL", database_url)
     get_settings.cache_clear()
 
@@ -60,6 +61,7 @@ def test_alembic_head_creates_schema_on_fresh_database(
 ) -> None:
     database_path = tmp_path / "fresh.db"
     database_url = f"sqlite:///{database_path}"
+    monkeypatch.setenv("ENVIRONMENT", "test")
     monkeypatch.setenv("DATABASE_URL", database_url)
     get_settings.cache_clear()
 
@@ -83,6 +85,7 @@ def test_alembic_document_ingest_revision_renames_legacy_jobs(
 ) -> None:
     database_path = tmp_path / "jobs.db"
     database_url = f"sqlite:///{database_path}"
+    monkeypatch.setenv("ENVIRONMENT", "test")
     monkeypatch.setenv("DATABASE_URL", database_url)
     get_settings.cache_clear()
 

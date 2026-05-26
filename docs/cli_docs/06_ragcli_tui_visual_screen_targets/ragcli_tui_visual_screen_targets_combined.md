@@ -80,12 +80,12 @@ A screen like this is functional but not ideal:
 
 ```text
 CLI ready.
-API base URL: http://127.0.0.1:8010
+API base URL: http://127.0.0.1:8000
 
 Example commands:
-  .venv\Scripts\context-engine.exe --api-base-url http://127.0.0.1:8010 --help
-  .venv\Scripts\context-engine.exe --api-base-url http://127.0.0.1:8010 login
-  .venv\Scripts\context-engine.exe --api-base-url http://127.0.0.1:8010 ui
+  .venv\Scripts\context-engine.exe --api-base-url http://127.0.0.1:8000 --help
+  .venv\Scripts\context-engine.exe --api-base-url http://127.0.0.1:8000 login
+  .venv\Scripts\context-engine.exe --api-base-url http://127.0.0.1:8000 ui
 
 UPLOAD COMPLETE
 
@@ -460,7 +460,7 @@ ADMIN DOCUMENTS / UPLOAD
 Could not connect to backend.
 
 Backend:
-  http://127.0.0.1:8010
+  http://127.0.0.1:8000
 
 > Retry upload
   Edit file path
@@ -499,7 +499,7 @@ These are the target ASCII views for document browsing and retrieval.
 ```text
 CONTEXT ENGINE
 
-Backend: http://127.0.0.1:8010
+Backend: http://127.0.0.1:8000
 Session: admin@example.com
 
 > Documents
@@ -845,7 +845,7 @@ CONNECTION FAILED
 [ERROR] Could not connect to backend
 
 Backend:
-  http://127.0.0.1:8010
+  http://127.0.0.1:8000
 
 Try:
   1. Confirm the backend is running.
@@ -867,7 +867,7 @@ LOADING
 Fetching documents...
 
 Backend:
-  http://127.0.0.1:8010
+  http://127.0.0.1:8000
 
 Please wait.
 ```
@@ -878,7 +878,7 @@ Please wait.
 CONTEXT ENGINE LOGIN
 
 Backend:
-  http://127.0.0.1:8010
+  http://127.0.0.1:8000
 
 Email:
   [ admin@example.com                                             ]

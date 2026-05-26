@@ -20,12 +20,12 @@ A screen like this is functional but not ideal:
 
 ```text
 CLI ready.
-API base URL: http://127.0.0.1:8010
+API base URL: http://127.0.0.1:8000
 
 Example commands:
-  .venv\Scripts\context-engine.exe --api-base-url http://127.0.0.1:8010 --help
-  .venv\Scripts\context-engine.exe --api-base-url http://127.0.0.1:8010 login
-  .venv\Scripts\context-engine.exe --api-base-url http://127.0.0.1:8010 ui
+  .venv\Scripts\context-engine.exe --api-base-url http://127.0.0.1:8000 --help
+  .venv\Scripts\context-engine.exe --api-base-url http://127.0.0.1:8000 login
+  .venv\Scripts\context-engine.exe --api-base-url http://127.0.0.1:8000 ui
 
 UPLOAD COMPLETE
 

@@ -50,7 +50,7 @@ Sample retrieve body:
 | Popular labels | `GET /lightrag/domains/{domain_id}/graph/labels/popular?limit=…` | authenticated | supported |
 | Label search | `GET /lightrag/domains/{domain_id}/graph/labels/search?q=…&limit=…` | authenticated | supported |
 
-Requires backend **`LIGHTRAG_ENABLED=true`** (mandatory at startup) with a reachable remote LightRAG service. LightRAG outages surface as HTTP `502`/`503` integration errors; there is no local semantic fallback.
+Requires a configured remote LightRAG service. LightRAG outages surface as HTTP `502`/`503` integration errors; there is no local semantic fallback.
 
 This capability is surfaced as **`Graphs`** in the root TUI menu.
 
@@ -78,7 +78,7 @@ Create accepts:
 }
 ```
 
-Admin domain routes require **`LIGHTRAG_DEPLOY_ENABLED=true`**. Runtime graph/retrieval behavior remains controlled separately by **`LIGHTRAG_ENABLED`**, **`LIGHTRAG_BASE_URL`**, and optional **`LIGHTRAG_API_KEY`**. The runtime **`LIGHTRAG_DOMAIN_MANIFEST`** and deploy **`LIGHTRAG_DOMAINS_MANIFEST`** default to the same file path but are separate settings.
+Admin domain routes require **`LIGHTRAG_DEPLOY_ENABLED=true`**. Runtime graph/retrieval behavior remains controlled separately by **`LIGHTRAG_BASE_URL`**, optional **`LIGHTRAG_API_KEY`**, and the domain manifest. The runtime **`LIGHTRAG_DOMAIN_MANIFEST`** and deploy **`LIGHTRAG_DOMAINS_MANIFEST`** default to the same file path but are separate settings.
 
 ## Admin documents
 
@@ -88,7 +88,7 @@ Admin domain routes require **`LIGHTRAG_DEPLOY_ENABLED=true`**. Runtime graph/re
 | Reingest | `POST /admin/documents/{document_id}/reingest` | admin | supported |
 | Refresh status | `POST /admin/documents/{document_id}/refresh-status` | admin | supported |
 | Delete | `DELETE /admin/documents/{document_id}` | admin | supported |
-| Admin listing | `GET /admin/documents` | admin | supported |
+| Admin listing | `GET /admin/documents?limit=50&offset=0` | admin | supported |
 | Corpus publish/rollback/cleanup | no matching endpoints | admin | documented gap |
 
 These admin routes are surfaced from **`Documents -> Admin Actions`** in the TUI (not a standalone root menu).
@@ -97,14 +97,14 @@ These admin routes are surfaced from **`Documents -> Admin Actions`** in the TUI
 
 | TUI capability | Backend | Role | Status |
 | --- | --- | --- | --- |
-| Audit feed | `GET /admin/audit-logs` | admin | supported |
-| Query log feed | `GET /admin/query-logs` | admin | supported |
+| Audit feed | `GET /admin/audit-logs?limit=100&offset=0` | admin | supported |
+| Query log feed | `GET /admin/query-logs?limit=100&offset=0` | admin | supported |
 
 ## Jobs
 
 | TUI capability | Backend | Role | Status |
 | --- | --- | --- | --- |
-| List jobs | `GET /jobs` | admin | supported |
+| List jobs | `GET /jobs?limit=50&offset=0` | admin | supported |
 | Job detail | `GET /jobs/{job_id}` | admin | supported |
 | Retry | `POST /jobs/{job_id}/retry` | admin | supported |
 

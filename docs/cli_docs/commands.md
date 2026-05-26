@@ -9,7 +9,7 @@ For request/response field detail, reuse `docs/cli_docs/api-contract.md`.
 Parsed in **`cli/config.py`**:
 
 ```bash
-context-engine --api-base-url http://127.0.0.1:8010 --config-dir ~/.context-engine/cli
+context-engine --api-base-url http://127.0.0.1:8000 --config-dir ~/.context-engine/cli
 context-engine --no-keyring
 ```
 
@@ -70,7 +70,7 @@ Known **backend gaps** (examples only—currently no matching routes):
 | Popular labels | **`GET /lightrag/domains/{domain_id}/graph/labels/popular`** |
 | Label search | **`GET /lightrag/domains/{domain_id}/graph/labels/search?q=…`** |
 
-The UI never connects to LightRAG directly; backend proxy handles **`LIGHTRAG_ENABLED`** and outbound HTTP.
+The UI never connects to LightRAG directly; backend proxy handles runtime LightRAG configuration and outbound HTTP.
 
 In the TUI root menu this area is labeled **`Graphs`**.
 

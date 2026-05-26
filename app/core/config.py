@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     environment: str = "local"
     secret_key: str = "dev-secret-change-me"
     access_token_minutes: int = 60
-    database_url: str = "sqlite:///./.data/context_engine.db"
+    database_url: str
     redis_url: str = "redis://localhost:6379/0"
     index_jobs_inline: bool = False
     storage_root: Path = Path(".data/uploads")
@@ -20,12 +20,13 @@ class Settings(BaseSettings):
     seed_admin_username: str = "admin"
     seed_admin_password: str = "admin-password"
     # Semantic retrieval is remote-LightRAG-only in this service.
-    lightrag_enabled: bool = True
     lightrag_base_url: str = "http://localhost:9621"
     lightrag_api_key: str | None = None
     lightrag_domain: str = "default"
     lightrag_domain_manifest: Path | None = Path(".data/lightrag/domains.json")
     lightrag_timeout_seconds: float = 10.0
+    query_log_store_text: bool = False
+    query_log_retention_days: int = 30
     lightrag_deploy_enabled: bool = False
     lightrag_deploy_root: Path = Path(".data/lightrag")
     lightrag_domains_root: Path = Path(".data/lightrag/domains")
@@ -102,12 +103,30 @@ class Settings(BaseSettings):
         return [item.strip() for item in raw.split(",") if item.strip()]
 
     @model_validator(mode="after")
-    def validate_required_lightrag(self) -> "Settings":
-        if not self.lightrag_enabled:
-            raise ValueError(
-                "LightRAG is required. Local semantic retrieval is no longer supported. "
-                "Set LIGHTRAG_ENABLED=true."
-            )
+    def validate_runtime_settings(self) -> "Settings":
+        env = self.environment.strip().lower()
+        database_url = self.database_url.strip()
+        if not database_url:
+            raise ValueError("DATABASE_URL must be configured.")
+        if database_url.startswith("sqlite") and env != "test":
+            raise ValueError("SQLite is only allowed when ENVIRONMENT=test. Use PostgreSQL.")
+        if env != "test" and not database_url.startswith("postgresql"):
+            raise ValueError("PostgreSQL is the only supported runtime database.")
+
+        if env == "production":
+            weak_secret_keys = {
+                "dev-secret-change-me",
+                "change-me",
+                "change-me-in-production",
+            }
+            if self.secret_key in weak_secret_keys:
+                raise ValueError("SECRET_KEY must be set to a strong production value.")
+            if self.allowed_origins == ["*"]:
+                raise ValueError("ALLOWED_ORIGINS cannot be '*' in production.")
+            weak_seed_passwords = {"admin", "admin123", "admin-password", "change-me"}
+            if self.seed_admin_password in weak_seed_passwords:
+                raise ValueError("SEED_ADMIN_PASSWORD is too weak for production.")
+
         has_base_url = bool((self.lightrag_base_url or "").strip())
         has_domain_manifest = bool(
             (self.lightrag_domain_manifest and self.lightrag_domain_manifest.is_file())

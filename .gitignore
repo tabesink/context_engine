@@ -45,6 +45,7 @@ coverage.xml
 
 # Local runtime data (uploads, SQLite, etc.)
 .data/
+docs/brainstorm/
 
 # IDE and OS
 .idea/

@@ -181,7 +181,7 @@ ADMIN DOCUMENTS / UPLOAD
 Could not connect to backend.
 
 Backend:
-  http://127.0.0.1:8010
+  http://127.0.0.1:8000
 
 > Retry upload
   Edit file path

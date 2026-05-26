@@ -161,7 +161,7 @@ CONNECTION FAILED
 [ERROR] Could not connect to backend
 
 Backend:
-  http://127.0.0.1:8010
+  http://127.0.0.1:8000
 
 Try:
   1. Confirm the backend is running.
@@ -183,7 +183,7 @@ LOADING
 Fetching documents...
 
 Backend:
-  http://127.0.0.1:8010
+  http://127.0.0.1:8000
 
 Please wait.
 ```
@@ -194,7 +194,7 @@ Please wait.
 CONTEXT ENGINE LOGIN
 
 Backend:
-  http://127.0.0.1:8010
+  http://127.0.0.1:8000
 
 Email:
   [ admin@example.com                                             ]

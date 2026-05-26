@@ -136,7 +136,7 @@ Current acceptance:
 
 Implemented:
 
-- `LIGHTRAG_ENABLED`, `LIGHTRAG_BASE_URL`, `LIGHTRAG_API_KEY`, `LIGHTRAG_DOMAIN`, `LIGHTRAG_DOMAIN_MANIFEST`, and `LIGHTRAG_TIMEOUT_SECONDS` settings (`LIGHTRAG_ENABLED` must remain `true`).
+- `LIGHTRAG_BASE_URL`, `LIGHTRAG_API_KEY`, `LIGHTRAG_DOMAIN`, `LIGHTRAG_DOMAIN_MANIFEST`, and `LIGHTRAG_TIMEOUT_SECONDS` settings. Remote LightRAG is required; there is no local semantic fallback flag.
 - `app/integrations/lightrag_domains.py` for optional domain manifest resolution.
 - `app/integrations/lightrag_remote_adapter.py` for HTTP-only LightRAG access.
 - Remote retrieval through `/query/data`.

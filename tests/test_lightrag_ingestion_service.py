@@ -7,8 +7,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 os.environ["DATABASE_URL"] = "sqlite:///./.data/test_context_engine.db"
+os.environ["ENVIRONMENT"] = "test"
 os.environ["INDEX_JOBS_INLINE"] = "true"
-os.environ["LIGHTRAG_ENABLED"] = "true"
+Path(".data").mkdir(parents=True, exist_ok=True)
 Path(".data/test_context_engine.db").unlink(missing_ok=True)
 
 from app.document_processing.artifacts import DocumentProcessingArtifactStore  # noqa: E402

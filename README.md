@@ -2,12 +2,12 @@
 
 Backend-only multi-user hybrid RAG application.
 
-Semantic retrieval is mandatory remote LightRAG (`LIGHTRAG_ENABLED=true`). This service keeps local navigation retrieval (`mode=navigation`) for page/section lookups, but it does not provide a local semantic fallback.
+Semantic retrieval is mandatory remote LightRAG. This service keeps local navigation retrieval (`mode=navigation`) for page/section lookups, but it does not provide a local semantic fallback.
 
 ## Prerequisites
 
 - **Python 3.11+** (see `requires-python` in `pyproject.toml`)
-- **PostgreSQL** and **Redis** at the URLs in `.env` (defaults use `localhost:5432` and `localhost:6386` when using Compose)
+- **PostgreSQL** and **Redis** at the URLs in `.env` (the host-first example uses `localhost:5438` and `localhost:6386`; Compose maps those to in-network service URLs for containers)
 
 First-time setup for both options:
 
@@ -16,6 +16,8 @@ copy .env.example .env
 ```
 
 Edit `.env` if your database or Redis URLs differ. Admin login is configured with `SEED_ADMIN_USERNAME` and `SEED_ADMIN_PASSWORD`.
+
+`DATABASE_URL` is required. Context Engine supports PostgreSQL as the runtime database for local development, staging, and production; sqlite is reserved only for explicit isolated tests.
 
 ---
 
@@ -28,7 +30,7 @@ docker compose up --build
 ```
 
 - API: `http://localhost:8000`
-- PostgreSQL: `localhost:5432`
+- PostgreSQL: `localhost:5438`
 - Redis: `localhost:6386` (host port; container still listens on 6379)
 
 Seed the admin user (first run, or after changing seed credentials):
@@ -44,6 +46,12 @@ curl http://localhost:8000/health
 ```
 
 With `INDEX_JOBS_INLINE=false` (as in `.env.example`), uploads and reindex requests enqueue jobs; the `worker` service processes them. Set `INDEX_JOBS_INLINE=true` if you want indexing in-process without a worker.
+
+For live-reload development inside Compose, run with the dev override:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+```
 
 ---
 

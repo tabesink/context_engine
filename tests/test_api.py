@@ -3,15 +3,16 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 os.environ["DATABASE_URL"] = "sqlite:///./.data/test_context_engine.db"
+os.environ["ENVIRONMENT"] = "test"
 os.environ["INDEX_JOBS_INLINE"] = "true"
-os.environ["LIGHTRAG_ENABLED"] = "true"
+Path(".data").mkdir(parents=True, exist_ok=True)
 Path(".data/test_context_engine.db").unlink(missing_ok=True)
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from pydantic import ValidationError  # noqa: E402
 
-from app.core.config import get_settings  # noqa: E402
+from app.core.config import Settings, get_settings  # noqa: E402
 from app.document_processing.models import (  # noqa: E402
     DocumentAsset,
     DocumentBlock,
@@ -38,6 +39,7 @@ from app.storage.db import SessionLocal, create_db_and_tables  # noqa: E402
 from app.storage.repositories.document_processing import DocumentProcessingRepository  # noqa: E402
 from app.storage.repositories.jobs import JobRepository  # noqa: E402
 from app.storage.repositories.documents import DocumentRepository  # noqa: E402
+from app.storage.repositories.logs import LogRepository  # noqa: E402
 from app.storage.repositories.users import UserRepository  # noqa: E402
 from app.workers.tasks import run_document_ingest_job  # noqa: E402
 
@@ -94,7 +96,6 @@ def _configure_lightrag_manifest(
         service.create_domain(
             LightRAGDomainCreateRequest(domain_id=domain_id, display_name=display_name)
         )
-    monkeypatch.setenv("LIGHTRAG_ENABLED", "true")
     monkeypatch.setenv("LIGHTRAG_DOMAIN_MANIFEST", str(settings.manifest_path))
     monkeypatch.setenv("LIGHTRAG_DOMAINS_MANIFEST", str(settings.manifest_path))
     get_settings.cache_clear()
@@ -105,6 +106,18 @@ def test_health_returns_ok() -> None:
         response = client.get("/health")
         assert response.status_code == 200
         assert response.json() == {"status": "ok"}
+
+
+def test_readiness_checks_dependencies() -> None:
+    with TestClient(app) as client:
+        response = client.get("/health/readiness")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ready"
+    assert body["checks"]["database"] == "ok"
+    assert body["checks"]["redis"] == "skipped"
+    assert body["checks"]["lightrag"] == "manifest"
 
 
 def test_admin_guardrails_and_document_retrieve_flow(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -152,6 +165,10 @@ def test_admin_guardrails_and_document_retrieve_flow(monkeypatch: pytest.MonkeyP
         assert body["evidence"][0]["source_engine"] == "navigation"
         assert "answer" not in body
 
+    with SessionLocal() as session:
+        latest_query_log = LogRepository(session).list_queries(limit=1)[0]
+        assert latest_query_log.query == ""
+
 
 def test_removed_query_routes_return_404() -> None:
     with TestClient(app) as client:
@@ -164,6 +181,48 @@ def test_removed_query_routes_return_404() -> None:
         assert client.post("/query/retrieve", headers=user_headers, json=payload).status_code == 404
 
 
+def test_admin_list_endpoints_are_paginated() -> None:
+    create_db_and_tables()
+    with SessionLocal() as session:
+        users = UserRepository(session)
+        admin = users.get_by_email("admin@example.com") or users.create(
+            email="admin@example.com", password="secret", role=UserRole.ADMIN
+        )
+        for index in range(3):
+            document = DocumentRepository(session).create(
+                owner_id=admin.id,
+                filename=f"manual-{index}.txt",
+                content_type="text/plain",
+                storage_path=f".data/uploads/manual-{index}.txt",
+                metadata={},
+            )
+            JobRepository(session).create(kind="document_ingest", document_id=document.id)
+        logs = LogRepository(session)
+        logs.record_audit(actor_id=admin.id, event="test", target_id=None, metadata={})
+        logs.record_audit(actor_id=admin.id, event="test", target_id=None, metadata={})
+        logs.record_query(
+            user_id=admin.id,
+            query="stored query",
+            mode="navigation",
+            latency_ms=1,
+            evidence_count=0,
+        )
+        logs.record_query(
+            user_id=admin.id,
+            query="stored query",
+            mode="navigation",
+            latency_ms=1,
+            evidence_count=0,
+        )
+
+    with TestClient(app) as client:
+        admin_headers = _login(client, "admin@example.com")
+        assert len(client.get("/admin/documents?limit=2", headers=admin_headers).json()) == 2
+        assert len(client.get("/jobs?limit=2", headers=admin_headers).json()) == 2
+        assert len(client.get("/admin/audit-logs?limit=1", headers=admin_headers).json()) == 1
+        assert len(client.get("/admin/query-logs?limit=1", headers=admin_headers).json()) == 1
+
+
 def test_retrieve_requires_authentication() -> None:
     with TestClient(app) as client:
         response = client.post(
@@ -174,25 +233,57 @@ def test_retrieve_requires_authentication() -> None:
     assert response.status_code == 401
 
 
-def test_lightrag_settings_default_to_remote_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("LIGHTRAG_ENABLED", raising=False)
+def test_lightrag_settings_default_to_remote_required(monkeypatch: pytest.MonkeyPatch) -> None:
     get_settings.cache_clear()
     settings = get_settings()
 
-    assert settings.lightrag_enabled is True
     assert settings.lightrag_base_url
 
 
-def test_lightrag_settings_reject_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("LIGHTRAG_ENABLED", "false")
-    get_settings.cache_clear()
+def test_settings_reject_sqlite_outside_test() -> None:
+    with pytest.raises(ValidationError, match="SQLite is only allowed"):
+        Settings(_env_file=None, environment="local", database_url="sqlite:///./.data/local.db")
 
-    with pytest.raises(ValidationError, match="LightRAG is required"):
-        get_settings()
+
+def test_settings_require_database_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    with pytest.raises(ValidationError, match="database_url"):
+        Settings(_env_file=None, environment="test")
+
+
+def test_production_settings_reject_unsafe_defaults() -> None:
+    with pytest.raises(ValidationError, match="SECRET_KEY"):
+        Settings(
+            _env_file=None,
+            environment="production",
+            database_url="postgresql+psycopg://user:pass@db:5432/app",
+            secret_key="dev-secret-change-me",
+            allowed_origins=["https://app.example"],
+            seed_admin_password="safe-production-password",
+        )
+
+    with pytest.raises(ValidationError, match="ALLOWED_ORIGINS"):
+        Settings(
+            _env_file=None,
+            environment="production",
+            database_url="postgresql+psycopg://user:pass@db:5432/app",
+            secret_key="safe-production-secret",
+            allowed_origins=["*"],
+            seed_admin_password="safe-production-password",
+        )
+
+    with pytest.raises(ValidationError, match="SEED_ADMIN_PASSWORD"):
+        Settings(
+            _env_file=None,
+            environment="production",
+            database_url="postgresql+psycopg://user:pass@db:5432/app",
+            secret_key="safe-production-secret",
+            allowed_origins=["https://app.example"],
+            seed_admin_password="admin123",
+        )
 
 
 def test_lightrag_settings_require_endpoint_or_manifest(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("LIGHTRAG_ENABLED", "true")
     monkeypatch.setenv("LIGHTRAG_BASE_URL", "")
     monkeypatch.setenv("LIGHTRAG_DOMAIN_MANIFEST", "")
     monkeypatch.setenv("LIGHTRAG_DOMAINS_MANIFEST", "")
@@ -893,8 +984,7 @@ def test_asset_route_hides_non_ready_documents(
     assert response.status_code == 404
 
 
-def test_retrieve_uses_remote_lightrag_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("LIGHTRAG_ENABLED", "true")
+def test_retrieve_uses_remote_lightrag(monkeypatch: pytest.MonkeyPatch) -> None:
     get_settings.cache_clear()
 
     document_id = "11111111-1111-4111-8111-111111111111"
@@ -959,7 +1049,6 @@ def test_admin_upload_queues_lightrag_ingestion_when_enabled(
 ) -> None:
     manifest_path = tmp_path / "domains.json"
     manifest_path.write_text('{"domains":[{"id":"default","status":"ready"}]}', encoding="utf-8")
-    monkeypatch.setenv("LIGHTRAG_ENABLED", "true")
     monkeypatch.setenv("INDEX_JOBS_INLINE", "false")
     monkeypatch.setenv("LIGHTRAG_DOMAIN_MANIFEST", str(manifest_path))
     monkeypatch.setenv("LIGHTRAG_DOMAINS_MANIFEST", str(manifest_path))
@@ -1009,7 +1098,6 @@ def test_admin_upload_queues_lightrag_ingestion_when_enabled(
 
 
 def test_admin_upload_requires_lightrag_domain_manifest(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("LIGHTRAG_ENABLED", "true")
     monkeypatch.setenv("LIGHTRAG_DOMAIN_MANIFEST", ".data/missing-lightrag-domains.json")
     monkeypatch.setenv("LIGHTRAG_DOMAINS_MANIFEST", ".data/missing-lightrag-domains.json")
     get_settings.cache_clear()
@@ -1042,7 +1130,6 @@ def test_admin_upload_to_selected_lightrag_domain_records_domain_metadata(
     LightRAGDomainService(settings=settings).create_domain(
         LightRAGDomainCreateRequest(domain_id="fatigue", display_name="Fatigue Manuals")
     )
-    monkeypatch.setenv("LIGHTRAG_ENABLED", "true")
     monkeypatch.setenv("INDEX_JOBS_INLINE", "false")
     monkeypatch.setenv("LIGHTRAG_DOMAIN_MANIFEST", str(settings.manifest_path))
     monkeypatch.setenv("LIGHTRAG_DOMAINS_MANIFEST", str(settings.manifest_path))
@@ -1136,7 +1223,6 @@ def test_lightrag_ingestion_job_uploads_polls_and_marks_document_ready(tmp_path:
 
 def test_admin_refresh_lightrag_status_marks_document_ready(monkeypatch: pytest.MonkeyPatch) -> None:
     create_db_and_tables()
-    monkeypatch.setenv("LIGHTRAG_ENABLED", "true")
     get_settings.cache_clear()
 
     def fake_document_status(self: LightRAGRemoteAdapter, track_id: str) -> dict:
@@ -1177,7 +1263,6 @@ def test_admin_refresh_lightrag_status_rejects_unknown_upstream_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     create_db_and_tables()
-    monkeypatch.setenv("LIGHTRAG_ENABLED", "true")
     get_settings.cache_clear()
 
     def fake_document_status(self: LightRAGRemoteAdapter, track_id: str) -> dict:
@@ -1227,7 +1312,6 @@ def test_admin_upload_to_missing_lightrag_domain_fails_before_forwarding(
     LightRAGDomainService(settings=settings).create_domain(
         LightRAGDomainCreateRequest(domain_id="fatigue")
     )
-    monkeypatch.setenv("LIGHTRAG_ENABLED", "true")
     monkeypatch.setenv("LIGHTRAG_DOMAIN_MANIFEST", str(settings.manifest_path))
     monkeypatch.setenv("LIGHTRAG_DOMAINS_MANIFEST", str(settings.manifest_path))
     get_settings.cache_clear()
@@ -1247,7 +1331,6 @@ def test_admin_upload_to_missing_lightrag_domain_fails_before_forwarding(
 
 
 def test_retrieve_uses_selected_lightrag_domain(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("LIGHTRAG_ENABLED", "true")
     get_settings.cache_clear()
     seen_domains: list[str | None] = []
 
@@ -1280,7 +1363,6 @@ def test_retrieve_uses_selected_lightrag_domain(monkeypatch: pytest.MonkeyPatch)
 
 
 def test_retrieve_empty_evidence_is_successful_empty_result(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("LIGHTRAG_ENABLED", "true")
     get_settings.cache_clear()
 
     def fake_retrieve(self: LightRAGRemoteAdapter, **kwargs):
@@ -1308,7 +1390,6 @@ def test_retrieve_empty_evidence_is_successful_empty_result(monkeypatch: pytest.
 
 
 def test_retrieve_debug_is_admin_only(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("LIGHTRAG_ENABLED", "true")
     get_settings.cache_clear()
 
     def fake_retrieve(self: LightRAGRemoteAdapter, **kwargs):
@@ -1345,7 +1426,6 @@ def test_retrieve_debug_is_admin_only(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_retrieve_rejects_document_ids_from_different_lightrag_domain(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("LIGHTRAG_ENABLED", "true")
     get_settings.cache_clear()
     with SessionLocal() as session:
         document = DocumentRepository(session).create(
@@ -1377,7 +1457,6 @@ def test_retrieve_rejects_document_ids_from_different_lightrag_domain(
 
 
 def test_lightrag_graph_proxy_uses_upstream_route_names(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("LIGHTRAG_ENABLED", "true")
     get_settings.cache_clear()
 
     seen_paths: list[str] = []
@@ -1408,7 +1487,6 @@ def test_lightrag_graph_proxy_uses_upstream_route_names(monkeypatch: pytest.Monk
 
 
 def test_lightrag_failures_return_stable_errors(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("LIGHTRAG_ENABLED", "true")
     get_settings.cache_clear()
 
     def fake_retrieve(self: LightRAGRemoteAdapter, **kwargs):

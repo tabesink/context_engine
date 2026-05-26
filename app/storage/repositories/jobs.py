@@ -19,8 +19,12 @@ class JobRepository:
     def get(self, job_id: str) -> JobRow | None:
         return self.session.get(JobRow, job_id)
 
-    def list(self) -> list[JobRow]:
-        return list(self.session.scalars(select(JobRow).order_by(JobRow.created_at.desc())))
+    def list(self, *, limit: int = 50, offset: int = 0) -> list[JobRow]:
+        return list(
+            self.session.scalars(
+                select(JobRow).order_by(JobRow.created_at.desc()).limit(limit).offset(offset)
+            )
+        )
 
     def set_status(
         self,

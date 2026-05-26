@@ -19,6 +19,8 @@ from app.integrations.lightrag_remote_adapter import (
 
 def test_domain_resolver_uses_settings_when_manifest_is_missing(tmp_path: Path) -> None:
     settings = Settings(
+        environment="test",
+        database_url="sqlite:///./.data/test_context_engine.db",
         lightrag_base_url="http://lightrag.example",
         lightrag_api_key="secret",
         lightrag_domain="default",

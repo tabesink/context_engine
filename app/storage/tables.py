@@ -22,7 +22,7 @@ class UserRow(Base):
     password_hash: Mapped[str] = mapped_column(String(255))
     role: Mapped[str] = mapped_column(String(32), default=UserRole.USER.value)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
 
 
 class DocumentRow(Base):
@@ -37,7 +37,7 @@ class DocumentRow(Base):
     active_index_version: Mapped[int] = mapped_column(Integer, default=0)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     meta: Mapped[dict] = mapped_column("metadata", json_type(), default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
@@ -128,7 +128,7 @@ class JobRow(Base):
     document_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("documents.id"), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     meta: Mapped[dict] = mapped_column("metadata", json_type(), default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
@@ -140,7 +140,7 @@ class AuditLogRow(Base):
     event: Mapped[str] = mapped_column(String(128))
     target_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     meta: Mapped[dict] = mapped_column("metadata", json_type(), default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
 
 
 class QueryLogRow(Base):
@@ -152,5 +152,5 @@ class QueryLogRow(Base):
     mode: Mapped[str] = mapped_column(String(32))
     latency_ms: Mapped[int] = mapped_column(Integer, default=0)
     evidence_count: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
 

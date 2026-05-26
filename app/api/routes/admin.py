@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Form, UploadFile
+from fastapi import APIRouter, Depends, Form, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_admin
@@ -66,15 +66,22 @@ def delete_document(
 
 @router.get("/documents")
 def list_all_documents(
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     admin: UserRow = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> list[DocumentResponse]:
     del admin
-    return [document_response(document) for document in DocumentRepository(session).list_all()]
+    return [
+        document_response(document)
+        for document in DocumentRepository(session).list_all(limit=limit, offset=offset)
+    ]
 
 
 @router.get("/audit-logs")
 def list_audit_logs(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     admin: UserRow = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> list[dict]:
@@ -87,12 +94,14 @@ def list_audit_logs(
             "metadata": row.meta,
             "created_at": row.created_at,
         }
-        for row in LogRepository(session).list_audit()
+        for row in LogRepository(session).list_audit(limit=limit, offset=offset)
     ]
 
 
 @router.get("/query-logs")
 def list_query_logs(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     admin: UserRow = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> list[dict]:
@@ -107,6 +116,6 @@ def list_query_logs(
             "evidence_count": row.evidence_count,
             "created_at": row.created_at,
         }
-        for row in LogRepository(session).list_queries()
+        for row in LogRepository(session).list_queries(limit=limit, offset=offset)
     ]
 

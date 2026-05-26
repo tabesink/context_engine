@@ -8,7 +8,13 @@ from app.lightrag_deploy.settings import LightRAGDeploySettings
 
 
 def test_env_example_declares_lightrag_deployment_settings() -> None:
-    env_example = Path(".env.example").read_text(encoding="utf-8")
+    env_examples = "\n".join(
+        [
+            Path(".env.example").read_text(encoding="utf-8"),
+            Path(".env.lightrag-deploy.example").read_text(encoding="utf-8"),
+            Path(".env.lightrag-provider.example").read_text(encoding="utf-8"),
+        ]
+    )
 
     for key in [
         "LIGHTRAG_DEPLOY_ENABLED",
@@ -50,11 +56,13 @@ def test_env_example_declares_lightrag_deployment_settings() -> None:
         "LIGHTRAG_OPENAI_LLM_TEMPERATURE",
         "LIGHTRAG_OPENAI_LLM_EXTRA_BODY",
     ]:
-        assert f"{key}=" in env_example
+        assert f"{key}=" in env_examples
 
 
 def test_settings_parse_lightrag_deployment_fields(tmp_path: Path) -> None:
     settings = Settings(
+        environment="test",
+        database_url="sqlite:///./.data/test_context_engine.db",
         lightrag_deploy_enabled=True,
         lightrag_deploy_root=tmp_path / "lightrag",
         lightrag_domains_root=tmp_path / "lightrag" / "domains",

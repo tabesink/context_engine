@@ -67,7 +67,7 @@ POST /retrieve
 ## Request Flow: Upload and Index
 
 ```text
-LIGHTRAG_ENABLED=true (required)
+LightRAG runtime configured
   POST /admin/documents/upload
     -> require_admin
     -> DocumentService stores a local mirror record and file
@@ -120,9 +120,9 @@ These routes call the configured remote LightRAG service and do not fall back to
 
 ## Storage
 
-Local development defaults are deliberately small:
+Local development uses explicit service-backed storage:
 
-- SQLite database at `.data/context_engine.db` unless `DATABASE_URL` overrides it.
+- PostgreSQL through required `DATABASE_URL`; sqlite is only allowed for explicit isolated tests.
 - Local filesystem uploads under `.data/uploads` unless `STORAGE_ROOT` overrides it.
 - Redis URL defaults to `redis://localhost:6379/0`, with background jobs used when `INDEX_JOBS_INLINE=false`.
 - Context Engine stores LightRAG document IDs, track IDs, status, and canonical local structure metadata; it does not store semantic chunks or embeddings.
