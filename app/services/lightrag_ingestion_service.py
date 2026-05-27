@@ -2,6 +2,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
+import re
 
 from redis import Redis
 from sqlalchemy.orm import Session
@@ -23,6 +24,9 @@ from app.storage.tables import DocumentRow
 
 class DomainIngestBusy(Exception):
     pass
+
+
+_MISSING_SECRET_KEY_PATTERN = re.compile(r"\b[A-Z][A-Z0-9_]{2,}\b")
 
 
 class IngestLock(Protocol):
@@ -139,13 +143,17 @@ class LightRAGIngestionService:
         return adapter.ingest_source_chunks(domain=domain_id, chunks=structure.source_chunks)
 
     def _mark_failed(self, *, document: DocumentRow, lightrag: dict, message: str) -> None:
+        normalized_message, missing_provider_secrets = self._normalize_lightrag_failure_message(message)
         updated_lightrag = lightrag | {
             "status": "failed",
-            "message": message,
+            "message": normalized_message,
             "last_status_check_at": self.now().isoformat().replace("+00:00", "Z"),
         }
+        if missing_provider_secrets:
+            updated_lightrag["failure_reason"] = "missing_provider_secrets"
+            updated_lightrag["missing_provider_secrets"] = missing_provider_secrets
         document = self.documents.update_metadata(document, document.meta | {"lightrag": updated_lightrag})
-        self.documents.update_status(document, DocumentStatus.FAILED, error_message=message)
+        self.documents.update_status(document, DocumentStatus.FAILED, error_message=normalized_message)
 
     def _can_build_document_structure(self, document: DocumentRow) -> bool:
         content_type = (document.content_type or "").split(";")[0].strip().lower()
@@ -178,13 +186,19 @@ class LightRAGIngestionService:
             status = str(status_payload.get("status") or status)
             remote = remote | status_payload
 
+        normalized_message, missing_provider_secrets = self._normalize_lightrag_failure_message(
+            remote.get("message") or remote.get("error")
+        )
         updated_lightrag = lightrag | {
             "document_id": remote.get("document_id"),
             "track_id": remote.get("track_id", track_id),
             "status": status,
-            "message": remote.get("message") or remote.get("error"),
+            "message": normalized_message,
             "last_status_check_at": self.now().isoformat().replace("+00:00", "Z"),
         }
+        if missing_provider_secrets:
+            updated_lightrag["failure_reason"] = "missing_provider_secrets"
+            updated_lightrag["missing_provider_secrets"] = missing_provider_secrets
         document = self.documents.update_metadata(
             document,
             document.meta | {"lightrag": updated_lightrag},
@@ -220,3 +234,39 @@ class LightRAGIngestionService:
             }
         )
         self.domain_manifest.update_domain(updated)
+
+    def _normalize_lightrag_failure_message(
+        self, raw_message: str | None
+    ) -> tuple[str | None, list[str] | None]:
+        message = str(raw_message).strip() if raw_message is not None else None
+        if not message:
+            return message, None
+        missing_provider_secrets = self._extract_missing_provider_secrets(message)
+        if not missing_provider_secrets:
+            return message, None
+        plural = "s" if len(missing_provider_secrets) > 1 else ""
+        friendly = (
+            f"Missing provider secret{plural}: {', '.join(missing_provider_secrets)}. "
+            "Configure it in AI Settings > Provider secrets and retry ingestion."
+        )
+        return friendly, missing_provider_secrets
+
+    def _extract_missing_provider_secrets(self, message: str) -> list[str]:
+        tokens = _MISSING_SECRET_KEY_PATTERN.findall(message)
+        candidates = sorted(
+            {
+                token
+                for token in tokens
+                if "_" in token and any(suffix in token for suffix in ("KEY", "TOKEN", "SECRET"))
+            }
+        )
+        if not candidates:
+            return []
+        normalized = re.sub(r"[\[\]\(\)\{\}'\",:;]", " ", message).strip()
+        words = [part for part in normalized.split() if part]
+        if words and all(part in candidates for part in words):
+            return candidates
+        lowered = message.lower()
+        if "missing" in lowered and ("key" in lowered or "secret" in lowered or "token" in lowered):
+            return candidates
+        return []

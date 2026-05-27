@@ -377,6 +377,42 @@ def test_readiness_reports_not_ready_when_redis_unhealthy_in_queue_mode(
     assert body["details"]["redis"]["reason"] == "Redis ping failed: RuntimeError (redis down)"
 
 
+def test_readiness_reports_queue_consumer_warning_when_workers_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeHealthResponse:
+        status_code = 200
+
+    class FakeRedis:
+        def ping(self) -> bool:
+            return True
+
+        def scard(self, key: str) -> int:
+            assert key == "rq:workers"
+            return 0
+
+        def llen(self, key: str) -> int:
+            assert key == "rq:queue:indexing"
+            return 3
+
+    monkeypatch.setenv("INDEX_JOBS_INLINE", "false")
+    get_settings.cache_clear()
+    monkeypatch.setattr("app.services.readiness_service.httpx.get", lambda *args, **kwargs: FakeHealthResponse())
+    monkeypatch.setattr("app.services.readiness_service.redis.Redis.from_url", lambda *args, **kwargs: FakeRedis())
+
+    with TestClient(app) as client:
+        response = client.get("/health/readiness")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ready"
+    assert body["details"]["queue_consumers"]["status"] == "unhealthy"
+    assert body["details"]["queue_consumers"]["reason"] == "No indexing workers detected; queue depth=3."
+    assert body["warnings"] == [
+        "No indexing workers detected while INDEX_JOBS_INLINE=false. Start docker compose (recommended) or run worker and status poller manually."
+    ]
+
+
 def test_admin_guardrails_and_document_retrieve_flow(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_ingest_source_chunks(
         self: LightRAGRemoteAdapter,
@@ -1595,6 +1631,56 @@ def test_admin_refresh_lightrag_status_marks_document_ready(monkeypatch: pytest.
     assert body["metadata"]["lightrag"]["document_id"] == "remote-doc"
 
 
+def test_admin_refresh_lightrag_status_reports_missing_provider_secret_cleanly(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_db_and_tables()
+    get_settings.cache_clear()
+
+    def fake_document_status(self: LightRAGRemoteAdapter, track_id: str) -> dict:
+        del self
+        assert track_id == "track-1"
+        return {
+            "document_id": "remote-doc",
+            "track_id": track_id,
+            "status": "failed",
+            "error": "'OPENAI_API_KEY'",
+        }
+
+    monkeypatch.setattr(LightRAGRemoteAdapter, "document_status", fake_document_status)
+    with SessionLocal() as session:
+        document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="manual.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/manual.txt",
+            metadata={
+                "semantic_engine": "lightrag",
+                "lightrag": {"domain_id": "default", "track_id": "track-1", "status": "indexing"},
+            },
+            status=DocumentStatus.INDEXING,
+        )
+        document_id = document.id
+
+    with TestClient(app) as client:
+        _seed_users()
+        admin_headers = _login(client, "admin@example.com")
+        response = client.post(
+            f"/admin/documents/{document_id}/refresh-status",
+            headers=admin_headers,
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "failed"
+    assert (
+        body["error_message"]
+        == "Missing provider secret: OPENAI_API_KEY. Configure it in AI Settings > Provider secrets and retry ingestion."
+    )
+    assert body["metadata"]["lightrag"]["failure_reason"] == "missing_provider_secrets"
+    assert body["metadata"]["lightrag"]["missing_provider_secrets"] == ["OPENAI_API_KEY"]
+
+
 def test_poller_refreshes_pending_lightrag_statuses(monkeypatch: pytest.MonkeyPatch) -> None:
     create_db_and_tables()
     get_settings.cache_clear()
@@ -1627,6 +1713,60 @@ def test_poller_refreshes_pending_lightrag_statuses(monkeypatch: pytest.MonkeyPa
     assert refreshed is not None
     assert refreshed.status == "ready"
     assert refreshed.meta["lightrag"]["status"] == "ready"
+
+
+def test_poller_continues_and_marks_missing_domain_document_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_db_and_tables()
+    get_settings.cache_clear()
+
+    def fake_document_status(self: LightRAGRemoteAdapter, track_id: str) -> dict:
+        del self
+        assert track_id == "track-ok"
+        return {"document_id": "remote-doc", "track_id": track_id, "status": "ready"}
+
+    monkeypatch.setattr(LightRAGRemoteAdapter, "document_status", fake_document_status)
+    with SessionLocal() as session:
+        missing_domain_doc = DocumentRepository(session).create(
+            owner_id=None,
+            filename="missing-domain.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/missing-domain.txt",
+            metadata={
+                "semantic_engine": "lightrag",
+                "lightrag": {"domain_id": "missing-domain", "track_id": "track-missing", "status": "indexing"},
+            },
+            status=DocumentStatus.INDEXING,
+        )
+        healthy_doc = DocumentRepository(session).create(
+            owner_id=None,
+            filename="healthy.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/healthy.txt",
+            metadata={
+                "semantic_engine": "lightrag",
+                "lightrag": {"domain_id": "default", "track_id": "track-ok", "status": "indexing"},
+            },
+            status=DocumentStatus.INDEXING,
+        )
+        missing_domain_doc_id = missing_domain_doc.id
+        healthy_doc_id = healthy_doc.id
+
+    poll_lightrag_statuses()
+
+    with SessionLocal() as session:
+        failed_doc = DocumentRepository(session).get(missing_domain_doc_id)
+        refreshed_doc = DocumentRepository(session).get(healthy_doc_id)
+
+    assert failed_doc is not None
+    assert failed_doc.status == "failed"
+    assert failed_doc.meta["lightrag"]["status"] == "failed"
+    assert "does not exist" in (failed_doc.error_message or "")
+
+    assert refreshed_doc is not None
+    assert refreshed_doc.status == "ready"
+    assert refreshed_doc.meta["lightrag"]["status"] == "ready"
 
 
 def test_admin_refresh_lightrag_status_rejects_unknown_upstream_state(

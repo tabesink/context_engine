@@ -144,6 +144,8 @@ def test_domain_env_can_use_stored_provider_secret(tmp_path: Path) -> None:
     env_text = render_domain_env(domain, settings, {"OPENAI_API_KEY": "stored-openai-key"})
 
     assert "EMBEDDING_BINDING_API_KEY=stored-openai-key" in env_text
+    assert "LLM_BINDING_API_KEY=stored-openai-key" in env_text
+    assert "OPENAI_API_KEY=stored-openai-key" in env_text
 
 
 def test_embedding_lock_metadata_persists_on_first_lock(tmp_path: Path) -> None:

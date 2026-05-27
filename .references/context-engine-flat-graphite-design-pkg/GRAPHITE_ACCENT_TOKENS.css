@@ -1,0 +1,89 @@
+/* Context Engine — Graphite + Accent tokens
+   Drop into a preview branch first. Do not scatter raw hex values across components. */
+
+:root {
+  --ce-background: #ffffff;
+  --ce-foreground: #1d1d1f;
+  --ce-surface: #ffffff;
+  --ce-surface-muted: #f7f7f8;
+  --ce-surface-raised: #f2f2f4;
+  --ce-border: #e8e8ed;
+  --ce-border-strong: #d4d4dc;
+  --ce-muted: #737373;
+  --ce-muted-strong: #525252;
+  --ce-muted-faint: #a3a3a8;
+  --ce-control: #f5f5f7;
+  --ce-control-hover: #ececef;
+  --ce-inverse: #1d1d1f;
+  --ce-inverse-foreground: #ffffff;
+  --ce-focus-ring: rgba(59, 130, 246, 0.5);
+
+  /* Recommended default: Graphite Teal */
+  --ce-accent: #4f8f83;
+  --ce-accent-strong: #2f6f65;
+  --ce-accent-soft: #eef6f4;
+  --ce-accent-border: #cfe3df;
+  --ce-accent-text: #275f57;
+
+  --ce-success: #4f8f83;
+  --ce-warning: #b9823b;
+  --ce-danger: #a85f5f;
+  --ce-info: #5b7894;
+}
+
+.dark {
+  --ce-background: #0f0f10;
+  --ce-foreground: #f4f4f5;
+  --ce-surface: #151517;
+  --ce-surface-muted: #1c1c1f;
+  --ce-surface-raised: #242428;
+  --ce-border: #2d2d32;
+  --ce-border-strong: #44444c;
+  --ce-muted: #b2b2b8;
+  --ce-muted-strong: #d7d7db;
+  --ce-muted-faint: #777780;
+  --ce-control: #1c1c1f;
+  --ce-control-hover: #242428;
+  --ce-inverse: #f4f4f5;
+  --ce-inverse-foreground: #0f0f10;
+}
+
+[data-ce-theme="teal"] {
+  --ce-accent: #4f8f83;
+  --ce-accent-strong: #2f6f65;
+  --ce-accent-soft: #eef6f4;
+  --ce-accent-border: #cfe3df;
+  --ce-accent-text: #275f57;
+}
+
+[data-ce-theme="indigo"] {
+  --ce-accent: #6d6adf;
+  --ce-accent-strong: #504dc4;
+  --ce-accent-soft: #f1f1fb;
+  --ce-accent-border: #dadaf5;
+  --ce-accent-text: #4643a8;
+}
+
+[data-ce-theme="sage"] {
+  --ce-accent: #71816d;
+  --ce-accent-strong: #53634f;
+  --ce-accent-soft: #f2f5f1;
+  --ce-accent-border: #d8e0d5;
+  --ce-accent-text: #495c45;
+}
+
+[data-ce-theme="amber"] {
+  --ce-accent: #b9823b;
+  --ce-accent-strong: #8f6329;
+  --ce-accent-soft: #fbf5ec;
+  --ce-accent-border: #ead8bd;
+  --ce-accent-text: #754f20;
+}
+
+[data-ce-theme="steel"] {
+  --ce-accent: #5b7894;
+  --ce-accent-strong: #3f5f78;
+  --ce-accent-soft: #f0f5f8;
+  --ce-accent-border: #d2e0e8;
+  --ce-accent-text: #34546b;
+}

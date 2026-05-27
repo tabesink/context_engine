@@ -26,11 +26,19 @@ def _append_provider_env(
     if settings is None:
         return
 
+    llm_api_key = settings.llm_binding_api_key
+    if not llm_api_key and provider_secrets:
+        preferred_key_name = domain.embedding.api_key_env_var if domain.embedding else None
+        if preferred_key_name:
+            llm_api_key = provider_secrets.get(preferred_key_name)
+        if not llm_api_key:
+            llm_api_key = provider_secrets.get("OPENAI_API_KEY")
+
     lines.append("")
     lines.append("# Model provider configuration")
     _append_env(lines, "LLM_BINDING", settings.llm_binding)
     _append_env(lines, "LLM_BINDING_HOST", settings.llm_binding_host)
-    _append_env(lines, "LLM_BINDING_API_KEY", settings.llm_binding_api_key)
+    _append_env(lines, "LLM_BINDING_API_KEY", llm_api_key)
     _append_env(lines, "LLM_MODEL", settings.llm_model)
     _append_env(lines, "KEYWORD_LLM_MODEL", settings.keyword_llm_model)
     _append_env(lines, "QUERY_LLM_MODEL", settings.query_llm_model)
@@ -80,6 +88,11 @@ def _append_provider_env(
     _append_env(lines, "OPENAI_LLM_MAX_COMPLETION_TOKENS", settings.openai_llm_max_completion_tokens)
     _append_env(lines, "OPENAI_LLM_TEMPERATURE", settings.openai_llm_temperature)
     _append_env(lines, "OPENAI_LLM_EXTRA_BODY", settings.openai_llm_extra_body)
+    if provider_secrets:
+        lines.append("")
+        lines.append("# Provider secrets injected for this domain runtime")
+        for key in sorted(provider_secrets):
+            _append_env(lines, key, provider_secrets[key])
 
 
 def write_domain_env(

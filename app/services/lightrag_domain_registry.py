@@ -48,6 +48,8 @@ class LightRAGDomainRuntime:
     id: str
     display_name: str
     base_url: str
+    host_base_url: str | None
+    container_base_url: str | None
     api_key: str | None
     status: str | None
     is_healthy: bool | None
@@ -102,6 +104,8 @@ class LightRAGDomainRegistry:
             id=str(entry.get("id") or requested),
             display_name=str(entry.get("display_name") or entry.get("name") or requested),
             base_url=base_url,
+            host_base_url=_optional_url(entry.get("host_base_url")),
+            container_base_url=_optional_url(entry.get("container_base_url")),
             api_key=_optional_string(entry.get("api_key")),
             status=_optional_string(entry.get("status")),
             is_healthy=entry.get("is_healthy"),
@@ -186,6 +190,13 @@ def _optional_int(value: Any) -> int | None:
     if isinstance(value, str) and value.strip().isdigit():
         return int(value.strip())
     return None
+
+
+def _optional_url(value: Any) -> str | None:
+    text = _optional_string(value)
+    if text is None:
+        return None
+    return text.rstrip("/")
 
 
 def _coerce_retrieval_defaults(value: Any) -> dict[str, int]:

@@ -1,3 +1,5 @@
+import logging
+import re
 from datetime import UTC, datetime
 
 from fastapi import HTTPException, UploadFile
@@ -27,6 +29,9 @@ from app.storage.repositories.ai_model_settings import AIModelSettingsRepository
 from app.storage.repositories.ai_provider_secrets import AIProviderSecretRepository
 from app.storage.repositories.documents import DocumentRepository
 from app.storage.tables import DocumentRow
+
+logger = logging.getLogger(__name__)
+_MISSING_SECRET_KEY_PATTERN = re.compile(r"\b[A-Z][A-Z0-9_]{2,}\b")
 
 
 class DocumentService:
@@ -172,13 +177,19 @@ class DocumentService:
         status = str(status_payload.get("status") or "")
         if status not in {"indexing", "ready", "failed"}:
             raise HTTPException(status_code=502, detail=f"Unknown LightRAG status: {status!r}")
+        normalized_message, missing_provider_secrets = self._normalize_lightrag_failure_message(
+            status_payload.get("error")
+        )
         updated_lightrag = lightrag | {
             "document_id": status_payload.get("document_id") or lightrag.get("document_id"),
             "track_id": status_payload.get("track_id") or track_id,
             "status": status,
-            "message": status_payload.get("error"),
+            "message": normalized_message,
             "last_status_check_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         }
+        if missing_provider_secrets:
+            updated_lightrag["failure_reason"] = "missing_provider_secrets"
+            updated_lightrag["missing_provider_secrets"] = missing_provider_secrets
         document = self.documents.update_metadata(
             document,
             document.meta | {"lightrag": updated_lightrag},
@@ -196,8 +207,93 @@ class DocumentService:
     def refresh_pending_lightrag_statuses(self) -> list[DocumentRow]:
         refreshed: list[DocumentRow] = []
         for document in self.documents.list_lightrag_indexing():
-            refreshed.append(self.refresh_lightrag_status(document_id=document.id))
+            try:
+                refreshed.append(self.refresh_lightrag_status(document_id=document.id))
+            except HTTPException as exc:
+                if exc.status_code in {400, 404}:
+                    refreshed.append(
+                        self._mark_poll_refresh_failed(
+                            document=document,
+                            message=str(exc.detail or "LightRAG status refresh failed"),
+                        )
+                    )
+                    logger.warning(
+                        "Marked document %s as failed during poll refresh (status=%s): %s",
+                        document.id,
+                        exc.status_code,
+                        exc.detail,
+                    )
+                    continue
+                logger.warning(
+                    "Skipping document %s during poll refresh due to HTTP %s: %s",
+                    document.id,
+                    exc.status_code,
+                    exc.detail,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Skipping document %s during poll refresh due to unexpected error: %s",
+                    document.id,
+                    exc,
+                )
         return refreshed
+
+    def _mark_poll_refresh_failed(self, *, document: DocumentRow, message: str) -> DocumentRow:
+        lightrag = dict(document.meta.get("lightrag") or {})
+        normalized_message, missing_provider_secrets = self._normalize_lightrag_failure_message(message)
+        updated_lightrag = lightrag | {
+            "status": "failed",
+            "message": normalized_message,
+            "last_status_check_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        }
+        if missing_provider_secrets:
+            updated_lightrag["failure_reason"] = "missing_provider_secrets"
+            updated_lightrag["missing_provider_secrets"] = missing_provider_secrets
+        document = self.documents.update_metadata(
+            document,
+            document.meta | {"lightrag": updated_lightrag},
+        )
+        return self.documents.update_status(
+            document,
+            DocumentStatus.FAILED,
+            error_message=normalized_message,
+        )
+
+    def _normalize_lightrag_failure_message(
+        self, raw_message: str | None
+    ) -> tuple[str | None, list[str] | None]:
+        message = str(raw_message).strip() if raw_message is not None else None
+        if not message:
+            return message, None
+        missing_provider_secrets = self._extract_missing_provider_secrets(message)
+        if not missing_provider_secrets:
+            return message, None
+        plural = "s" if len(missing_provider_secrets) > 1 else ""
+        friendly = (
+            f"Missing provider secret{plural}: {', '.join(missing_provider_secrets)}. "
+            "Configure it in AI Settings > Provider secrets and retry ingestion."
+        )
+        return friendly, missing_provider_secrets
+
+    def _extract_missing_provider_secrets(self, message: str) -> list[str]:
+        tokens = _MISSING_SECRET_KEY_PATTERN.findall(message)
+        candidates = sorted(
+            {
+                token
+                for token in tokens
+                if "_" in token and any(suffix in token for suffix in ("KEY", "TOKEN", "SECRET"))
+            }
+        )
+        if not candidates:
+            return []
+        normalized = re.sub(r"[\[\]\(\)\{\}'\",:;]", " ", message).strip()
+        words = [part for part in normalized.split() if part]
+        if words and all(part in candidates for part in words):
+            return candidates
+        lowered = message.lower()
+        if "missing" in lowered and ("key" in lowered or "secret" in lowered or "token" in lowered):
+            return candidates
+        return []
 
     def reingest(self, *, actor_id: str, document_id: str) -> str:
         document = self.documents.get(document_id)

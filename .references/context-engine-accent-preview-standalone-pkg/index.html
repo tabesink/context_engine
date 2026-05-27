@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en" data-theme="teal" data-mode="light" data-density="comfortable" data-boundaries="minimal">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Context Engine — Flat Graphite Accent Preview</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="preview-shell">
+    <aside class="side-rail" aria-label="Preview controls">
+      <div class="brand-block">
+        <div class="brand-mark">CE</div>
+        <div>
+          <h1>Context Engine</h1>
+          <p>Flat Graphite UI Preview</p>
+        </div>
+      </div>
+
+      <section class="control-section">
+        <h2>Accent themes</h2>
+        <div class="theme-list" id="themeList" role="tablist" aria-label="Accent theme selector"></div>
+      </section>
+
+      <section class="control-section">
+        <h2>Explore blocks</h2>
+        <div class="block-list" id="blockList" role="tablist" aria-label="Component block selector"></div>
+      </section>
+
+      <section class="control-section compact-controls">
+        <h2>Design options</h2>
+        <label class="switch-row">
+          <span>Dark mode</span>
+          <input id="darkToggle" type="checkbox" />
+        </label>
+        <label class="switch-row">
+          <span>Show internal boundaries</span>
+          <input id="boundaryToggle" type="checkbox" />
+        </label>
+        <label class="select-row">
+          <span>Density</span>
+          <select id="densitySelect">
+            <option value="comfortable">Comfortable</option>
+            <option value="compact">Compact</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="control-section token-box">
+        <h2>Active tokens</h2>
+        <div id="tokenList" class="token-list"></div>
+        <button class="btn btn-secondary full" id="copyTokens">Copy CSS tokens</button>
+      </section>
+    </aside>
+
+    <main class="main-stage">
+      <header class="stage-header">
+        <div>
+          <p class="eyebrow">Standalone browser preview</p>
+          <h2 id="stageTitle">Graphite Teal — Recommended</h2>
+          <p id="stageDescription">Compare five graphite + accent themes on realistic Context Engine WebUI examples.</p>
+        </div>
+        <div class="header-actions">
+          <span class="chip selected"><span class="dot accent"></span>domain: fatigue-manuals</span>
+          <button class="btn btn-secondary">Retrieve settings</button>
+          <button class="btn btn-primary">Ask</button>
+        </div>
+      </header>
+
+      <section class="theme-compare" aria-label="Theme comparison strip" id="themeCompare"></section>
+
+      <section class="stage-layout">
+        <div class="workspace-preview">
+          <div class="topbar-demo">
+            <button class="pill-control active">fatigue-manuals</button>
+            <button class="pill-control">hybrid retrieval</button>
+            <span class="status-line"><span class="dot success"></span> Ready</span>
+            <button class="icon-btn" aria-label="settings">⚙</button>
+          </div>
+
+          <div class="three-zone-demo">
+            <aside class="workspace-tree-demo">
+              <div class="panel-title-row">
+                <div>
+                  <h3>Workspace</h3>
+                  <p>Indexed source map</p>
+                </div>
+              </div>
+              <div class="tree-row open">▾ Knowledge Graph</div>
+              <div class="tree-row open indent-1">▾ Fatigue Manuals</div>
+              <div class="tree-row selected indent-2">◦ bearing-service.pdf</div>
+              <div class="tree-row indent-2">◦ inspection-table.xlsx</div>
+              <div class="tree-row indent-2">◦ extracted figures</div>
+              <div class="tree-row indent-1">▸ Warranty Policies</div>
+            </aside>
+
+            <section class="center-demo" id="componentStage" aria-live="polite"></section>
+
+            <aside class="context-panel-demo">
+              <div class="panel-title-row">
+                <div>
+                  <h3>Evidence</h3>
+                  <p>7 sources · hybrid retrieval</p>
+                </div>
+                <span class="badge accent-badge">ranked</span>
+              </div>
+              <div class="citation-map mini">
+                <div class="citation-row active"><span>[1]</span><b>bearing-service.pdf</b><em>p.12 · chunk_183</em></div>
+                <div class="citation-row"><span>[2]</span><b>inspection-table.xlsx</b><em>T2 · table_002</em></div>
+                <div class="citation-row"><span>[3]</span><b>field-notes.md</b><em>§3 · chunk_044</em></div>
+              </div>
+              <article class="evidence-card compact-card">
+                <div class="evidence-card-head"><span class="citation-pill">1</span><strong>bearing-service.pdf</strong><small>p.12</small></div>
+                <p>“Inspection intervals should be shortened when vibration exceeds the baseline threshold.”</p>
+                <footer>chunk_183 · score 0.82 · hybrid</footer>
+              </article>
+            </aside>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

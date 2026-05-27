@@ -22,7 +22,7 @@ const ROUTES: Array<{ id: SettingsRoute; label: string; icon: ComponentType<{ cl
   { id: "general", label: "General", icon: Settings },
   { id: "account", label: "Account", icon: UserRound },
   { id: "knowledge-graph", label: "Knowledge Graph", icon: Workflow },
-  { id: "provider", label: "Provider", icon: Bot },
+  { id: "provider", label: "Providers", icon: Bot },
 ];
 
 export function SettingsDialog() {
@@ -34,6 +34,7 @@ export function SettingsDialog() {
     [isAdmin],
   );
   const activeRouteLabel = allowedRoutes.find((item) => item.id === route)?.label ?? "General";
+  const useFlatHeader = route === "knowledge-graph" || route === "provider";
 
   return (
     <DialogPrimitive.Root open={isOpen} onOpenChange={setSettingsDialogOpen}>
@@ -81,7 +82,7 @@ export function SettingsDialog() {
             </aside>
 
             <section className="min-h-0 overflow-y-auto px-6 py-4">
-              <header className="mb-5 border-b border-[var(--border)] pb-4">
+              <header className={useFlatHeader ? "mb-4 pb-1" : "mb-5 border-b border-[var(--border)] pb-4"}>
                 <h2 className="text-base font-medium text-[var(--foreground)]">{activeRouteLabel}</h2>
               </header>
               {route === "general" ? <GeneralSettingsPanel /> : null}

@@ -139,7 +139,25 @@ class LightRAGRemoteAdapter:
                 for chunk in chunks
             ],
         }
-        data = self.post_json("/documents/ingest_chunks", json=payload)
+        try:
+            data = self.post_json("/documents/ingest_chunks", json=payload)
+        except LightRAGUpstreamError as exc:
+            if exc.upstream_status != 404:
+                raise
+            # Compatibility fallback for LightRAG builds that support text ingestion
+            # but do not expose /documents/ingest_chunks.
+            text_payload = {
+                "texts": [chunk.text for chunk in chunks],
+                "file_sources": [
+                    str(
+                        (chunk.metadata or {}).get("source_path")
+                        or (chunk.metadata or {}).get("source_file")
+                        or f"{domain}:{chunk.document_id}:{chunk.chunk_id}"
+                    )
+                    for chunk in chunks
+                ],
+            }
+            data = self.post_json("/documents/texts", json=text_payload)
         return {
             "track_id": data.get("track_id"),
             "status": self._normalize_upload_status(data.get("status")),

@@ -32,6 +32,7 @@ Port and host settings are centralized in root `.env` for local runs:
 ## Option A: Docker Compose
 
 Runs PostgreSQL, Redis, the API, the worker, and the LightRAG status poller together.
+This is the canonical startup path for queue-backed indexing (`INDEX_JOBS_INLINE=false`).
 
 ```powershell
 docker compose up --build
@@ -62,11 +63,14 @@ For live-reload development inside Compose, run with the dev override:
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
 
+For web + backend startup together, `scripts/deploy-all.sh` now defaults to this Compose backend mode and starts the frontend dev server in parallel.
+
 ---
 
 ## Option B: Local API (uvicorn)
 
 Use your own Python for the API. You still need PostgreSQL and Redis running and matching `DATABASE_URL` and `REDIS_URL` in `.env`.
+This path is advanced/override mode and does not auto-start worker/poller.
 
 **Start only databases with Docker** (optional):
 
@@ -101,6 +105,8 @@ python -m app.workers.status_poller
 ```
 
 Or set `INDEX_JOBS_INLINE=true` in `.env` for local development without separate worker/poller processes.
+
+If you use helper scripts, run `scripts/deploy-all.sh --local-api` (or PowerShell `scripts/deploy-all.ps1 -LocalApi`) for this mode.
 
 Health check:
 

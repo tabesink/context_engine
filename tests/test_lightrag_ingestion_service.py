@@ -70,6 +70,12 @@ class CapturingRawUploadAdapter:
         return {"document_id": "remote-doc", "track_id": "track-raw", "status": "ready"}
 
 
+class MissingProviderKeyAdapter:
+    def ingest_source_chunks(self, *, domain: str, chunks: list) -> dict:
+        del domain, chunks
+        return {"status": "failed", "error": "'OPENAI_API_KEY'"}
+
+
 class FakeStructureParser:
     def __init__(self, structure: DocumentStructure) -> None:
         self.structure = structure
@@ -344,6 +350,43 @@ def test_lightrag_ingestion_fails_when_structure_parser_errors(
     assert refreshed.status == DocumentStatus.FAILED.value
     assert refreshed.meta["lightrag"]["status"] == "failed"
     assert "Structure-aware ingestion failed" in refreshed.meta["lightrag"]["message"]
+
+
+def test_lightrag_ingestion_reports_missing_provider_secret_cleanly(
+    tmp_path: Path,
+    session: Session,
+) -> None:
+    upload_path = tmp_path / "manual.txt"
+    upload_path.write_text("Hello world", encoding="utf-8")
+    lock = FakeLock()
+    document = DocumentRepository(session).create(
+        owner_id=None,
+        filename="manual.txt",
+        content_type="text/plain",
+        storage_path=str(upload_path),
+        metadata={
+            "semantic_engine": "lightrag",
+            "lightrag": {"domain_id": "fatigue", "status": "queued"},
+        },
+        status=DocumentStatus.INDEXING,
+    )
+
+    LightRAGIngestionService(
+        session,
+        adapter_factory=lambda domain_id: MissingProviderKeyAdapter(),
+        lock_factory=lambda domain_id: lock,
+        artifact_store=_artifact_store(tmp_path),
+    ).ingest_document(document.id)
+
+    refreshed = DocumentRepository(session).get(document.id)
+    assert refreshed is not None
+    assert refreshed.status == DocumentStatus.FAILED.value
+    assert (
+        refreshed.error_message
+        == "Missing provider secret: OPENAI_API_KEY. Configure it in AI Settings > Provider secrets and retry ingestion."
+    )
+    assert refreshed.meta["lightrag"]["failure_reason"] == "missing_provider_secrets"
+    assert refreshed.meta["lightrag"]["missing_provider_secrets"] == ["OPENAI_API_KEY"]
 
 
 def test_lightrag_ingestion_locks_domain_embedding_on_first_success(

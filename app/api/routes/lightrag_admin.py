@@ -16,8 +16,11 @@ from app.services.ai_model_settings_service import AIModelSettingsService
 from app.services.domain_purge_service import DomainPurgeService
 from app.services.lightrag_domain_registry import LightRAGDomainRegistry
 from app.services.model_profile_resolver import ModelProfileResolver
+from app.services.secret_crypto import SecretCryptoService
+from app.core.config import get_settings
 from app.storage.db import get_session
 from app.storage.repositories.ai_model_settings import AIModelSettingsRepository
+from app.storage.repositories.ai_provider_secrets import AIProviderSecretRepository
 from app.storage.repositories.logs import LogRepository
 from app.storage.repositories.lightrag_domain_lifecycle import LightRAGDomainLifecycleRepository
 from app.storage.tables import UserRow
@@ -26,7 +29,11 @@ router = APIRouter(tags=["lightrag-domains"])
 
 
 def get_domain_service(session: Session = Depends(get_session)) -> LightRAGDomainService:
-    profile_service = AIModelSettingsService(AIModelSettingsRepository(session))
+    crypto = SecretCryptoService.from_settings(get_settings())
+    profile_service = AIModelSettingsService(
+        AIModelSettingsRepository(session),
+        AIProviderSecretRepository(session, crypto),
+    )
     return LightRAGDomainService(profile_resolver=ModelProfileResolver(profile_service))
 
 

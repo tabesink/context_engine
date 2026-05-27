@@ -43,6 +43,8 @@ $apiPort = if ($env:API_PORT) { $env:API_PORT } else { Get-EnvValue -Key 'API_PO
 if (-not $apiPort) { $apiPort = '8010' }
 $apiHost = if ($env:API_HOST) { $env:API_HOST } else { Get-EnvValue -Key 'API_HOST' }
 if (-not $apiHost) { $apiHost = '127.0.0.1' }
+$indexJobsInline = if ($env:INDEX_JOBS_INLINE) { $env:INDEX_JOBS_INLINE } else { Get-EnvValue -Key 'INDEX_JOBS_INLINE' }
+if (-not $indexJobsInline) { $indexJobsInline = 'false' }
 
 if (-not $NoDocker) {
     docker compose up postgres redis -d
@@ -81,4 +83,9 @@ if ($needsInstall) {
 }
 
 & $venvPython -m scripts.seed_admin
+if ($indexJobsInline.ToLowerInvariant() -eq 'false') {
+    Write-Warning 'INDEX_JOBS_INLINE=false but deploy-server.ps1 runs API only.'
+    Write-Host 'For queue-mode indexing, start the compose stack (recommended): docker compose up --build'
+    Write-Host 'Or manually start: python -m app.workers.worker and python -m app.workers.status_poller'
+}
 & $venvPython -m uvicorn app.main:create_app --factory --reload --host $apiHost --port $apiPort

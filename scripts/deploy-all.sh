@@ -4,33 +4,57 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: scripts/deploy-all.sh [server options...]
+Usage: scripts/deploy-all.sh [--local-api] [local-api options...]
 
-Starts:
-  - server via scripts/deploy-server.sh
+Default mode (recommended):
+  - backend via docker compose (postgres, redis, migrate, api, worker, status-poller)
   - client via npm run dev in ./client
 
-Any options are passed through to scripts/deploy-server.sh.
+Optional local API mode:
+  --local-api            Run backend via scripts/deploy-server.sh instead of compose
+  --dev                  (local-api only) install editable dev dependencies (.[dev])
+  --no-docker            (local-api only) skip docker compose startup/readiness checks
+  --refresh-deps         (local-api only) force reinstall of editable dependencies
+
 Examples:
-  scripts/deploy-all.sh --dev
-  scripts/deploy-all.sh --no-docker --refresh-deps
+  scripts/deploy-all.sh
+  scripts/deploy-all.sh --local-api --dev
 EOF
 }
 
-server_args=("$@")
-for arg in "${server_args[@]}"; do
-  if [[ "$arg" == "-h" || "$arg" == "--help" ]]; then
-    usage
-    exit 0
-  fi
+backend_mode="compose"
+server_args=()
+for arg in "$@"; do
+  case "$arg" in
+    --local-api)
+      backend_mode="local"
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --dev|--no-docker|--refresh-deps)
+      server_args+=("$arg")
+      ;;
+    *)
+      printf 'Unknown argument: %s\n\n' "$arg" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
 done
+
+if [[ "$backend_mode" == "compose" && ${#server_args[@]} -gt 0 ]]; then
+  printf '%s\n' "Local API flags (--dev/--no-docker/--refresh-deps) require --local-api." >&2
+  exit 1
+fi
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 server_script="$repo_root/scripts/deploy-server.sh"
 client_dir="$repo_root/client"
 env_file="$repo_root/.env"
 
-if [[ ! -x "$server_script" ]]; then
+if [[ "$backend_mode" == "local" && ! -x "$server_script" ]]; then
   printf 'Missing or non-executable server script: %s\n' "$server_script" >&2
   exit 1
 fi
@@ -86,17 +110,21 @@ if [[ -z "$client_api_base" ]]; then
   client_api_base="http://${api_host}:${api_port}"
 fi
 
+compose_pid=""
 server_pid=""
 client_pid=""
 
 cleanup() {
   local exit_code=$?
 
+  if [[ -n "$client_pid" ]] && kill -0 "$client_pid" >/dev/null 2>&1; then
+    kill "$client_pid" >/dev/null 2>&1 || true
+  fi
   if [[ -n "$server_pid" ]] && kill -0 "$server_pid" >/dev/null 2>&1; then
     kill "$server_pid" >/dev/null 2>&1 || true
   fi
-  if [[ -n "$client_pid" ]] && kill -0 "$client_pid" >/dev/null 2>&1; then
-    kill "$client_pid" >/dev/null 2>&1 || true
+  if [[ -n "$compose_pid" ]] && kill -0 "$compose_pid" >/dev/null 2>&1; then
+    kill -INT "$compose_pid" >/dev/null 2>&1 || kill "$compose_pid" >/dev/null 2>&1 || true
   fi
 
   wait >/dev/null 2>&1 || true
@@ -105,9 +133,15 @@ cleanup() {
 
 trap cleanup EXIT INT TERM
 
-printf '%s\n' "Starting server..."
-"$server_script" "${server_args[@]}" &
-server_pid=$!
+if [[ "$backend_mode" == "compose" ]]; then
+  printf '%s\n' "Starting backend via docker compose (api + worker + status-poller)..."
+  (cd "$repo_root" && docker compose up --build) &
+  compose_pid=$!
+else
+  printf '%s\n' "Starting backend via local API script..."
+  "$server_script" "${server_args[@]}" &
+  server_pid=$!
+fi
 
 printf '%s\n' "Starting client..."
 (
@@ -121,12 +155,20 @@ printf '%s\n' "Starting client..."
 ) &
 client_pid=$!
 
-printf 'Server PID: %s\n' "$server_pid"
+if [[ -n "$compose_pid" ]]; then
+  printf 'Compose PID: %s\n' "$compose_pid"
+else
+  printf 'Server PID: %s\n' "$server_pid"
+fi
 printf 'Client PID: %s\n' "$client_pid"
 printf 'API host:port: %s:%s\n' "$api_host" "$api_port"
 printf 'Client host:port: %s:%s\n' "$client_host" "$client_port"
 printf 'Client API base: %s\n' "$client_api_base"
 printf '%s\n' "Press Ctrl+C to stop both processes."
 
-wait -n "$server_pid" "$client_pid"
+if [[ -n "$compose_pid" ]]; then
+  wait -n "$compose_pid" "$client_pid"
+else
+  wait -n "$server_pid" "$client_pid"
+fi
 

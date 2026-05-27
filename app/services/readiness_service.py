@@ -17,6 +17,7 @@ class ReadinessReport:
     status: str
     services: dict[str, str]
     details: dict[str, dict[str, Any]]
+    warnings: list[str]
 
 
 @dataclass(frozen=True)
@@ -46,6 +47,7 @@ class ReadinessService:
         redis_status = self._probe_redis()
         domain_registry, default_domain = self._probe_domain_registry()
         lightrag = self._probe_lightrag(default_domain)
+        warnings: list[str] = []
 
         detail_map = {
             "database": database,
@@ -53,10 +55,17 @@ class ReadinessService:
             "lightrag": lightrag,
             "domain_registry": domain_registry,
         }
+        if not self.settings.index_jobs_inline:
+            queue_consumers, queue_warning = self._probe_queue_consumers()
+            detail_map["queue_consumers"] = queue_consumers
+            if queue_warning:
+                warnings.append(queue_warning)
         services = {service: detail_map[service].status for service in self._SERVICE_ORDER}
         details = {service: detail_map[service].as_dict() for service in self._SERVICE_ORDER}
+        if "queue_consumers" in detail_map:
+            details["queue_consumers"] = detail_map["queue_consumers"].as_dict()
         status = "ready" if all(value == "healthy" for value in services.values()) else "not_ready"
-        return ReadinessReport(status=status, services=services, details=details)
+        return ReadinessReport(status=status, services=services, details=details, warnings=warnings)
 
     def _probe_database(self, session: Session) -> ServiceReadinessDetail:
         started_at = perf_counter()
@@ -89,6 +98,37 @@ class ReadinessService:
                 checked_at=checked_at,
                 reason=self._format_reason("Redis ping failed", exc),
             )
+
+    def _probe_queue_consumers(self) -> tuple[ServiceReadinessDetail, str | None]:
+        started_at = perf_counter()
+        checked_at = self._checked_at()
+        try:
+            client = redis.Redis.from_url(self.settings.redis_url)
+            worker_count = int(client.scard("rq:workers"))
+            queue_depth = int(client.llen("rq:queue:indexing"))
+        except Exception as exc:
+            detail = self._unhealthy_detail(
+                started_at=started_at,
+                checked_at=checked_at,
+                reason=self._format_reason("Unable to inspect indexing queue consumers", exc),
+            )
+            return detail, (
+                "Could not verify indexing queue consumers. Queue-mode uploads may stall if workers are down."
+            )
+
+        if worker_count > 0:
+            reason = f"Detected {worker_count} indexing worker(s); queue depth={queue_depth}."
+            return self._healthy_detail(started_at=started_at, checked_at=checked_at, reason=reason), None
+
+        if queue_depth > 0:
+            reason = f"No indexing workers detected; queue depth={queue_depth}."
+        else:
+            reason = "No indexing workers detected; queue depth=0."
+        warning = (
+            "No indexing workers detected while INDEX_JOBS_INLINE=false. "
+            "Start docker compose (recommended) or run worker and status poller manually."
+        )
+        return self._unhealthy_detail(started_at=started_at, checked_at=checked_at, reason=reason), warning
 
     def _probe_domain_registry(self) -> tuple[ServiceReadinessDetail, LightRAGDomainRuntime | None]:
         started_at = perf_counter()

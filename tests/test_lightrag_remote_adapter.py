@@ -48,6 +48,28 @@ def test_domain_resolver_uses_registered_runtime_connection(tmp_path: Path) -> N
     assert domain.api_key == "secret"
 
 
+def test_domain_resolver_prefers_container_url_in_socket_mode(tmp_path: Path) -> None:
+    registry_path = tmp_path / "domains.json"
+    registry_path.write_text(
+        (
+            '{"domains":[{"id":"default","base_url":"http://127.0.0.1:9623",'
+            '"host_base_url":"http://127.0.0.1:9623",'
+            '"container_base_url":"http://lightrag_default:9621","status":"ready"}]}'
+        ),
+        encoding="utf-8",
+    )
+    settings = Settings(
+        environment="test",
+        database_url="sqlite:///./.data/test_context_engine.db",
+        lightrag_domain_registry=registry_path,
+        lightrag_docker_execution_mode="socket",
+    )
+
+    domain = resolve_lightrag_domain(settings=settings, domain="default")
+
+    assert domain.base_url == "http://lightrag_default:9621"
+
+
 def test_remote_adapter_normalizes_query_data_chunks_to_evidence() -> None:
     document_id = "22222222-2222-4222-8222-222222222222"
 
@@ -282,6 +304,47 @@ def test_remote_adapter_ingests_source_chunks_with_metadata() -> None:
 
     assert response["status"] == "indexing"
     assert response["track_id"] == "track-chunks"
+
+
+def test_remote_adapter_falls_back_to_texts_when_ingest_chunks_not_supported() -> None:
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.path)
+        if request.url.path == "/documents/ingest_chunks":
+            return httpx.Response(404, json={"detail": "Not Found"})
+        if request.url.path == "/documents/texts":
+            payload = request.read().decode()
+            assert '"texts":["See figure."]' in payload
+            assert '"file_sources":["manual.pdf"]' in payload
+            return httpx.Response(200, json={"status": "success", "track_id": "track-fallback"})
+        return httpx.Response(500, json={"detail": "unexpected path"})
+
+    adapter = LightRAGRemoteAdapter(
+        base_url="http://lightrag.local",
+        client=httpx.Client(transport=httpx.MockTransport(handler), base_url="http://lightrag.local"),
+    )
+
+    response = adapter.ingest_source_chunks(
+        domain="manuals",
+        chunks=[
+            SourceChunk(
+                chunk_id="chunk-1",
+                document_id="doc-1",
+                section_id="sec-1",
+                block_ids=["block-1"],
+                text="See figure.",
+                page_start=1,
+                page_end=1,
+                asset_ids=["asset-1"],
+                metadata={"source_path": "manual.pdf"},
+            )
+        ],
+    )
+
+    assert calls == ["/documents/ingest_chunks", "/documents/texts"]
+    assert response["status"] == "indexing"
+    assert response["track_id"] == "track-fallback"
 
 
 def test_remote_adapter_normalizes_track_status() -> None:

@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="teal">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Context Engine — Graphite Accent Preview</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --background: #ffffff;
+      --foreground: #1d1d1f;
+      --muted-foreground: #737373;
+      --border: #e8e8ed;
+      --muted: #f5f5f7;
+      --radius-card: 12px;
+      --radius-pill: 9999px;
+
+      --success: #4f8f83;
+      --warning: #b9823b;
+      --danger: #a85f5f;
+      --info: #5b7894;
+    }
+
+    [data-theme="teal"] {
+      --accent: #4f8f83;
+      --accent-strong: #2f6f65;
+      --accent-soft: #eef6f4;
+      --accent-border: #cfe3df;
+      --accent-text: #275f57;
+    }
+
+    [data-theme="indigo"] {
+      --accent: #6d6adf;
+      --accent-strong: #504dc4;
+      --accent-soft: #f1f1fb;
+      --accent-border: #dadaf5;
+      --accent-text: #4643a8;
+    }
+
+    [data-theme="sage"] {
+      --accent: #71816d;
+      --accent-strong: #53634f;
+      --accent-soft: #f2f5f1;
+      --accent-border: #d8e0d5;
+      --accent-text: #495c45;
+    }
+
+    [data-theme="amber"] {
+      --accent: #b9823b;
+      --accent-strong: #8f6329;
+      --accent-soft: #fbf5ec;
+      --accent-border: #ead8bd;
+      --accent-text: #754f20;
+    }
+
+    [data-theme="steel"] {
+      --accent: #5b7894;
+      --accent-strong: #3f5f78;
+      --accent-soft: #f0f5f8;
+      --accent-border: #d2e0e8;
+      --accent-text: #34546b;
+    }
+
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--background);
+      color: var(--foreground);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Header */
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: var(--background);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+    }
+
+    .header-inner {
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+
+    .header-top {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    .header-sub {
+      font-size: 13px;
+      color: var(--muted-foreground);
+      margin-top: 2px;
+    }
+
+    .copy-btn {
+      font-size: 12px;
+      padding: 6px 14px;
+      border-radius: var(--radius-pill);
+      border: 1px solid var(--border);
+      background: var(--background);
+      color: var(--foreground);
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .copy-btn:hover { background: var(--muted); }
+
+    /* Theme tabs */
+    .theme-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .theme-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: var(--radius-pill);
+      border: 1px solid var(--border);
+      background: var(--background);
+      color: var(--muted-foreground);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: inherit;
+      transition: none;
+    }
+
+    .theme-tab:hover { background: var(--muted); }
+
+    .theme-tab.active {
+      background: var(--accent-soft);
+      border-color: var(--accent-border);
+      color: var(--accent-text);
+    }
+
+    .theme-tab .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .badge-rec {
+      font-size: 10px;
+      font-weight: 500;
+      padding: 2px 6px;
+      border-radius: var(--radius-pill);
+      background: var(--muted);
+      color: var(--muted-foreground);
+    }
+
+    .theme-tab.active .badge-rec {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    /* Swatches */
+    .swatches {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 20px 24px 0;
+    }
+
+    .swatch-section-title {
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted-foreground);
+      margin-bottom: 8px;
+    }
+
+    .swatch-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .swatch {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: var(--radius-pill);
+      border: 1px solid var(--border);
+      font-size: 11px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      background: var(--background);
+    }
+
+    .swatch-color {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      border: 1px solid rgba(0,0,0,0.08);
+      flex-shrink: 0;
+    }
+
+    .swatch-label {
+      color: var(--muted-foreground);
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      font-size: 11px;
+    }
+
+    /* Main grid */
+    .main {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 20px;
+    }
+
+    /* shadcn-style Card */
+    .card {
+      background: var(--background);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-card);
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .card-header {
+      padding: 20px 20px 0;
+    }
+
+    .card-title {
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+
+    .card-description {
+      font-size: 13px;
+      color: var(--muted-foreground);
+      margin-top: 4px;
+    }
+
+    .card-content {
+      padding: 16px 20px 20px;
+    }
+
+    /* Settings nav */
+    .settings-nav {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .nav-item {
+      padding: 8px 12px;
+      font-size: 13px;
+      color: var(--muted-foreground);
+      border-radius: 6px;
+      border-left: 2px solid transparent;
+    }
+
+    .nav-item.active {
+      background: var(--accent-soft);
+      border-left-color: var(--accent);
+      color: var(--accent-text);
+      font-weight: 500;
+    }
+
+    /* Provider pills */
+    .provider-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: var(--radius-pill);
+      font-size: 13px;
+      border: 1px solid var(--border);
+      background: var(--muted);
+      color: var(--foreground);
+    }
+
+    .pill.selected {
+      background: var(--accent-soft);
+      border-color: var(--accent-border);
+      color: var(--accent-text);
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--success);
+      flex-shrink: 0;
+    }
+
+    .selected-label {
+      font-size: 12px;
+      color: var(--muted-foreground);
+      margin-bottom: 6px;
+    }
+
+    /* Domain pill */
+    .domain-pill {
+      display: inline-flex;
+      padding: 6px 14px;
+      border-radius: var(--radius-pill);
+      font-size: 13px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      background: var(--accent-soft);
+      border: 1px solid var(--accent-border);
+      color: var(--accent-text);
+    }
+
+    /* Evidence */
+    .evidence-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .evidence-badge {
+      display: inline-flex;
+      padding: 4px 10px;
+      border-radius: var(--radius-pill);
+      font-size: 12px;
+      font-weight: 500;
+      background: var(--accent-soft);
+      border: 1px solid var(--accent-border);
+      color: var(--accent-text);
+    }
+
+    .citation-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .citation-row {
+      display: flex;
+      gap: 10px;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+
+    .citation-row.highlighted {
+      background: var(--accent-soft);
+      border-color: var(--accent-border);
+    }
+
+    .citation-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 22px;
+      height: 22px;
+      border-radius: var(--radius-pill);
+      font-size: 11px;
+      font-weight: 600;
+      background: var(--accent);
+      color: #fff;
+      flex-shrink: 0;
+    }
+
+    .citation-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .citation-title {
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .citation-meta {
+      font-size: 12px;
+      color: var(--muted-foreground);
+      margin-top: 2px;
+    }
+
+    /* Workspace tree */
+    .tree {
+      font-size: 13px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .tree-row {
+      padding: 6px 10px;
+      border-radius: 4px;
+      color: var(--muted-foreground);
+      border-left: 2px solid transparent;
+    }
+
+    .tree-row.indent-1 { padding-left: 24px; }
+    .tree-row.indent-2 { padding-left: 38px; }
+
+    .tree-row.selected {
+      background: var(--accent-soft);
+      border-left-color: var(--accent);
+      color: var(--accent-text);
+    }
+
+    /* Status badges */
+    .status-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+    }
+
+    .status-item .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .dot-success { background: var(--success); }
+    .dot-accent { background: var(--accent); }
+    .dot-danger { background: var(--danger); }
+    .dot-muted { background: var(--border); }
+
+    .status-failed { color: var(--danger); }
+    .status-disconnected { color: var(--muted-foreground); }
+
+    /* Progress */
+    .progress-label {
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+
+    .progress-track {
+      height: 6px;
+      background: var(--muted);
+      border-radius: var(--radius-pill);
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 72%;
+      background: var(--accent);
+      border-radius: var(--radius-pill);
+    }
+
+    .progress-pct {
+      font-size: 12px;
+      color: var(--muted-foreground);
+      margin-top: 4px;
+    }
+
+    .admin-badge {
+      display: inline-flex;
+      padding: 4px 10px;
+      border-radius: var(--radius-pill);
+      font-size: 12px;
+      font-weight: 500;
+      background: #fbf5ec;
+      border: 1px solid #ead8bd;
+      color: #754f20;
+    }
+
+    .admin-note {
+      font-size: 12px;
+      color: var(--muted-foreground);
+      margin-top: 8px;
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 12px 0;
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <div class="header-top">
+        <div>
+          <h1>Context Engine — Graphite Accent Preview</h1>
+          <p class="header-sub">Compare accent palettes on realistic admin / retrieval UI patterns</p>
+        </div>
+        <button type="button" class="copy-btn" id="copy-css">Copy theme CSS</button>
+      </div>
+      <div class="theme-tabs" role="tablist">
+        <button type="button" class="theme-tab active" data-theme="teal" role="tab" aria-selected="true">
+          <span class="dot" style="background:#4f8f83"></span>
+          Muted Teal
+          <span class="badge-rec">Recommended</span>
+        </button>
+        <button type="button" class="theme-tab" data-theme="indigo" role="tab" aria-selected="false">
+          <span class="dot" style="background:#6d6adf"></span>
+          Soft Indigo
+        </button>
+        <button type="button" class="theme-tab" data-theme="sage" role="tab" aria-selected="false">
+          <span class="dot" style="background:#71816d"></span>
+          Sage Green
+        </button>
+        <button type="button" class="theme-tab" data-theme="amber" role="tab" aria-selected="false">
+          <span class="dot" style="background:#b9823b"></span>
+          Warm Amber
+        </button>
+        <button type="button" class="theme-tab" data-theme="steel" role="tab" aria-selected="false">
+          <span class="dot" style="background:#5b7894"></span>
+          Steel Blue
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <section class="swatches" aria-label="Active theme palette">
+    <p class="swatch-section-title">Accent tokens</p>
+    <div class="swatch-row" id="accent-swatches"></div>
+    <p class="swatch-section-title">Semantic tokens (fixed across themes)</p>
+    <div class="swatch-row" id="semantic-swatches"></div>
+  </section>
+
+  <main class="main">
+    <div class="card-grid">
+
+      <!-- 1. Settings Nav -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Settings route</div>
+          <div class="card-description">Active nav item uses left accent border + soft background</div>
+        </div>
+        <div class="card-content">
+          <nav class="settings-nav" aria-label="Settings navigation">
+            <div class="nav-item">Account</div>
+            <div class="nav-item active">Provider</div>
+            <div class="nav-item">LightRAG</div>
+            <div class="nav-item">Documents</div>
+            <div class="nav-item">Status</div>
+          </nav>
+        </div>
+      </div>
+
+      <!-- 2. Provider Selection -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Provider selection</div>
+          <div class="card-description">Selected provider uses soft accent pill, not saturated fill</div>
+        </div>
+        <div class="card-content">
+          <div class="provider-row">
+            <span class="pill selected"><span class="status-dot"></span> OpenAI</span>
+            <span class="pill">Ollama</span>
+            <span class="pill">AWS Bedrock</span>
+          </div>
+          <p class="selected-label">Selected:</p>
+          <span class="pill selected"><span class="status-dot"></span> OpenAI · connected</span>
+        </div>
+      </div>
+
+      <!-- 3. Selected Domain -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Selected domain</div>
+          <div class="card-description">High-importance configuration state in accent soft pill</div>
+        </div>
+        <div class="card-content">
+          <p class="selected-label">Selected domain:</p>
+          <span class="domain-pill">engineering-docs</span>
+        </div>
+      </div>
+
+      <!-- 4. Evidence & Citations -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Evidence &amp; citations</div>
+          <div class="card-description">Accent for source count badge and citation number pills</div>
+        </div>
+        <div class="card-content">
+          <div class="evidence-header">
+            <span style="font-size:13px;font-weight:500">Evidence</span>
+            <span class="evidence-badge">8 sources</span>
+          </div>
+          <div class="citation-list">
+            <div class="citation-row highlighted">
+              <span class="citation-num">1</span>
+              <div class="citation-body">
+                <div class="citation-title">ISO Manual.pdf</div>
+                <div class="citation-meta">Page 12 · confidence 0.82</div>
+              </div>
+            </div>
+            <div class="citation-row">
+              <span class="citation-num">2</span>
+              <div class="citation-body">
+                <div class="citation-title">Upload Guide.md</div>
+                <div class="citation-meta">Section: domain ingestion</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. Workspace Tree -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Workspace tree</div>
+          <div class="card-description">Selected row: accent-soft background + left border</div>
+        </div>
+        <div class="card-content">
+          <div class="tree">
+            <div class="tree-row">Workspace</div>
+            <div class="tree-row indent-1">engineering-docs</div>
+            <div class="tree-row indent-2 selected">manuals</div>
+            <div class="tree-row indent-2">tables</div>
+            <div class="tree-row indent-2">images</div>
+            <div class="tree-row indent-1">policy-docs</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6. Domain Status -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Domain status</div>
+          <div class="card-description">Semantic colors for system states — small dots, not filled cards</div>
+        </div>
+        <div class="card-content">
+          <div class="status-list">
+            <div class="status-item"><span class="dot dot-success"></span> Healthy</div>
+            <div class="status-item"><span class="dot dot-accent"></span> Ingesting</div>
+            <div class="status-item status-failed"><span class="dot dot-danger"></span> Failed</div>
+            <div class="status-item status-disconnected"><span class="dot dot-muted"></span> Disconnected</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 7. Upload Progress + Admin -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Upload &amp; admin guardrail</div>
+          <div class="card-description">Accent progress fill; amber reserved for admin / attention states</div>
+        </div>
+        <div class="card-content">
+          <div class="progress-label">Uploading document.pdf</div>
+          <div class="progress-track">
+            <div class="progress-fill"></div>
+          </div>
+          <div class="progress-pct">72%</div>
+          <div class="divider"></div>
+          <span class="admin-badge">Admin only</span>
+          <p class="admin-note">Uses warning/amber semantic — not the main accent color</p>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    const THEMES = {
+      teal:   { name: "Muted Teal",   accent: "#4f8f83", accentStrong: "#2f6f65", accentSoft: "#eef6f4", accentBorder: "#cfe3df", accentText: "#275f57" },
+      indigo: { name: "Soft Indigo",  accent: "#6d6adf", accentStrong: "#504dc4", accentSoft: "#f1f1fb", accentBorder: "#dadaf5", accentText: "#4643a8" },
+      sage:   { name: "Sage Green",   accent: "#71816d", accentStrong: "#53634f", accentSoft: "#f2f5f1", accentBorder: "#d8e0d5", accentText: "#495c45" },
+      amber:  { name: "Warm Amber",   accent: "#b9823b", accentStrong: "#8f6329", accentSoft: "#fbf5ec", accentBorder: "#ead8bd", accentText: "#754f20" },
+      steel:  { name: "Steel Blue",   accent: "#5b7894", accentStrong: "#3f5f78", accentSoft: "#f0f5f8", accentBorder: "#d2e0e8", accentText: "#34546b" },
+    };
+
+    const SEMANTIC = {
+      success: "#4f8f83",
+      warning: "#b9823b",
+      danger:  "#a85f5f",
+      info:    "#5b7894",
+    };
+
+    const accentSwatchesEl = document.getElementById("accent-swatches");
+    const semanticSwatchesEl = document.getElementById("semantic-swatches");
+    const tabs = document.querySelectorAll(".theme-tab");
+    const copyBtn = document.getElementById("copy-css");
+
+    function renderSwatches(themeKey) {
+      const t = THEMES[themeKey];
+      const accentKeys = [
+        ["accent", t.accent, "--accent"],
+        ["accent-strong", t.accentStrong, "--accent-strong"],
+        ["accent-soft", t.accentSoft, "--accent-soft"],
+        ["accent-border", t.accentBorder, "--accent-border"],
+        ["accent-text", t.accentText, "--accent-text"],
+      ];
+
+      accentSwatchesEl.innerHTML = accentKeys.map(([label, hex, varName]) =>
+        `<span class="swatch"><span class="swatch-color" style="background:${hex}"></span><span class="swatch-label">${varName}</span> ${hex}</span>`
+      ).join("");
+
+      semanticSwatchesEl.innerHTML = Object.entries(SEMANTIC).map(([key, hex]) =>
+        `<span class="swatch"><span class="swatch-color" style="background:${hex}"></span><span class="swatch-label">--${key}</span> ${hex}</span>`
+      ).join("");
+    }
+
+    function setTheme(themeKey) {
+      document.documentElement.dataset.theme = themeKey;
+      tabs.forEach(tab => {
+        const active = tab.dataset.theme === themeKey;
+        tab.classList.toggle("active", active);
+        tab.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      renderSwatches(themeKey);
+    }
+
+    function cssBlock(themeKey) {
+      const t = THEMES[themeKey];
+      return `[data-theme="${themeKey}"] {
+  --accent: ${t.accent};
+  --accent-strong: ${t.accentStrong};
+  --accent-soft: ${t.accentSoft};
+  --accent-border: ${t.accentBorder};
+  --accent-text: ${t.accentText};
+}
+
+/* Semantic (shared) */
+--success: ${SEMANTIC.success};
+--warning: ${SEMANTIC.warning};
+--danger: ${SEMANTIC.danger};
+--info: ${SEMANTIC.info};`;
+    }
+
+    tabs.forEach(tab => {
+      tab.addEventListener("click", () => setTheme(tab.dataset.theme));
+    });
+
+    copyBtn.addEventListener("click", async () => {
+      const key = document.documentElement.dataset.theme;
+      const text = cssBlock(key);
+      try {
+        await navigator.clipboard.writeText(text);
+        copyBtn.textContent = "Copied!";
+        setTimeout(() => { copyBtn.textContent = "Copy theme CSS"; }, 1500);
+      } catch {
+        copyBtn.textContent = "Copy failed";
+        setTimeout(() => { copyBtn.textContent = "Copy theme CSS"; }, 1500);
+      }
+    });
+
+    setTheme("teal");
+  </script>
+</body>
+</html>

@@ -77,6 +77,8 @@ api_port="${API_PORT:-$(read_env_value API_PORT .env)}"
 api_port="${api_port:-8010}"
 api_host="${API_HOST:-$(read_env_value API_HOST .env)}"
 api_host="${api_host:-127.0.0.1}"
+index_jobs_inline="${INDEX_JOBS_INLINE:-$(read_env_value INDEX_JOBS_INLINE .env)}"
+index_jobs_inline="${index_jobs_inline:-false}"
 
 if [[ "$no_docker" == false ]]; then
   docker compose up postgres redis -d
@@ -128,4 +130,9 @@ fi
 
 "$venv_python" -m alembic upgrade head
 "$venv_python" -m scripts.seed_admin
+if [[ "${index_jobs_inline,,}" == "false" ]]; then
+  printf '%s\n' "Warning: INDEX_JOBS_INLINE=false but deploy-server.sh runs API only."
+  printf '%s\n' "For queue-mode indexing, start the compose stack (recommended): docker compose up --build"
+  printf '%s\n' "Or manually start: python -m app.workers.worker and python -m app.workers.status_poller"
+fi
 "$venv_python" -m uvicorn app.main:create_app --factory --reload --host "$api_host" --port "$api_port"

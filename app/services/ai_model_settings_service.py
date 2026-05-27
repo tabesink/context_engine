@@ -130,7 +130,7 @@ class AIModelSettingsService:
             profile_id=profile.id,
             kind=ModelProfileKind(profile.kind),
             success=True,
-            message="Connection test passed",
+            message="Configuration validation passed",
             vector_length=vector_length,
         )
 

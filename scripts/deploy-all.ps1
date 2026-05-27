@@ -5,18 +5,19 @@
 
 .DESCRIPTION
   Starts:
-    - server via scripts/deploy-server.ps1
+    - backend via docker compose (recommended default)
     - client via npm run dev in ./client
 
-  Any server options are passed through to scripts/deploy-server.ps1.
+  Optional local API mode uses scripts/deploy-server.ps1.
 
 .EXAMPLE
-  .\scripts\deploy-all.ps1 -Dev
+  .\scripts\deploy-all.ps1
 
 .EXAMPLE
-  .\scripts\deploy-all.ps1 -NoDocker -RefreshDeps
+  .\scripts\deploy-all.ps1 -LocalApi -Dev
 #>
 param(
+    [switch]$LocalApi,
     [switch]$Dev,
     [switch]$NoDocker,
     [switch]$RefreshDeps,
@@ -30,13 +31,18 @@ function Show-Usage {
 Usage: scripts/deploy-all.ps1 [-Dev] [-NoDocker] [-RefreshDeps]
 
 Starts:
-  - server via scripts/deploy-server.ps1
+  - backend via docker compose (postgres, redis, migrate, api, worker, status-poller)
   - client via npm run dev in ./client
 
-Options are passed through to scripts/deploy-server.ps1.
+Optional local API mode:
+  -LocalApi      Run backend via scripts/deploy-server.ps1
+  -Dev           (LocalApi only) pass through to deploy-server.ps1
+  -NoDocker      (LocalApi only) pass through to deploy-server.ps1
+  -RefreshDeps   (LocalApi only) pass through to deploy-server.ps1
+
 Examples:
-  .\scripts\deploy-all.ps1 -Dev
-  .\scripts\deploy-all.ps1 -NoDocker -RefreshDeps
+  .\scripts\deploy-all.ps1
+  .\scripts\deploy-all.ps1 -LocalApi -Dev
 "@
 }
 
@@ -50,8 +56,12 @@ $serverScript = Join-Path $PSScriptRoot 'deploy-server.ps1'
 $clientDir = Join-Path $repoRoot 'client'
 $envFile = Join-Path $repoRoot '.env'
 
-if (-not (Test-Path $serverScript)) {
+if ($LocalApi -and -not (Test-Path $serverScript)) {
     throw "Missing server script: $serverScript"
+}
+
+if (-not $LocalApi -and ($Dev -or $NoDocker -or $RefreshDeps)) {
+    throw 'Use -LocalApi when passing -Dev, -NoDocker, or -RefreshDeps.'
 }
 
 if (-not (Test-Path (Join-Path $clientDir 'package.json'))) {
@@ -137,10 +147,14 @@ function Start-NpmDevProcess {
     return [System.Diagnostics.Process]::Start($psi)
 }
 
+$composeProcess = $null
 $serverProcess = $null
 $clientProcess = $null
 
 function Stop-ChildProcesses {
+    if ($composeProcess -and -not $composeProcess.HasExited) {
+        Stop-ProcessTree -ProcessId $composeProcess.Id
+    }
     if ($serverProcess -and -not $serverProcess.HasExited) {
         Stop-ProcessTree -ProcessId $serverProcess.Id
     }
@@ -150,22 +164,31 @@ function Stop-ChildProcesses {
 }
 
 try {
-    Write-Host 'Starting server...'
+    if ($LocalApi) {
+        Write-Host 'Starting backend via local API script...'
+        $serverArgs = @(
+            '-NoProfile'
+            '-ExecutionPolicy', 'Bypass'
+            '-File', $serverScript
+        )
+        if ($Dev) { $serverArgs += '-Dev' }
+        if ($NoDocker) { $serverArgs += '-NoDocker' }
+        if ($RefreshDeps) { $serverArgs += '-RefreshDeps' }
 
-    $serverArgs = @(
-        '-NoProfile'
-        '-ExecutionPolicy', 'Bypass'
-        '-File', $serverScript
-    )
-    if ($Dev) { $serverArgs += '-Dev' }
-    if ($NoDocker) { $serverArgs += '-NoDocker' }
-    if ($RefreshDeps) { $serverArgs += '-RefreshDeps' }
-
-    $serverProcess = Start-Process -FilePath 'powershell.exe' `
-        -ArgumentList $serverArgs `
-        -WorkingDirectory $repoRoot `
-        -PassThru `
-        -NoNewWindow
+        $serverProcess = Start-Process -FilePath 'powershell.exe' `
+            -ArgumentList $serverArgs `
+            -WorkingDirectory $repoRoot `
+            -PassThru `
+            -NoNewWindow
+    }
+    else {
+        Write-Host 'Starting backend via docker compose (api + worker + status-poller)...'
+        $composeProcess = Start-Process -FilePath 'docker' `
+            -ArgumentList @('compose', 'up', '--build') `
+            -WorkingDirectory $repoRoot `
+            -PassThru `
+            -NoNewWindow
+    }
 
     Write-Host 'Starting client...'
 
@@ -177,7 +200,12 @@ try {
         NEXT_PUBLIC_API_PORT = $apiPort
     }
 
-    Write-Host "Server PID: $($serverProcess.Id)"
+    if ($composeProcess) {
+        Write-Host "Compose PID: $($composeProcess.Id)"
+    }
+    else {
+        Write-Host "Server PID: $($serverProcess.Id)"
+    }
     Write-Host "Client PID: $($clientProcess.Id)"
     Write-Host "API host:port: ${apiHost}:${apiPort}"
     Write-Host "Client host:port: ${clientHost}:${clientPort}"
@@ -185,13 +213,17 @@ try {
     Write-Host 'Press Ctrl+C to stop both processes.'
 
     while ($true) {
-        if ($serverProcess.HasExited -or $clientProcess.HasExited) {
+        $backendExited = if ($composeProcess) { $composeProcess.HasExited } else { $serverProcess.HasExited }
+        if ($backendExited -or $clientProcess.HasExited) {
             break
         }
         Start-Sleep -Milliseconds 500
     }
 
-    if ($serverProcess.HasExited -and $serverProcess.ExitCode -ne 0) {
+    if ($composeProcess -and $composeProcess.HasExited -and $composeProcess.ExitCode -ne 0) {
+        exit $composeProcess.ExitCode
+    }
+    if ($serverProcess -and $serverProcess.HasExited -and $serverProcess.ExitCode -ne 0) {
         exit $serverProcess.ExitCode
     }
     if ($clientProcess.HasExited -and $clientProcess.ExitCode -ne 0) {

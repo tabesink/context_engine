@@ -1,6 +1,6 @@
 # Deployment Notes
 
-The supported local deployment uses Docker Compose with PostgreSQL, Redis, the API, one ingestion worker, and one LightRAG status poller. Context Engine can also manage same-machine LightRAG domain containers through admin-only deployment-control APIs; generated LightRAG services share the same Docker network and use per-domain PostgreSQL databases.
+The supported local deployment uses Docker Compose with PostgreSQL, Redis, the API, one ingestion worker, and one LightRAG status poller. This is the canonical startup topology for queue-backed indexing. Context Engine can also manage same-machine LightRAG domain containers through admin-only deployment-control APIs; generated LightRAG services share the same Docker network and use per-domain PostgreSQL databases.
 
 ## Required Environment
 
@@ -54,7 +54,6 @@ INDEX_JOBS_INLINE=false
 Then start the stack and seed admin (adjust service name if your compose file differs):
 
 ```bash
-docker compose up --build -d postgres redis
 docker compose up --build
 docker compose exec api python -m scripts.seed_admin
 ```
@@ -63,6 +62,7 @@ Alternatively, `docker compose run --rm api python -m scripts.seed_admin` works 
 
 The `worker` service must stay up when `INDEX_JOBS_INLINE=false`. It consumes indexing jobs and moves them through `queued`, `running`, `succeeded`, or `failed`.
 The `status-poller` service should also stay up in that mode so documents that remain `indexing` in LightRAG can transition to `ready`/`failed` without manual refresh calls.
+`scripts/deploy-all.sh` (and PowerShell variant) now use this Compose backend path by default.
 
 For bind mounts and API reload during local development, layer the dev override on top:
 
@@ -94,6 +94,7 @@ uvicorn app.main:create_app --factory --reload --port 8010
 ```
 
 `DATABASE_URL` must be configured. Local non-compose runs should point at the PostgreSQL service started above; the app no longer falls back to a hidden sqlite file database.
+When `INDEX_JOBS_INLINE=false`, local non-compose mode requires manual worker and status poller terminals, or uploads can remain queued/indexing.
 
 ## Terminal Client (Deprecated)
 
