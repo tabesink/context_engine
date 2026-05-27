@@ -109,6 +109,12 @@ export type ContextPanelItem = {
   reference_id?: string | null;
   workspace_node_id?: string | null;
   score?: number | null;
+  asset_id?: string | null;
+  asset_type?: string | null;
+  caption?: string | null;
+  url?: string | null;
+  thumbnail_url?: string | null;
+  mime_type?: string | null;
   handles: Record<string, unknown>;
 };
 

@@ -1,0 +1,23 @@
+diff --git a/client/src/types/chat.ts b/client/src/types/chat.ts
+--- a/client/src/types/chat.ts
++++ b/client/src/types/chat.ts
+@@
+ export type ContextPanelItem = {
+   id: string;
+   kind: "text" | "table" | "figure";
+   title: string;
+   content: string;
+   score?: number | null;
+   page_start?: number | null;
+   page_end?: number | null;
+   file_path?: string | null;
+   document_id?: string | null;
+   workspace_node_id?: string | null;
++  asset_id?: string | null;
++  asset_type?: string | null;
++  caption?: string | null;
++  url?: string | null;
++  thumbnail_url?: string | null;
++  mime_type?: string | null;
+   handles?: Record<string, unknown>;
+ };

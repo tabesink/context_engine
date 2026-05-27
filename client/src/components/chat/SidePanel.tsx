@@ -2,6 +2,13 @@
 
 import { useState, type PointerEvent, type ReactNode } from "react";
 import { X } from "lucide-react";
+import {
+  FigureCard,
+  TableCard,
+  assetCardFromContextItem,
+  assetCardFromWorkspaceAsset,
+  splitAssetCards,
+} from "@/components/chat/AssetCards";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,7 +18,6 @@ import type {
   PipelineProgressEvent,
   SidePanelTab,
   SourceNavigatorState,
-  WorkspaceContextAsset,
 } from "@/types/chat";
 
 const SIDE_PANEL_MIN_WIDTH = 400;
@@ -351,6 +357,8 @@ function SourceNavigatorTab({ sourceNavigator }: { sourceNavigator: SourceNaviga
   }
 
   const context = sourceNavigator.context;
+  const assetCards = (context.assets ?? []).map(assetCardFromWorkspaceAsset);
+  const { primaryFigure, tables, others } = splitAssetCards(assetCards);
   const badges = [
     context.kind,
     context.page_number ? `Page ${context.page_number}` : null,
@@ -412,12 +420,36 @@ function SourceNavigatorTab({ sourceNavigator }: { sourceNavigator: SourceNaviga
         </CardContent>
       </Card>
 
-      {context.assets.length ? (
+      {primaryFigure ? (
         <section className="space-y-2">
-          <p className="text-xs font-medium tracking-tight text-[var(--foreground)]">Assets</p>
+          <h4 className="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
+            Figure
+          </h4>
+          <FigureCard asset={primaryFigure} density="spacious" />
+        </section>
+      ) : null}
+
+      {tables.length > 0 ? (
+        <section className="space-y-2">
+          <h4 className="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
+            Tables
+          </h4>
           <div className="space-y-2">
-            {context.assets.map((asset) => (
-              <SourceAssetCard key={asset.asset_id} asset={asset} />
+            {tables.map((asset) => (
+              <TableCard key={asset.id} asset={asset} density="compact" />
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {!primaryFigure && tables.length === 0 && others.length > 0 ? (
+        <section className="space-y-2">
+          <h4 className="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
+            Assets
+          </h4>
+          <div className="space-y-2">
+            {others.map((asset) => (
+              <TableCard key={asset.id} asset={asset} density="compact" />
             ))}
           </div>
         </section>
@@ -442,32 +474,6 @@ function SourceStateBlock({
         {description}
       </p>
     </section>
-  );
-}
-
-function SourceAssetCard({ asset }: { asset: WorkspaceContextAsset }) {
-  return (
-    <Card className="gap-0 rounded-xl border-[var(--border)] bg-[var(--background)] py-0 shadow-none">
-      <CardContent className="px-3 py-2">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="truncate text-xs font-medium text-[var(--foreground)]">{asset.title}</p>
-            <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
-              {asset.asset_type}
-              {asset.page_number ? ` - Page ${asset.page_number}` : ""}
-            </p>
-          </div>
-          {asset.url ? (
-            <Badge variant="outline" className="rounded-full text-[11px] font-normal">
-              source
-            </Badge>
-          ) : null}
-        </div>
-        {asset.caption ? (
-          <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-[var(--muted-foreground)]">{asset.caption}</p>
-        ) : null}
-      </CardContent>
-    </Card>
   );
 }
 
@@ -565,17 +571,11 @@ function TableContextItem({
   onOpenSourceFromContext?: (nodeId: string) => void;
 }) {
   return (
-    <article className="text-xs leading-5">
-      <div className="rounded-xl border border-[var(--border)]">
-        <div className="border-b border-[var(--border)] px-3 py-2 text-xs text-[var(--foreground)]">{item.title}</div>
-        <div className="max-h-64 overflow-auto p-3">
-          <pre className="min-w-full w-max whitespace-pre font-mono text-xs leading-5 text-[var(--muted-foreground)]">
-            {item.content || "Table content will appear here when returned by retrieval."}
-          </pre>
-        </div>
-      </div>
-      <OpenSourceAction item={item} onOpenSourceFromContext={onOpenSourceFromContext} />
-    </article>
+    <TableCard
+      asset={assetCardFromContextItem(item)}
+      density="compact"
+      action={<OpenSourceAction item={item} onOpenSourceFromContext={onOpenSourceFromContext} />}
+    />
   );
 }
 
@@ -587,18 +587,11 @@ function FigureContextItem({
   onOpenSourceFromContext?: (nodeId: string) => void;
 }) {
   return (
-    <article className="text-xs leading-5">
-      <div className="overflow-hidden rounded-xl border border-[var(--border)]">
-        <div className="border-b border-[var(--border)] px-3 py-2 text-xs text-[var(--foreground)]">{item.title}</div>
-        <div className="p-3 text-xs leading-5 text-[var(--muted-foreground)]">
-          <div className="flex h-32 items-center justify-center rounded-lg border border-dashed border-[var(--border)] bg-[var(--muted)]">
-            figure artifact placeholder
-          </div>
-          <p className="mt-2 whitespace-pre-wrap">{item.content || "Backend image/artifact loading will be wired later."}</p>
-        </div>
-      </div>
-      <OpenSourceAction item={item} onOpenSourceFromContext={onOpenSourceFromContext} />
-    </article>
+    <FigureCard
+      asset={assetCardFromContextItem(item)}
+      density="spacious"
+      action={<OpenSourceAction item={item} onOpenSourceFromContext={onOpenSourceFromContext} />}
+    />
   );
 }
 
