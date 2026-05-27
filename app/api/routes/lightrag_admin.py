@@ -68,6 +68,11 @@ def create_domain(
         domain = service.create_domain(request)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if request.start:
+        result = service.repair(domain.id)
+        if result.docker_operation != "succeeded":
+            raise HTTPException(status_code=502, detail=result.model_dump())
+        domain = service.get_domain(domain.id)
     _audit(session, admin, "lightrag.domain.created", domain)
     return domain
 

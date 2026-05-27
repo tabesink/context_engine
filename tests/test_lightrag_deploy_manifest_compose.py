@@ -6,7 +6,7 @@ import pytest
 
 from app.lightrag_deploy.compose import ComposeGenerator, write_domain_env
 from app.lightrag_deploy.manifest import DomainManifestStore
-from app.lightrag_deploy.models import LightRAGDomain
+from app.lightrag_deploy.models import DomainLLMSnapshot, LightRAGDomain
 from app.lightrag_deploy.paths import DomainPathResolver
 from app.lightrag_deploy.settings import LightRAGDeploySettings
 
@@ -219,6 +219,41 @@ def test_domain_env_includes_bedrock_openai_compatible_provider_config(tmp_path:
     assert "EMBEDDING_SEND_DIM=false" in env_text
     assert "EMBEDDING_USE_BASE64=true" in env_text
     assert "OPENAI_LLM_MAX_TOKENS=9000" in env_text
+
+
+def test_domain_env_can_prefer_resolved_llm_profile_over_shell_settings(tmp_path: Path) -> None:
+    settings = replace(
+        _settings_with_provider(tmp_path),
+        llm_binding_host="http://stale-provider.local/v1",
+        llm_binding_api_key="stale-runtime-key",
+        llm_model="mistral-nemo:latest",
+    )
+    paths = DomainPathResolver(settings).ensure_domain_paths("fatigue")
+    domain = _domain(tmp_path)
+    llm = DomainLLMSnapshot(
+        profile_id="bedrock-gpt-oss-120b",
+        provider="bedrock_openai",
+        binding="openai",
+        base_url="https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1",
+        api_key_env_var="AWS_BEARER_TOKEN_BEDROCK",
+        model="openai.gpt-oss-120b-1:0",
+    )
+
+    write_domain_env(
+        domain,
+        settings,
+        paths,
+        provider_secrets={"AWS_BEARER_TOKEN_BEDROCK": "stored-bedrock-key"},
+        llm=llm,
+    )
+    env_text = paths.env_file.read_text(encoding="utf-8")
+
+    assert "LLM_BINDING=openai" in env_text
+    assert "LLM_BINDING_HOST=https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1" in env_text
+    assert "LLM_BINDING_API_KEY=stored-bedrock-key" in env_text
+    assert "LLM_MODEL=openai.gpt-oss-120b-1:0" in env_text
+    assert "mistral-nemo:latest" not in env_text
+    assert "stale-runtime-key" not in env_text
 
 
 def test_domain_env_skips_blank_optional_provider_values(tmp_path: Path) -> None:

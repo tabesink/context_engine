@@ -347,33 +347,45 @@ def test_remote_adapter_ingests_source_chunks_with_metadata() -> None:
     assert response["track_id"] == "track-chunks"
 
 
-def test_remote_adapter_raises_on_missing_ingest_chunks_endpoint() -> None:
+def test_remote_adapter_falls_back_to_texts_when_ingest_chunks_not_supported() -> None:
+    paths: list[str] = []
+
     def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path == "/documents/ingest_chunks"
-        return httpx.Response(404, json={"detail": "Not Found"})
+        paths.append(request.url.path)
+        if request.url.path == "/documents/ingest_chunks":
+            return httpx.Response(404, json={"detail": "Not Found"})
+
+        assert request.url.path == "/documents/texts"
+        payload = request.read().decode()
+        assert '"texts":["See figure."]' in payload
+        assert '"file_sources":["manual.pdf#chunk=chunk-1"]' in payload
+        return httpx.Response(200, json={"status": "success", "track_id": "track-texts"})
 
     adapter = LightRAGRemoteAdapter(
         base_url="http://lightrag.local",
         client=httpx.Client(transport=httpx.MockTransport(handler), base_url="http://lightrag.local"),
     )
 
-    with pytest.raises(LightRAGUpstreamError):
-        adapter.ingest_source_chunks(
-            domain="manuals",
-            chunks=[
-                SourceChunk(
-                    chunk_id="chunk-1",
-                    document_id="doc-1",
-                    section_id="sec-1",
-                    block_ids=["block-1"],
-                    text="See figure.",
-                    page_start=1,
-                    page_end=1,
-                    asset_ids=["asset-1"],
-                    metadata={"source_path": "manual.pdf"},
-                )
-            ],
-        )
+    response = adapter.ingest_source_chunks(
+        domain="manuals",
+        chunks=[
+            SourceChunk(
+                chunk_id="chunk-1",
+                document_id="doc-1",
+                section_id="sec-1",
+                block_ids=["block-1"],
+                text="See figure.",
+                page_start=1,
+                page_end=1,
+                asset_ids=["asset-1"],
+                metadata={"source_path": "manual.pdf"},
+            )
+        ],
+    )
+
+    assert paths == ["/documents/ingest_chunks", "/documents/texts"]
+    assert response["status"] == "indexing"
+    assert response["track_id"] == "track-texts"
 
 
 def test_remote_adapter_normalizes_track_status() -> None:
@@ -405,6 +417,23 @@ def test_remote_adapter_normalizes_track_status() -> None:
     assert status["document_id"] == "external-doc"
     assert status["status"] == "ready"
     assert status["error"] is None
+
+
+def test_remote_adapter_treats_missing_track_status_as_indexing() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/documents/track_status/track-1"
+        return httpx.Response(200, json={"track_id": "track-1", "documents": []})
+
+    adapter = LightRAGRemoteAdapter(
+        base_url="http://lightrag.local",
+        client=httpx.Client(transport=httpx.MockTransport(handler), base_url="http://lightrag.local"),
+    )
+
+    status = adapter.document_status("track-1")
+
+    assert status["track_id"] == "track-1"
+    assert status["document_id"] is None
+    assert status["status"] == "indexing"
 
 
 def test_remote_adapter_rejects_unknown_track_status() -> None:

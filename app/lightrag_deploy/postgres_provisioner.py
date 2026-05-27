@@ -42,8 +42,8 @@ class LightRAGPostgresProvisioner:
 
         self._ensure_role(domain.postgres_user, self.settings.postgres_password)
         self._ensure_database(domain.postgres_database, domain.postgres_user)
-        self._grant_database_privileges(domain.postgres_database, domain.postgres_user)
         extensions = self._ensure_extensions(domain.postgres_database)
+        self._grant_database_privileges(domain.postgres_database, domain.postgres_user)
 
         return LightRAGPostgresProvisionResult(
             database=domain.postgres_database,
@@ -66,21 +66,28 @@ class LightRAGPostgresProvisioner:
                 return cur.fetchone() is not None
 
     def _ensure_role(self, username: str, password: str) -> None:
+        if not username or not username.strip():
+            raise ValueError("LightRAG postgres username cannot be empty")
+        if not password:
+            raise ValueError("LightRAG postgres password cannot be empty")
+
         with psycopg.connect(self.admin_dsn, autocommit=True) as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (username,))
                 role_exists = cur.fetchone() is not None
                 if role_exists:
                     cur.execute(
-                        sql.SQL("ALTER ROLE {} WITH LOGIN PASSWORD %s").format(
-                            sql.Identifier(username)
-                        ),
-                        (password,),
+                        sql.SQL("ALTER ROLE {} WITH LOGIN PASSWORD {}").format(
+                            sql.Identifier(username),
+                            sql.Literal(password),
+                        )
                     )
                     return
                 cur.execute(
-                    sql.SQL("CREATE ROLE {} LOGIN PASSWORD %s").format(sql.Identifier(username)),
-                    (password,),
+                    sql.SQL("CREATE ROLE {} WITH LOGIN PASSWORD {}").format(
+                        sql.Identifier(username),
+                        sql.Literal(password),
+                    )
                 )
 
     def _ensure_database(self, database: str, owner: str) -> None:
@@ -143,6 +150,18 @@ class LightRAGPostgresProvisioner:
                         "GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO {}"
                     ).format(sql.Identifier(username))
                 )
+                cur.execute("SELECT 1 FROM pg_namespace WHERE nspname = 'ag_catalog'")
+                if cur.fetchone() is not None:
+                    cur.execute(
+                        sql.SQL("GRANT USAGE ON SCHEMA ag_catalog TO {}").format(
+                            sql.Identifier(username)
+                        )
+                    )
+                    cur.execute(
+                        sql.SQL("GRANT SELECT ON TABLE ag_catalog.ag_graph TO {}").format(
+                            sql.Identifier(username)
+                        )
+                    )
 
     def _ensure_extensions(self, database: str) -> dict[str, PostgresExtensionStatus]:
         db_dsn = _dsn_with_database(self.admin_dsn, database)
@@ -154,11 +173,32 @@ class LightRAGPostgresProvisioner:
                     self.settings.postgres_age_extension,
                 ):
                     try:
-                        cur.execute(
-                            sql.SQL("CREATE EXTENSION IF NOT EXISTS {}").format(
-                                sql.Identifier(extension)
+                        if extension == self.settings.postgres_age_extension:
+                            cur.execute(
+                                sql.SQL("CREATE EXTENSION IF NOT EXISTS {} CASCADE").format(
+                                    sql.Identifier(extension)
+                                )
                             )
-                        )
+                            cur.execute(
+                                sql.SQL(
+                                    "ALTER DATABASE {} SET session_preload_libraries = {}"
+                                ).format(
+                                    sql.Identifier(database),
+                                    sql.Literal(extension),
+                                )
+                            )
+                            cur.execute(
+                                sql.SQL(
+                                    "ALTER DATABASE {} SET search_path = public, "
+                                    'ag_catalog, "$user"'
+                                ).format(sql.Identifier(database))
+                            )
+                        else:
+                            cur.execute(
+                                sql.SQL("CREATE EXTENSION IF NOT EXISTS {}").format(
+                                    sql.Identifier(extension)
+                                )
+                            )
                     except Exception as exc:  # pragma: no cover - image-dependent
                         statuses[extension] = PostgresExtensionStatus(
                             name=extension,
@@ -176,6 +216,13 @@ class LightRAGPostgresProvisioner:
             raise RuntimeError(
                 f"{self.settings.postgres_vector_extension} extension is required for "
                 f"LightRAG PGVectorStorage in {database}: {message}"
+            )
+        age_status = statuses.get(self.settings.postgres_age_extension)
+        if age_status is None or age_status.status != "ok":
+            message = age_status.message if age_status else "extension was not attempted"
+            raise RuntimeError(
+                f"{self.settings.postgres_age_extension} extension is required for "
+                f"LightRAG PGGraphStorage in {database}: {message}"
             )
         return statuses
 

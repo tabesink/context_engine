@@ -2555,7 +2555,7 @@ def test_lightrag_domain_admin_api_lifecycle_routes_remain_available() -> None:
             create = client.post(
                 "/admin/lightrag/domains",
                 headers=admin_headers,
-                json={"domain_id": "fatigue", "display_name": "Fatigue Manuals"},
+                json={"domain_id": "fatigue", "display_name": "Fatigue Manuals", "start": True},
             )
             up = client.post("/admin/lightrag/domains/fatigue/up", headers=admin_headers)
             down = client.post("/admin/lightrag/domains/fatigue/down", headers=admin_headers)
@@ -2565,6 +2565,7 @@ def test_lightrag_domain_admin_api_lifecycle_routes_remain_available() -> None:
 
         assert create.status_code == 200
         assert create.json()["id"] == "fatigue"
+        assert create.json()["status"] == "running"
         assert up.status_code == 200
         assert up.json()["operation"] == "up"
         assert down.status_code == 200

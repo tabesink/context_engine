@@ -311,6 +311,7 @@ export function KnowledgeGraphSettingsPanel() {
       display_name: displayName || undefined,
       host_port: parsedHostPort,
       embedding_profile_id: selectedEmbeddingProfileId,
+      start: true,
       top_k: topK,
       chunk_top_k: chunkTopK,
       chunk_rerank_top_k: chunkRerankTopK,
@@ -327,7 +328,7 @@ export function KnowledgeGraphSettingsPanel() {
       setRetrievalProfile("balanced");
       applyProfileDefaults("balanced");
       setCreateOpen(false);
-      setNotice(`Created domain ${domainId}`);
+      setNotice(`Created and started domain ${domainId}`);
       await refreshAll();
     } catch (nextError) {
       setError(getErrorMessage(nextError, "Failed to create domain"));
@@ -635,11 +636,11 @@ export function KnowledgeGraphSettingsPanel() {
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled={Boolean(uploadBusyByDomain[domain.id])}
+                    disabled={!isRunning || Boolean(uploadBusyByDomain[domain.id])}
                     onClick={() => triggerUpload(domain.id)}
                     className={pillButtonClassName}
                   >
-                    {uploadBusyByDomain[domain.id] ? "Uploading..." : "Upload document"}
+                    {uploadBusyByDomain[domain.id] ? "Uploading..." : isRunning ? "Upload document" : "Start before upload"}
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => openDocumentsDialog(domain.id)} className={pillButtonClassName}>
                     View documents

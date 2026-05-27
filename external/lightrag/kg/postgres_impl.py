@@ -675,9 +675,15 @@ class PostgreSQLDB:
             await connection.execute(  # type: ignore
                 'SET search_path = ag_catalog, "$user", public'
             )
-            await connection.execute(  # type: ignore
-                f"select create_graph('{graph_name}')"
+            graph_exists = await connection.fetchval(  # type: ignore
+                "SELECT EXISTS(SELECT 1 FROM ag_catalog.ag_graph WHERE name = $1)",
+                graph_name,
             )
+            if not graph_exists:
+                await connection.execute(  # type: ignore
+                    "SELECT create_graph($1)",
+                    graph_name,
+                )
         except (
             asyncpg.exceptions.InvalidSchemaNameError,
             asyncpg.exceptions.UniqueViolationError,

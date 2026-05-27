@@ -21,18 +21,20 @@ class FakeProfile:
         self,
         *,
         profile_id: str,
+        kind: str,
         provider: str,
         binding: str,
         base_url: str,
         model: str,
-        dimensions: int,
+        api_key_env_var: str | None = None,
+        dimensions: int | None = None,
     ) -> None:
         self.id = profile_id
-        self.kind = "embedding"
+        self.kind = kind
         self.provider = provider
         self.binding = binding
         self.base_url = base_url
-        self.api_key_env_var = None
+        self.api_key_env_var = api_key_env_var
         self.model = model
         self.dimensions = dimensions
         self.token_limit = 8192
@@ -45,6 +47,7 @@ class FakeProfileResolver:
     def __init__(self) -> None:
         self.default = FakeProfile(
             profile_id="openai-text-embedding-3-small",
+            kind="embedding",
             provider="openai",
             binding="openai",
             base_url="https://api.openai.com/v1",
@@ -53,17 +56,38 @@ class FakeProfileResolver:
         )
         self.alt = FakeProfile(
             profile_id="openai-text-embedding-3-large",
+            kind="embedding",
             provider="openai",
             binding="openai",
             base_url="https://api.openai.com/v1",
             model="text-embedding-3-large",
             dimensions=3072,
         )
+        self.llm = FakeProfile(
+            profile_id="bedrock-gpt-oss-120b",
+            kind="llm",
+            provider="bedrock_openai",
+            binding="openai",
+            base_url="https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1",
+            api_key_env_var="AWS_BEARER_TOKEN_BEDROCK",
+            model="openai.gpt-oss-120b-1:0",
+        )
+        self.secrets = {
+            "AWS_BEARER_TOKEN_BEDROCK": "stored-bedrock-key",
+            "OPENAI_API_KEY": "stored-openai-key",
+        }
 
     def resolve_embedding_profile(self, embedding_profile_id: str | None = None) -> FakeProfile:
         if embedding_profile_id == self.alt.id:
             return self.alt
         return self.default
+
+    def resolve_llm_profile(self, llm_profile_id: str | None = None) -> FakeProfile:
+        del llm_profile_id
+        return self.llm
+
+    def get_provider_secret_value(self, secret_name: str | None) -> str | None:
+        return self.secrets.get(secret_name or "")
 
 
 class FakeRunner:
@@ -256,6 +280,34 @@ def test_create_domain_keeps_provider_keys_in_domain_env_only(tmp_path: Path) ->
     assert "test-openai-key" not in compose_text
 
 
+def test_create_domain_uses_default_llm_profile_for_domain_env(tmp_path: Path) -> None:
+    settings = replace(
+        _settings_with_provider(tmp_path),
+        llm_binding_host="http://stale-provider.local/v1",
+        llm_binding_api_key="stale-runtime-key",
+        llm_model="mistral-nemo:latest",
+    )
+    service = LightRAGDomainService(
+        settings=settings,
+        runner=FakeRunner(),
+        profile_resolver=FakeProfileResolver(),
+        now=lambda: datetime(2026, 5, 18, 14, 30, tzinfo=UTC),
+    )
+
+    service.create_domain(LightRAGDomainCreateRequest(domain_id="manual-domain"))
+
+    env_text = (tmp_path / "lightrag/domains/manual-domain/domain.env").read_text(
+        encoding="utf-8"
+    )
+
+    assert "LLM_BINDING=openai" in env_text
+    assert "LLM_BINDING_HOST=https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1" in env_text
+    assert "LLM_BINDING_API_KEY=stored-bedrock-key" in env_text
+    assert "LLM_MODEL=openai.gpt-oss-120b-1:0" in env_text
+    assert "mistral-nemo:latest" not in env_text
+    assert "stale-runtime-key" not in env_text
+
+
 def test_create_domain_auto_selects_next_available_port(tmp_path: Path) -> None:
     service = _service(tmp_path)
 
@@ -342,9 +394,15 @@ def test_docker_operations_call_runner_with_domain_service_name(tmp_path: Path) 
     service = _service(tmp_path, runner)
     service.create_domain(LightRAGDomainCreateRequest(domain_id="fatigue"))
 
-    assert service.up("fatigue").status == "succeeded"
+    assert (
+        service.up("fatigue", reachability=FakeReachability(), attempts=1, sleep_seconds=0).status
+        == "succeeded"
+    )
     assert service.down("fatigue").status == "succeeded"
-    assert service.recreate("fatigue").status == "succeeded"
+    assert (
+        service.recreate("fatigue", reachability=FakeReachability(), attempts=1, sleep_seconds=0).status
+        == "succeeded"
+    )
 
     assert runner.calls == [
         ("build", "lightrag_fatigue"),
@@ -355,18 +413,39 @@ def test_docker_operations_call_runner_with_domain_service_name(tmp_path: Path) 
     ]
 
 
-def test_docker_operations_update_manifest_runtime_status(tmp_path: Path) -> None:
+def test_docker_operations_mark_started_domain_running_when_probe_is_healthy(tmp_path: Path) -> None:
     service = _service(tmp_path, FakeRunner())
     service.create_domain(LightRAGDomainCreateRequest(domain_id="fatigue"))
+    reachability = FakeReachability(healthy=True)
 
-    service.up("fatigue")
+    service.up("fatigue", reachability=reachability, attempts=1, sleep_seconds=0)
     running = service.get_domain("fatigue")
+
+    assert reachability.calls == ["fatigue"]
+    assert running.status == "running"
+    assert running.is_healthy is True
+
+
+def test_docker_operations_keep_started_domain_unverified_when_probe_fails(tmp_path: Path) -> None:
+    service = _service(tmp_path, FakeRunner())
+    service.create_domain(LightRAGDomainCreateRequest(domain_id="fatigue"))
+    reachability = FakeReachability(healthy=False)
+
+    service.up("fatigue", reachability=reachability, attempts=1, sleep_seconds=0)
+    running = service.get_domain("fatigue")
+
+    assert reachability.calls == ["fatigue"]
+    assert running.status == "running_unverified"
+    assert running.is_healthy is False
+
+
+def test_docker_operations_update_manifest_stopped_status(tmp_path: Path) -> None:
+    service = _service(tmp_path, FakeRunner())
+    service.create_domain(LightRAGDomainCreateRequest(domain_id="fatigue"))
 
     service.down("fatigue")
     stopped = service.get_domain("fatigue")
 
-    assert running.status == "running_unverified"
-    assert running.is_healthy is False
     assert stopped.status == "stopped"
     assert stopped.is_healthy is False
 

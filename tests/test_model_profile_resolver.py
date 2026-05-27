@@ -40,3 +40,27 @@ def test_resolver_falls_back_to_default_embedding_profile() -> None:
 
     assert profile.id == "openai-text-embedding-3-small"
 
+
+def test_resolver_falls_back_to_default_llm_profile() -> None:
+    _reset_state()
+    with SessionLocal() as session:
+        service = AIModelSettingsService(AIModelSettingsRepository(session))
+        service.get_settings()
+        resolver = ModelProfileResolver(service)
+        profile = resolver.resolve_llm_profile()
+
+    assert profile.id == "openai-gpt-4o-mini"
+    assert profile.kind == "llm"
+
+
+def test_resolver_uses_explicit_llm_profile() -> None:
+    _reset_state()
+    with SessionLocal() as session:
+        service = AIModelSettingsService(AIModelSettingsRepository(session))
+        service.get_settings()
+        resolver = ModelProfileResolver(service)
+        profile = resolver.resolve_llm_profile("bedrock-gpt-oss-120b")
+
+    assert profile.id == "bedrock-gpt-oss-120b"
+    assert profile.model == "openai.gpt-oss-120b-1:0"
+

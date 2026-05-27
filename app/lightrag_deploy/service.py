@@ -17,6 +17,7 @@ from app.lightrag_deploy.errors import DomainNotFoundError, PermanentDeleteDisab
 from app.lightrag_deploy.manifest import DomainManifestStore
 from app.lightrag_deploy.models import (
     DomainEmbeddingSnapshot,
+    DomainLLMSnapshot,
     DomainRetrievalDefaults,
     LightRAGDomain,
     LightRAGDomainCreateRequest,
@@ -24,7 +25,7 @@ from app.lightrag_deploy.models import (
     LightRAGDomainRepairResult,
     LightRAGDomainRemoveResponse,
 )
-from app.lightrag_deploy.paths import DomainPathResolver
+from app.lightrag_deploy.paths import DomainPathResolver, DomainPaths
 from app.lightrag_deploy.postgres_provisioner import LightRAGPostgresProvisioner
 from app.lightrag_deploy.settings import LightRAGDeploySettings
 from app.services.model_profile_resolver import ModelProfileResolver
@@ -130,7 +131,7 @@ class LightRAGDomainService:
         )
         domain = self._ensure_postgres_identity(domain)
         self._provision_domain_postgres(domain)
-        write_domain_env(domain, self.settings, paths, self._provider_secrets_for_domain(domain))
+        self._write_domain_env(domain, paths)
         self.manifest.add_domain(domain)
         self.compose.write(self.list_domains())
         return domain
@@ -140,12 +141,7 @@ class LightRAGDomainService:
         for domain in domains:
             domain = self._ensure_postgres_identity(domain)
             self._provision_domain_postgres(domain)
-            write_domain_env(
-                domain,
-                self.settings,
-                self.paths.ensure_domain_paths(domain.id),
-                self._provider_secrets_for_domain(domain),
-            )
+            self._write_domain_env(domain, self.paths.ensure_domain_paths(domain.id))
         self.compose.write(self.list_domains())
 
     def lock_embedding_for_domain(
@@ -173,15 +169,17 @@ class LightRAGDomainService:
         self.manifest.update_domain(updated)
         return updated
 
-    def up(self, domain_id: str) -> LightRAGDomainOperationResult:
+    def up(
+        self,
+        domain_id: str,
+        *,
+        reachability: LightRAGReachabilityService | None = None,
+        attempts: int = 5,
+        sleep_seconds: float = 1.0,
+    ) -> LightRAGDomainOperationResult:
         domain = self._ensure_postgres_identity(self.get_domain(domain_id))
         self._provision_domain_postgres(domain)
-        write_domain_env(
-            domain,
-            self.settings,
-            self.paths.ensure_domain_paths(domain.id),
-            self._provider_secrets_for_domain(domain),
-        )
+        self._write_domain_env(domain, self.paths.ensure_domain_paths(domain.id))
         self.compose.write(self.list_domains())
         build_result = self.runner.build(domain.service_name)
         if build_result.exit_code != 0:
@@ -189,7 +187,16 @@ class LightRAGDomainService:
             self._persist_domain_status(domain, command_succeeded=False, running=False)
             return result
         result = self._operation_result(domain, "up", self.runner.up(domain.service_name))
-        self._persist_domain_status(domain, command_succeeded=result.status == "succeeded", running=True)
+        if result.status == "succeeded":
+            health = self._probe_domain_health(
+                domain.id,
+                reachability=reachability,
+                attempts=attempts,
+                sleep_seconds=sleep_seconds,
+            )
+            self._persist_started_domain_health(domain, health)
+        else:
+            self._persist_domain_status(domain, command_succeeded=False, running=False)
         return result
 
     def down(self, domain_id: str) -> LightRAGDomainOperationResult:
@@ -198,15 +205,17 @@ class LightRAGDomainService:
         self._persist_domain_status(domain, command_succeeded=result.status == "succeeded", running=False)
         return result
 
-    def recreate(self, domain_id: str) -> LightRAGDomainOperationResult:
+    def recreate(
+        self,
+        domain_id: str,
+        *,
+        reachability: LightRAGReachabilityService | None = None,
+        attempts: int = 5,
+        sleep_seconds: float = 1.0,
+    ) -> LightRAGDomainOperationResult:
         domain = self._ensure_postgres_identity(self.get_domain(domain_id))
         self._provision_domain_postgres(domain)
-        write_domain_env(
-            domain,
-            self.settings,
-            self.paths.ensure_domain_paths(domain.id),
-            self._provider_secrets_for_domain(domain),
-        )
+        self._write_domain_env(domain, self.paths.ensure_domain_paths(domain.id))
         self.compose.write(self.list_domains())
         build_result = self.runner.build(domain.service_name)
         if build_result.exit_code != 0:
@@ -214,7 +223,16 @@ class LightRAGDomainService:
             self._persist_domain_status(domain, command_succeeded=False, running=False)
             return result
         result = self._operation_result(domain, "recreate", self.runner.recreate(domain.service_name))
-        self._persist_domain_status(domain, command_succeeded=result.status == "succeeded", running=True)
+        if result.status == "succeeded":
+            health = self._probe_domain_health(
+                domain.id,
+                reachability=reachability,
+                attempts=attempts,
+                sleep_seconds=sleep_seconds,
+            )
+            self._persist_started_domain_health(domain, health)
+        else:
+            self._persist_domain_status(domain, command_succeeded=False, running=False)
         return result
 
     def repair(
@@ -227,12 +245,7 @@ class LightRAGDomainService:
     ) -> LightRAGDomainRepairResult:
         domain = self._ensure_postgres_identity(self.get_domain(domain_id))
         provision_result = self._provision_domain_postgres(domain)
-        write_domain_env(
-            domain,
-            self.settings,
-            self.paths.ensure_domain_paths(domain.id),
-            self._provider_secrets_for_domain(domain),
-        )
+        self._write_domain_env(domain, self.paths.ensure_domain_paths(domain.id))
         self.compose.write(self.list_domains())
         build_result = self.runner.build(domain.service_name)
         if build_result.exit_code != 0:
@@ -262,14 +275,12 @@ class LightRAGDomainService:
                 provision_result=provision_result,
             )
 
-        probe = reachability or LightRAGReachabilityService()
-        health: LightRAGReachabilityReport | None = None
-        for attempt in range(max(1, attempts)):
-            health = probe.probe(domain_id)
-            if health.healthy:
-                break
-            if attempt < attempts - 1:
-                sleep(sleep_seconds)
+        health = self._probe_domain_health(
+            domain_id,
+            reachability=reachability,
+            attempts=attempts,
+            sleep_seconds=sleep_seconds,
+        )
 
         updated = self._persist_domain_health(domain, health)
         return self._repair_response(
@@ -311,15 +322,51 @@ class LightRAGDomainService:
             port += 1
         return port
 
-    def _provider_secrets_for_domain(self, domain: LightRAGDomain) -> dict[str, str] | None:
-        if not self.profile_resolver or not domain.embedding or not domain.embedding.api_key_env_var:
+    def _write_domain_env(self, domain: LightRAGDomain, paths: DomainPaths) -> None:
+        llm = self._default_llm_snapshot()
+        write_domain_env(
+            domain,
+            self.settings,
+            paths,
+            self._provider_secrets_for_domain(domain, llm=llm),
+            llm=llm,
+        )
+
+    def _default_llm_snapshot(self) -> DomainLLMSnapshot | None:
+        if not self.profile_resolver or not hasattr(self.profile_resolver, "resolve_llm_profile"):
+            return None
+        profile = self.profile_resolver.resolve_llm_profile()
+        return DomainLLMSnapshot(
+            profile_id=profile.id,
+            provider=profile.provider,
+            binding=profile.binding,
+            base_url=profile.base_url,
+            api_key_env_var=profile.api_key_env_var,
+            model=profile.model,
+        )
+
+    def _provider_secrets_for_domain(
+        self,
+        domain: LightRAGDomain,
+        *,
+        llm: DomainLLMSnapshot | None = None,
+    ) -> dict[str, str] | None:
+        if not self.profile_resolver:
             return None
         if not hasattr(self.profile_resolver, "get_provider_secret_value"):
             return None
-        secret_value = self.profile_resolver.get_provider_secret_value(domain.embedding.api_key_env_var)
-        if not secret_value:
-            return None
-        return {domain.embedding.api_key_env_var: secret_value}
+        secrets: dict[str, str] = {}
+        secret_names = [
+            llm.api_key_env_var if llm else None,
+            domain.embedding.api_key_env_var if domain.embedding else None,
+        ]
+        for secret_name in secret_names:
+            if not secret_name or secret_name in secrets:
+                continue
+            secret_value = self.profile_resolver.get_provider_secret_value(secret_name)
+            if secret_value:
+                secrets[secret_name] = secret_value
+        return secrets or None
 
     def _default_postgres_provisioner(self) -> LightRAGPostgresProvisioner | None:
         if self.settings.storage_backend != "postgres":
@@ -393,6 +440,33 @@ class LightRAGDomainService:
             )
         self.manifest.update_domain(updated)
         return updated
+
+    def _probe_domain_health(
+        self,
+        domain_id: str,
+        *,
+        reachability: LightRAGReachabilityService | None = None,
+        attempts: int = 5,
+        sleep_seconds: float = 1.0,
+    ) -> LightRAGReachabilityReport | None:
+        probe = reachability or LightRAGReachabilityService()
+        health: LightRAGReachabilityReport | None = None
+        for attempt in range(max(1, attempts)):
+            health = probe.probe(domain_id)
+            if health.healthy:
+                break
+            if attempt < attempts - 1:
+                sleep(sleep_seconds)
+        return health
+
+    def _persist_started_domain_health(
+        self,
+        domain: LightRAGDomain,
+        health: LightRAGReachabilityReport | None,
+    ) -> LightRAGDomain:
+        if health and health.healthy:
+            return self._persist_domain_health(domain, health)
+        return self._persist_domain_status(domain, command_succeeded=True, running=True)
 
     def _persist_domain_health(
         self,

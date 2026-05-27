@@ -139,7 +139,12 @@ class LightRAGRemoteAdapter:
                 for chunk in chunks
             ],
         }
-        data = self.post_json("/documents/ingest_chunks", json=payload)
+        try:
+            data = self.post_json("/documents/ingest_chunks", json=payload)
+        except LightRAGUpstreamError as exc:
+            if exc.upstream_status != 404:
+                raise
+            data = self.post_json("/documents/texts", json=self._texts_payload_from_chunks(chunks))
         return {
             "track_id": data.get("track_id"),
             "status": self._normalize_upload_status(data.get("status")),
@@ -150,10 +155,11 @@ class LightRAGRemoteAdapter:
         data = self.get_json(f"/documents/track_status/{track_id}")
         documents = data.get("documents") if isinstance(data, dict) else None
         first = documents[0] if isinstance(documents, list) and documents else {}
+        raw_status = first.get("status")
         return {
             "document_id": first.get("id"),
             "track_id": data.get("track_id", track_id),
-            "status": self._normalize_status(first.get("status")),
+            "status": self._normalize_status(raw_status) if raw_status is not None else "indexing",
             "error": first.get("error_msg"),
             "metadata": first.get("metadata") or {},
         }
@@ -264,6 +270,21 @@ class LightRAGRemoteAdapter:
         if normalized in {"processed", "ready", "complete", "completed"}:
             return "ready"
         raise LightRAGInvalidResponse(f"Unknown LightRAG upload status: {value!r}")
+
+    def _texts_payload_from_chunks(self, chunks: list[SourceChunk]) -> dict[str, Any]:
+        return {
+            "texts": [chunk.text for chunk in chunks],
+            "file_sources": [self._file_source_for_chunk(chunk) for chunk in chunks],
+        }
+
+    @staticmethod
+    def _file_source_for_chunk(chunk: SourceChunk) -> str:
+        source = (
+            chunk.metadata.get("source_path")
+            or chunk.metadata.get("filename")
+            or chunk.document_id
+        )
+        return f"{source}#chunk={chunk.chunk_id}"
 
     def _normalize_status(self, value: Any) -> str:
         normalized = str(value or "").lower()

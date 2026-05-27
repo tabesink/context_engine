@@ -18,6 +18,7 @@ class LightRAGDomainCreateRequest(BaseModel):
     display_name: str | None = None
     host_port: int | None = Field(default=None, ge=1, le=65535)
     embedding_profile_id: str | None = None
+    start: bool = False
     make_default: bool = False
     top_k: int = Field(default=10, ge=1)
     chunk_top_k: int = Field(default=10, ge=1)
@@ -39,6 +40,15 @@ class DomainEmbeddingSnapshot(BaseModel):
     send_dimensions: bool = False
     use_base64: bool = True
     fingerprint: str
+
+
+class DomainLLMSnapshot(BaseModel):
+    profile_id: str
+    provider: str
+    binding: str
+    base_url: str
+    api_key_env_var: str | None = None
+    model: str
 
 
 class LightRAGDomain(BaseModel):

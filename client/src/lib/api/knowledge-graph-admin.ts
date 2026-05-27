@@ -6,6 +6,7 @@ export type CreateKnowledgeGraphDomainPayload = {
   display_name?: string;
   host_port?: number;
   embedding_profile_id?: string;
+  start?: boolean;
   top_k?: number;
   chunk_top_k?: number;
   chunk_rerank_top_k?: number;
