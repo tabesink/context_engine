@@ -145,3 +145,40 @@ def test_domain_env_can_use_stored_provider_secret(tmp_path: Path) -> None:
 
     assert "EMBEDDING_BINDING_API_KEY=stored-openai-key" in env_text
 
+
+def test_embedding_lock_metadata_persists_on_first_lock(tmp_path: Path) -> None:
+    resolver = StaticResolver("openai-text-embedding-3-small", "text-embedding-3-small", 1536)
+    service = LightRAGDomainService(
+        settings=_settings(tmp_path),
+        profile_resolver=resolver,
+        now=lambda: datetime(2026, 5, 18, 14, 30, tzinfo=UTC),
+    )
+    service.create_domain(LightRAGDomainCreateRequest(domain_id="fatigue"))
+
+    updated = service.lock_embedding_for_domain(domain_id="fatigue", document_id="doc-1")
+
+    assert updated.embedding_locked_at is not None
+    assert updated.embedding_lock_reason == "first_successful_ingestion"
+    assert updated.first_ingested_document_id == "doc-1"
+    persisted = service.get_domain("fatigue")
+    assert persisted.embedding_locked_at is not None
+
+
+def test_embedding_lock_is_idempotent(tmp_path: Path) -> None:
+    timestamps = [
+        datetime(2026, 5, 18, 14, 30, tzinfo=UTC),
+        datetime(2026, 5, 18, 14, 31, tzinfo=UTC),
+    ]
+
+    def next_now() -> datetime:
+        return timestamps.pop(0) if timestamps else datetime(2026, 5, 18, 14, 31, tzinfo=UTC)
+
+    resolver = StaticResolver("openai-text-embedding-3-small", "text-embedding-3-small", 1536)
+    service = LightRAGDomainService(settings=_settings(tmp_path), profile_resolver=resolver, now=next_now)
+    service.create_domain(LightRAGDomainCreateRequest(domain_id="fatigue"))
+    first = service.lock_embedding_for_domain(domain_id="fatigue", document_id="doc-1")
+    second = service.lock_embedding_for_domain(domain_id="fatigue", document_id="doc-2")
+
+    assert first.embedding_locked_at is not None
+    assert second.first_ingested_document_id == "doc-1"
+

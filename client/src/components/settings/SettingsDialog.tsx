@@ -22,7 +22,7 @@ const ROUTES: Array<{ id: SettingsRoute; label: string; icon: ComponentType<{ cl
   { id: "general", label: "General", icon: Settings },
   { id: "account", label: "Account", icon: UserRound },
   { id: "knowledge-graph", label: "Knowledge Graph", icon: Workflow },
-  { id: "ai-models", label: "AI Models", icon: Bot },
+  { id: "provider", label: "Provider", icon: Bot },
 ];
 
 export function SettingsDialog() {
@@ -30,7 +30,7 @@ export function SettingsDialog() {
   const route = useSettingsDialogStore((state) => state.route);
   const isAdmin = useAuthStore(selectIsAdmin);
   const allowedRoutes = React.useMemo(
-    () => ROUTES.filter((item) => item.id !== "ai-models" || isAdmin),
+    () => ROUTES.filter((item) => item.id !== "provider" || isAdmin),
     [isAdmin],
   );
   const activeRouteLabel = allowedRoutes.find((item) => item.id === route)?.label ?? "General";
@@ -87,7 +87,7 @@ export function SettingsDialog() {
               {route === "general" ? <GeneralSettingsPanel /> : null}
               {route === "account" ? <AccountSettingsPanel embedded /> : null}
               {route === "knowledge-graph" ? <KnowledgeGraphSettingsPanel /> : null}
-              {route === "ai-models" ? <AIModelSettingsPanel /> : null}
+              {route === "provider" ? <AIModelSettingsPanel /> : null}
             </section>
           </div>
         </DialogPrimitive.Content>

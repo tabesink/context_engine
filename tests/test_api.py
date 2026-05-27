@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import UTC, datetime
 from pathlib import Path
@@ -1696,6 +1697,75 @@ def test_admin_upload_to_missing_lightrag_domain_fails_before_forwarding(
 
     assert response.status_code == 404
     assert response.json()["detail"] == "LightRAG domain 'missing' does not exist"
+
+
+def test_admin_upload_fails_when_domain_provider_secret_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    manifest_path = tmp_path / "domains.json"
+    now = "2026-05-18T14:30:00Z"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "domains": [
+                    {
+                        "id": "fatigue",
+                        "display_name": "Fatigue",
+                        "workspace": "fatigue",
+                        "postgres_database": "lightrag_fatigue",
+                        "postgres_user": "lightrag_fatigue",
+                        "host": "127.0.0.1",
+                        "host_port": 9621,
+                        "container_port": 9621,
+                        "base_url": "http://127.0.0.1:9621",
+                        "host_base_url": "http://127.0.0.1:9621",
+                        "container_base_url": "http://lightrag_fatigue:9621",
+                        "container_name": "context_engine_lightrag_fatigue",
+                        "service_name": "lightrag_fatigue",
+                        "status": "ready",
+                        "paths": {"root": str(tmp_path / "lightrag" / "domains" / "fatigue")},
+                        "created_at": now,
+                        "updated_at": now,
+                        "embedding": {
+                            "profile_id": "openai-text-embedding-3-small",
+                            "provider": "openai",
+                            "binding": "openai",
+                            "base_url": "https://api.openai.com/v1",
+                            "api_key_env_var": "OPENAI_API_KEY",
+                            "model": "text-embedding-3-small",
+                            "dimensions": 1536,
+                            "token_limit": 8192,
+                            "send_dimensions": False,
+                            "use_base64": True,
+                            "fingerprint": "openai:text-embedding-3-small:1536",
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("INDEX_JOBS_INLINE", "false")
+    monkeypatch.setenv("LIGHTRAG_DOMAIN_REGISTRY", str(manifest_path))
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    get_settings.cache_clear()
+
+    with TestClient(app) as client:
+        _seed_users()
+        admin_headers = _login(client, "admin@example.com")
+        response = client.post(
+            "/admin/documents/upload",
+            headers=admin_headers,
+            data={"lightrag_domain_id": "fatigue"},
+            files={"file": ("manual.txt", b"Remote document body.", "text/plain")},
+        )
+
+    assert response.status_code == 400
+    assert (
+        response.json()["detail"]
+        == "LightRAG domain 'fatigue' is missing required provider secret: OPENAI_API_KEY"
+    )
 
 
 def test_retrieve_uses_selected_lightrag_domain(monkeypatch: pytest.MonkeyPatch) -> None:

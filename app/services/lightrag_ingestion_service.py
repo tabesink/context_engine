@@ -14,6 +14,8 @@ from app.document_processing.pipeline import TextDoclingParser
 from app.document_processing.quality import StructureQualityScorer
 from app.domain.models import DocumentStatus
 from app.integrations.lightrag_remote_adapter import LightRAGRemoteAdapter
+from app.lightrag_deploy.manifest import DomainManifestStore
+from app.lightrag_deploy.settings import LightRAGDeploySettings
 from app.storage.repositories.document_processing import DocumentProcessingRepository
 from app.storage.repositories.documents import DocumentRepository
 from app.storage.tables import DocumentRow
@@ -61,6 +63,7 @@ class LightRAGIngestionService:
         chunk_builder: StructureAwareChunkBuilder | None = None,
         quality_scorer: StructureQualityScorer | None = None,
         artifact_store: DocumentProcessingArtifactStore | None = None,
+        domain_manifest: DomainManifestStore | None = None,
         now: Callable[[], datetime] | None = None,
     ):
         self.documents = DocumentRepository(session)
@@ -74,6 +77,8 @@ class LightRAGIngestionService:
         self.adapter_factory = adapter_factory or LightRAGRemoteAdapter.for_domain
         self.lock_factory = lock_factory or (lambda domain_id: RedisIngestLock(domain_id=domain_id))
         self.now = now or (lambda: datetime.now(UTC))
+        self.deploy_settings = LightRAGDeploySettings.from_app_settings(get_settings())
+        self.domain_manifest = domain_manifest or DomainManifestStore(self.deploy_settings.manifest_path)
 
     def ingest_document(self, document_id: str) -> None:
         document = self.documents.get(document_id)
@@ -186,6 +191,10 @@ class LightRAGIngestionService:
         )
         if status == "ready":
             self.documents.update_status(document, DocumentStatus.READY)
+            self._lock_domain_embedding(
+                domain_id=str(lightrag.get("domain_id") or lightrag.get("domain") or ""),
+                document_id=document.id,
+            )
         elif status == "failed":
             self.documents.update_status(
                 document,
@@ -194,3 +203,20 @@ class LightRAGIngestionService:
             )
         elif status != "indexing":
             raise ValueError(f"Unknown LightRAG status: {status!r}")
+
+    def _lock_domain_embedding(self, *, domain_id: str, document_id: str) -> None:
+        if not domain_id:
+            return
+        domain = self.domain_manifest.get_domain(domain_id)
+        if domain is None or domain.embedding is None or domain.embedding_locked_at is not None:
+            return
+        now = self.now()
+        updated = domain.model_copy(
+            update={
+                "embedding_locked_at": now,
+                "embedding_lock_reason": "first_successful_ingestion",
+                "first_ingested_document_id": document_id,
+                "updated_at": now,
+            }
+        )
+        self.domain_manifest.update_domain(updated)

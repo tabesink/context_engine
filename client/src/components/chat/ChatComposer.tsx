@@ -50,9 +50,11 @@ export function ChatComposer({
   }, [resize, value]);
 
   useEffect(() => {
-    if (!menuOpen) {
+    if (menuOpen) return;
+    const task = window.setTimeout(() => {
       setRetrievalOpen(false);
-    }
+    }, 0);
+    return () => window.clearTimeout(task);
   }, [menuOpen]);
 
   const send = useCallback(async () => {

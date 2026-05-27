@@ -21,8 +21,11 @@ This file records what the current codebase implements. For the intended build s
 - Remote LightRAG integration for semantic retrieval/runtime, including HTTP adapter, domain manifest resolution, retrieval strategy, queued ingestion jobs, status refresh, and graph proxy routes.
 - LightRAG domain deployment control behind `LIGHTRAG_DEPLOY_ENABLED`, including managed domain manifest, generated domain env files, generated compose file, fakeable Docker Compose runner, admin APIs in `app/api/routes/lightrag_admin.py`, user-safe `GET /lightrag/domains`, domain-aware upload/query selection, and per-domain PostgreSQL storage metadata.
 - LightRAG provider configuration contract for generated `domain.env` files, including `LLM_BINDING*`, `EMBEDDING_BINDING*`, and `OPENAI_LLM_*` tuning fields sourced from root `LIGHTRAG_*` settings.
+- Admin AI settings are exposed through `/admin/ai-settings` (defaults, profile CRUD, profile test, and encrypted provider secret upsert/clear), and frontend Settings now uses the `provider` route key/label for this surface.
 - Bedrock OpenAI-compatible support path by keeping LightRAG bindings as `openai` and setting `LIGHTRAG_LLM_BINDING_HOST` to `https://bedrock-runtime.<region>.amazonaws.com/openai/v1`.
 - Provider secret boundary enforcement: provider API keys are emitted only to per-domain `domain.env` files and are not written into compose output, manifest JSON, or admin/user domain API responses.
+- Upload readiness now enforces provider/embedding validation for snapshot-backed domains before ingest jobs are enqueued, including required provider secret presence checks.
+- Domain manifest entries now support embedding lock metadata (`embedding_locked_at`, `embedding_lock_reason`, `first_ingested_document_id`) and ingestion writes the lock on first successful domain ingestion.
 - Contract files under `external/lightrag/contract/`.
 - Behavior tests for API, routing policy, LightRAG adapter, LightRAG deploy stack, auth guardrails, upload, retrieval flow, queued jobs, and worker failure handling. Legacy CLI/TUI tests remain while deprecation cleanup is pending.
 - Canonical document-processing scaffolding for `DocumentStructure`, pages, sections, blocks, source chunks, assets, structure quality, storage paths, and document-processing repository persistence.
@@ -47,8 +50,10 @@ Runtime behavior:
 - Admin upload stores a local mirror record/file and enqueues `document_ingest`.
 - Uploads require a LightRAG domain manifest so requested domains are explicit and validated.
 - Upload responses include the LightRAG ingestion job id; LightRAG status is tracked under `documents.metadata.lightrag`.
+- Upload metadata now records domain embedding identity (`embedding_profile_id`, `embedding_fingerprint`) when snapshot data is available.
 - Domain-scoped graph routes under `GET /lightrag/domains/{domain_id}/graphs` and `GET /lightrag/domains/{domain_id}/graph/labels...` proxy to the remote LightRAG service.
 - LightRAG timeouts/connect failures become `503`; auth/upstream/invalid-response failures become `502`.
+- Frontend chat now submits retrieval through `POST /retrieve`, maps `RetrieveResponse` into context-panel items via adapter code, and loads workspace tree content from `GET /lightrag/domains/{domain_id}/workspace-tree`.
 
 ## Intentional Simplifications
 

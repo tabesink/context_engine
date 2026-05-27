@@ -77,6 +77,12 @@ if [[ -z "$client_api_base" ]]; then
   client_api_base="${NEXT_PUBLIC_BACKEND_BASE_URL:-}"
 fi
 if [[ -z "$client_api_base" ]]; then
+  client_api_base="$(read_env_value NEXT_PUBLIC_API_URL "$env_file")"
+fi
+if [[ -z "$client_api_base" ]]; then
+  client_api_base="$(read_env_value NEXT_PUBLIC_BACKEND_BASE_URL "$env_file")"
+fi
+if [[ -z "$client_api_base" ]]; then
   client_api_base="http://${api_host}:${api_port}"
 fi
 

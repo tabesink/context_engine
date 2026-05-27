@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,8 @@ from app.document_processing.models import (  # noqa: E402
 )
 from app.document_processing.storage_paths import DocumentStoragePaths  # noqa: E402
 from app.domain.models import DocumentStatus  # noqa: E402
+from app.lightrag_deploy.manifest import DomainManifestStore  # noqa: E402
+from app.lightrag_deploy.models import DomainEmbeddingSnapshot, LightRAGDomain  # noqa: E402
 from app.services.lightrag_ingestion_service import LightRAGIngestionService  # noqa: E402
 from app.storage import tables  # noqa: E402, F401
 from app.storage.db import Base  # noqa: E402
@@ -341,3 +344,71 @@ def test_lightrag_ingestion_fails_when_structure_parser_errors(
     assert refreshed.status == DocumentStatus.FAILED.value
     assert refreshed.meta["lightrag"]["status"] == "failed"
     assert "Structure-aware ingestion failed" in refreshed.meta["lightrag"]["message"]
+
+
+def test_lightrag_ingestion_locks_domain_embedding_on_first_success(
+    tmp_path: Path,
+    session: Session,
+) -> None:
+    manifest = DomainManifestStore(tmp_path / "domains.json")
+    now = datetime(2026, 5, 18, 14, 30, tzinfo=UTC)
+    manifest.add_domain(
+        LightRAGDomain(
+            id="fatigue",
+            display_name="Fatigue",
+            workspace="fatigue",
+            postgres_database="lightrag_fatigue",
+            postgres_user="lightrag_fatigue",
+            host="127.0.0.1",
+            host_port=9621,
+            container_port=9621,
+            base_url="http://127.0.0.1:9621",
+            host_base_url="http://127.0.0.1:9621",
+            container_base_url="http://lightrag_fatigue:9621",
+            container_name="context_engine_lightrag_fatigue",
+            service_name="lightrag_fatigue",
+            status="running",
+            paths={"root": str(tmp_path / "lightrag" / "domains" / "fatigue")},
+            embedding=DomainEmbeddingSnapshot(
+                profile_id="openai-text-embedding-3-small",
+                provider="openai",
+                binding="openai",
+                base_url="https://api.openai.com/v1",
+                model="text-embedding-3-small",
+                dimensions=1536,
+                fingerprint="openai:text-embedding-3-small:1536",
+            ),
+            created_at=now,
+            updated_at=now,
+        )
+    )
+
+    upload_path = tmp_path / "manual.txt"
+    upload_path.write_text("Hello world", encoding="utf-8")
+    lock = FakeLock()
+    adapter = CapturingChunkAdapter()
+    document = DocumentRepository(session).create(
+        owner_id=None,
+        filename="manual.txt",
+        content_type="text/plain",
+        storage_path=str(upload_path),
+        metadata={
+            "semantic_engine": "lightrag",
+            "lightrag": {"domain_id": "fatigue", "status": "queued"},
+        },
+        status=DocumentStatus.INDEXING,
+    )
+
+    LightRAGIngestionService(
+        session,
+        adapter_factory=lambda domain_id: adapter,
+        lock_factory=lambda domain_id: lock,
+        artifact_store=_artifact_store(tmp_path),
+        domain_manifest=manifest,
+        now=lambda: now,
+    ).ingest_document(document.id)
+
+    updated_domain = manifest.get_domain("fatigue")
+    assert updated_domain is not None
+    assert updated_domain.embedding_locked_at is not None
+    assert updated_domain.first_ingested_document_id == document.id

@@ -3,18 +3,23 @@
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PanelRightOpen } from "lucide-react";
+import { fetchWorkspaceTree } from "@/api/workspace-tree";
 import { ChatComposer } from "@/components/chat/ChatComposer";
 import { ConversationView } from "@/components/chat/ConversationView";
 import { SidePanel } from "@/components/chat/SidePanel";
 import { WorkspaceTree } from "@/components/chat/WorkspaceTree";
-import { streamBackendMessage } from "@/lib/lightrag-client";
+import { retrieveApi, toRetrievalMode } from "@/lib/api/retrieve";
+import { adaptRetrieveResponse } from "@/lib/retrieve-response-adapter";
 import {
   createId,
-  mergeSourceTrees,
   setChatSessionState,
   useChatSessionStore,
 } from "@/stores/chat-session-store";
-import { DEFAULT_LIGHTRAG_PORT, useLightRagDomainStore } from "@/stores/lightrag-domain-store";
+import {
+  DEFAULT_LIGHTRAG_PORT,
+  getSelectedLightRagDomainId,
+  useLightRagDomainStore,
+} from "@/stores/lightrag-domain-store";
 import type {
   AssistantTurnContext,
   ActivityEntry,
@@ -38,7 +43,6 @@ type ConnectionStatus = "idle" | "connecting" | "streaming" | "error";
 
 export function LightRagChatShell() {
   const messages = useChatSessionStore((session) => session.messages);
-  const conversationId = useChatSessionStore((session) => session.conversationId);
   const contextByAssistantId = useChatSessionStore((session) => session.contextByAssistantId);
   const progressByAssistantId = useChatSessionStore((session) => session.progressByAssistantId);
   const selectedAssistantMessageId = useChatSessionStore((session) => session.selectedAssistantMessageId);
@@ -80,19 +84,32 @@ export function LightRagChatShell() {
     void loadDomains();
   }, [loadDomains]);
 
+  const loadWorkspaceForDomain = useCallback(async (domainId: string) => {
+    try {
+      const tree = await fetchWorkspaceTree(domainId);
+      setChatSessionState({ sourceTree: tree });
+    } catch {
+      // Keep chat interactive even if workspace-tree fetch fails.
+    }
+  }, []);
+
   useEffect(() => {
     const defaults = selectedDomain?.retrieval_defaults;
     if (!defaults) return;
-    setRetrievalSettings((current) => ({
-      ...current,
-      top_k: defaults.top_k,
-      chunk_top_k: defaults.chunk_top_k,
-      chunk_rerank_top_k: defaults.chunk_rerank_top_k,
-      max_token_for_text_unit: defaults.max_token_for_text_unit,
-      max_token_for_global_context: defaults.max_token_for_global_context,
-      max_token_for_local_context: defaults.max_token_for_local_context,
-    }));
-  }, [selectedDomain]);
+    const task = window.setTimeout(() => {
+      setRetrievalSettings((current) => ({
+        ...current,
+        top_k: defaults.top_k,
+        chunk_top_k: defaults.chunk_top_k,
+        chunk_rerank_top_k: defaults.chunk_rerank_top_k,
+        max_token_for_text_unit: defaults.max_token_for_text_unit,
+        max_token_for_global_context: defaults.max_token_for_global_context,
+        max_token_for_local_context: defaults.max_token_for_local_context,
+      }));
+    }, 0);
+    void loadWorkspaceForDomain(selectedDomain.domain_id);
+    return () => window.clearTimeout(task);
+  }, [loadWorkspaceForDomain, selectedDomain]);
 
   const effectiveRetrievalSettings: RetrievalSettings = useMemo(
     () => ({
@@ -134,7 +151,7 @@ export function LightRagChatShell() {
       const activity: ActivityEntry = {
         id: activityId,
         label: "Query started",
-        detail: `Retrieving ${settingsForTurn.mode} context from Knowledge Graph port ${settingsForTurn.lightrag_port ?? "default"}.`,
+        detail: `Retrieving ${settingsForTurn.mode} context from domain ${getSelectedLightRagDomainId()}.`,
         createdAt: Date.now(),
         status: "pending",
       };
@@ -145,96 +162,43 @@ export function LightRagChatShell() {
       setLastError(undefined);
       setStatus("connecting");
       setSelectedAssistantMessageId(assistantId);
-
-      let receivedChunk = false;
-      let activeAssistantId = assistantId;
+      const activeAssistantId = assistantId;
 
       try {
-        await streamBackendMessage({
-          conversationId,
+        const domainId = getSelectedLightRagDomainId();
+        const response = await retrieveApi.retrieve({
           query: content,
-          retrievalSettings: settingsForTurn,
-          onMetadata: (event) => {
-            const backendAssistantId = event.assistant_message_id;
-            const previousAssistantId = activeAssistantId;
-            setMessages((current) =>
-              current.map((message) =>
-                message.id === previousAssistantId ? { ...message, id: backendAssistantId } : message,
-              ),
-            );
-            setContextByAssistantId((current) => {
-              if (!current[previousAssistantId] || previousAssistantId === backendAssistantId) {
-                return current;
-              }
-              const moved = current[previousAssistantId];
-              if (!moved) return current;
-              const next = { ...current };
-              delete next[previousAssistantId];
-              next[backendAssistantId] = { ...moved, assistantMessageId: backendAssistantId };
-              return next;
-            });
-            setProgressByAssistantId((current) => {
-              if (!current[previousAssistantId] || previousAssistantId === backendAssistantId) {
-                return current;
-              }
-              const moved = current[previousAssistantId];
-              const next = { ...current };
-              delete next[previousAssistantId];
-              next[backendAssistantId] = moved;
-              return next;
-            });
-            setSelectedAssistantMessageId((current) =>
-              current === previousAssistantId || !current ? backendAssistantId : current,
-            );
-            activeAssistantId = backendAssistantId;
-          },
-          onProgress: (event) => {
-            const assistantMessageId = event.assistant_message_id || activeAssistantId;
-            setProgressByAssistantId((current) => ({
-              ...current,
-              [assistantMessageId]: [...(current[assistantMessageId] ?? []), event],
-            }));
-            setSelectedAssistantMessageId((current) => current ?? assistantMessageId);
-            setStatus("streaming");
-          },
-          onContext: (event) => {
-            const assistantMessageId = event.assistant_message_id || activeAssistantId;
-            setChatSessionState((session) => {
-              const nextSourceTree = mergeSourceTrees(session.sourceTree, event.source_tree);
-              return {
-                contextByAssistantId: {
-                  ...session.contextByAssistantId,
-                  [assistantMessageId]: {
-                    assistantMessageId,
-                    contextItems: event.context_items,
-                    retrievalSummary: event.retrieval_summary,
-                    sourceTree: nextSourceTree,
-                  },
-                },
-                sourceTree: nextSourceTree,
-              };
-            });
-            setSelectedAssistantMessageId(assistantMessageId);
-            setStatus("streaming");
-          },
-          onChunk: (chunk) => {
-            receivedChunk = true;
-            setStatus("streaming");
-            setMessages((current) =>
-              current.map((message) =>
-                message.id === activeAssistantId ? { ...message, content: `${message.content}${chunk}` } : message,
-              ),
-            );
-          },
+          mode: toRetrievalMode(settingsForTurn.mode),
+          lightrag_domain_id: domainId,
+          top_k: settingsForTurn.top_k,
+          include_assets: true,
         });
-
-        if (!receivedChunk) {
-          setMessages((current) =>
-            current.map((message) =>
-              message.id === activeAssistantId ? { ...message, content: "No response returned." } : message,
-            ),
-          );
+        const adapted = adaptRetrieveResponse(response);
+        const workspaceTree = await fetchWorkspaceTree(domainId).catch(() => null);
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === activeAssistantId
+              ? { ...message, content: adapted.assistantText }
+              : message,
+          ),
+        );
+        setContextByAssistantId((current) => ({
+          ...current,
+          [activeAssistantId]: {
+            assistantMessageId: activeAssistantId,
+            contextItems: adapted.contextItems,
+            retrievalSummary: adapted.retrievalSummary,
+            sourceTree: workspaceTree ?? sourceTree ?? { root_id: "root", items: {} },
+          },
+        }));
+        if (workspaceTree) {
+          setChatSessionState({ sourceTree: workspaceTree });
         }
+        setProgressByAssistantId((current) => ({
+          ...current,
+          [activeAssistantId]: [],
+        }));
+        setStatus("streaming");
 
         setActivities((current) =>
           current.map((activity) =>
@@ -253,7 +217,7 @@ export function LightRagChatShell() {
             item.id === activeAssistantId
               ? {
                   ...item,
-                  content: item.content || "The query failed before a response was returned.",
+                  content: item.content || "The retrieval request failed before a response was returned.",
                   error: message,
                 }
               : item,
@@ -269,7 +233,6 @@ export function LightRagChatShell() {
       }
     },
     [
-      conversationId,
       effectiveRetrievalSettings,
       setActivities,
       setContextByAssistantId,
@@ -278,6 +241,7 @@ export function LightRagChatShell() {
       setProgressByAssistantId,
       setSelectedAssistantMessageId,
       setStatus,
+      sourceTree,
     ],
   );
 

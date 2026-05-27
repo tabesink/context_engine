@@ -58,6 +58,9 @@ class LightRAGDomain(BaseModel):
     status: str = "configured"
     paths: dict[str, str]
     embedding: DomainEmbeddingSnapshot | None = None
+    embedding_locked_at: datetime | None = None
+    embedding_lock_reason: str | None = None
+    first_ingested_document_id: str | None = None
     retrieval_defaults: DomainRetrievalDefaults = Field(default_factory=DomainRetrievalDefaults)
     is_default: bool = False
     is_healthy: bool | None = None
@@ -68,6 +71,8 @@ class LightRAGDomain(BaseModel):
         data = self.model_dump(exclude_none=True)
         data["created_at"] = _datetime_to_z(self.created_at)
         data["updated_at"] = _datetime_to_z(self.updated_at)
+        if self.embedding_locked_at is not None:
+            data["embedding_locked_at"] = _datetime_to_z(self.embedding_locked_at)
         return data
 
 

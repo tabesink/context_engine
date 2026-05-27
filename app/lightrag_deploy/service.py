@@ -134,6 +134,31 @@ class LightRAGDomainService:
             )
         self.compose.write(self.list_domains())
 
+    def lock_embedding_for_domain(
+        self,
+        *,
+        domain_id: str,
+        document_id: str,
+        reason: str = "first_successful_ingestion",
+    ) -> LightRAGDomain:
+        domain = self.get_domain(domain_id)
+        if domain.embedding is None:
+            raise ValueError(
+                f"LightRAG domain '{domain_id}' cannot be locked because embedding is not configured"
+            )
+        if domain.embedding_locked_at is not None:
+            return domain
+        updated = domain.model_copy(
+            update={
+                "embedding_locked_at": self.now(),
+                "embedding_lock_reason": reason,
+                "first_ingested_document_id": document_id,
+                "updated_at": self.now(),
+            }
+        )
+        self.manifest.update_domain(updated)
+        return updated
+
     def up(self, domain_id: str) -> LightRAGDomainOperationResult:
         domain = self.get_domain(domain_id)
         self.compose.write(self.list_domains())

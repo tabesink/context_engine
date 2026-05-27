@@ -105,6 +105,9 @@ export type ContextPanelItem = {
   file_path?: string | null;
   chunk_id?: string | null;
   source_type?: string | null;
+  document_id?: string | null;
+  reference_id?: string | null;
+  score?: number | null;
   handles: Record<string, unknown>;
 };
 
