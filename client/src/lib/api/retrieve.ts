@@ -25,6 +25,7 @@ export type RetrieveEvidence = {
   document_title?: string | null;
   chunk_id?: string | null;
   reference_id?: string | null;
+  workspace_node_id?: string | null;
   metadata: Record<string, unknown>;
 };
 

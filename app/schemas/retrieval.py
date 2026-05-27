@@ -28,6 +28,7 @@ class EvidenceResponse(BaseModel):
     document_title: str | None = None
     chunk_id: str | None = None
     reference_id: str | None = None
+    workspace_node_id: str | None = None
     metadata: dict = Field(default_factory=dict)
 
 

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PanelRightOpen } from "lucide-react";
+import { fetchWorkspaceSourceContext } from "@/api/workspace-context";
 import { fetchWorkspaceTree } from "@/api/workspace-tree";
 import { ChatComposer } from "@/components/chat/ChatComposer";
 import { ConversationView } from "@/components/chat/ConversationView";
@@ -10,6 +11,7 @@ import { SidePanel } from "@/components/chat/SidePanel";
 import { WorkspaceTree } from "@/components/chat/WorkspaceTree";
 import { retrieveApi, toRetrievalMode } from "@/lib/api/retrieve";
 import { adaptRetrieveResponse } from "@/lib/retrieve-response-adapter";
+import { errorMessage } from "@/lib/utils";
 import {
   createId,
   setChatSessionState,
@@ -26,6 +28,8 @@ import type {
   ChatMessage,
   PipelineProgressEvent,
   RetrievalSettings,
+  SidePanelTab,
+  SourceTreeItem,
 } from "@/types/chat";
 
 const DEFAULT_RETRIEVAL_SETTINGS: RetrievalSettings = {
@@ -47,6 +51,8 @@ export function LightRagChatShell() {
   const progressByAssistantId = useChatSessionStore((session) => session.progressByAssistantId);
   const selectedAssistantMessageId = useChatSessionStore((session) => session.selectedAssistantMessageId);
   const sourceTree = useChatSessionStore((session) => session.sourceTree);
+  const sidePanelTab = useChatSessionStore((session) => session.sidePanelTab);
+  const sourceNavigator = useChatSessionStore((session) => session.sourceNavigator);
   const status = useChatSessionStore((session) => session.status);
   const lastError = useChatSessionStore((session) => session.lastError);
   const [retrievalSettings, setRetrievalSettings] = useState<RetrievalSettings>(DEFAULT_RETRIEVAL_SETTINGS);
@@ -78,6 +84,9 @@ export function LightRagChatShell() {
   }, []);
   const setLastError = useCallback((lastError: string | undefined) => {
     setChatSessionState({ lastError });
+  }, []);
+  const setSidePanelTab = useCallback((sidePanelTab: SidePanelTab) => {
+    setChatSessionState({ sidePanelTab });
   }, []);
 
   useEffect(() => {
@@ -162,6 +171,7 @@ export function LightRagChatShell() {
       setLastError(undefined);
       setStatus("connecting");
       setSelectedAssistantMessageId(assistantId);
+      setSidePanelTab("context-stream");
       const activeAssistantId = assistantId;
 
       try {
@@ -240,9 +250,73 @@ export function LightRagChatShell() {
       setMessages,
       setProgressByAssistantId,
       setSelectedAssistantMessageId,
+      setSidePanelTab,
       setStatus,
       sourceTree,
     ],
+  );
+
+  const loadSourceNavigator = useCallback(async (nodeId: string, selectedTreeLabel?: string) => {
+    const domainId = getSelectedLightRagDomainId();
+    setSidePanelOpen(true);
+    setChatSessionState({
+      sidePanelTab: "source-navigator",
+      sourceNavigator: {
+        selectedDomainId: domainId,
+        selectedNodeId: nodeId,
+        selectedTreeLabel,
+        loading: true,
+      },
+    });
+
+    try {
+      const context = await fetchWorkspaceSourceContext(domainId, nodeId);
+      setChatSessionState((current) => {
+        if (current.sourceNavigator.selectedNodeId !== nodeId) return {};
+        return {
+          sourceNavigator: {
+            ...current.sourceNavigator,
+            context,
+            loading: false,
+            error: undefined,
+          },
+        };
+      });
+    } catch (error) {
+      const message = errorMessage(error, "Could not load source context.");
+      setChatSessionState((current) => {
+        if (current.sourceNavigator.selectedNodeId !== nodeId) return {};
+        return {
+          sourceNavigator: {
+            ...current.sourceNavigator,
+            loading: false,
+            error: message,
+          },
+        };
+      });
+    }
+  }, []);
+
+  const handleWorkspaceNodeSelect = useCallback(
+    (nodeId: string, item: SourceTreeItem) => {
+      void loadSourceNavigator(nodeId, item.name);
+    },
+    [loadSourceNavigator],
+  );
+
+  const handleOpenSourceFromContext = useCallback(
+    (nodeId: string) => {
+      void loadSourceNavigator(nodeId);
+    },
+    [loadSourceNavigator],
+  );
+
+  const handleAssistantSelect = useCallback(
+    (messageId: string) => {
+      setSelectedAssistantMessageId(messageId);
+      setSidePanelTab("context-stream");
+    },
+    [setSelectedAssistantMessageId, setSidePanelTab],
   );
 
   const busy = status === "connecting" || status === "streaming";
@@ -257,7 +331,11 @@ export function LightRagChatShell() {
   return (
     <div className="flex h-full min-h-0 bg-[var(--background)]">
       <aside className="min-h-0 w-[280px] shrink-0 overflow-y-auto bg-[var(--background)] px-4 py-3">
-        <WorkspaceTree sourceTree={displayedSourceTree} />
+        <WorkspaceTree
+          sourceTree={displayedSourceTree}
+          selectedNodeId={sourceNavigator.selectedNodeId}
+          onNodeSelect={handleWorkspaceNodeSelect}
+        />
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="px-4 py-3">
@@ -279,7 +357,7 @@ export function LightRagChatShell() {
           messages={messages}
           busy={busy}
           selectedAssistantMessageId={selectedAssistantMessageId}
-          onAssistantSelect={setSelectedAssistantMessageId}
+          onAssistantSelect={handleAssistantSelect}
           emptyState={
             <div className="mx-auto flex max-w-lg flex-col items-center gap-3 px-4 text-center">
               <Image src="/logo.svg" alt="Knowledge Graph" width={112} height={112} priority className="h-28 w-28 text-[var(--foreground)]" />
@@ -321,13 +399,17 @@ export function LightRagChatShell() {
       <SidePanel
         open={sidePanelOpen}
         onOpenChange={setSidePanelOpen}
+        activeTab={sidePanelTab}
+        onActiveTabChange={setSidePanelTab}
         contextItems={selectedContext?.contextItems ?? []}
+        sourceNavigator={sourceNavigator}
         retrievalSummary={selectedContext?.retrievalSummary}
         progressItems={selectedProgress ?? []}
         lastError={displayedLastError}
         hasAssistantMessages={hasAssistantMessages}
         selectedAssistantMessageId={selectedAssistantMessageId}
         loadingSelection={loadingSelection}
+        onOpenSourceFromContext={handleOpenSourceFromContext}
       />
     </div>
   );

@@ -17,14 +17,35 @@ const emptyTree: SourceTreeSnapshot = {
 
 const indent = 20;
 
-export function WorkspaceTree({ sourceTree }: { sourceTree?: SourceTreeSnapshot | null }) {
+type WorkspaceTreeProps = {
+  sourceTree?: SourceTreeSnapshot | null;
+  selectedNodeId?: string;
+  onNodeSelect?: (nodeId: string, item: SourceTreeItem) => void;
+};
+
+export function WorkspaceTree({ sourceTree, selectedNodeId, onNodeSelect }: WorkspaceTreeProps) {
   const data = normalizeSourceTree(sourceTree);
   const revision = sourceTreeRevision(data);
 
-  return <WorkspaceTreeContent key={revision} sourceTree={data} />;
+  return (
+    <WorkspaceTreeContent
+      key={revision}
+      sourceTree={data}
+      selectedNodeId={selectedNodeId}
+      onNodeSelect={onNodeSelect}
+    />
+  );
 }
 
-function WorkspaceTreeContent({ sourceTree }: { sourceTree: SourceTreeSnapshot }) {
+function WorkspaceTreeContent({
+  sourceTree,
+  selectedNodeId,
+  onNodeSelect,
+}: {
+  sourceTree: SourceTreeSnapshot;
+  selectedNodeId?: string;
+  onNodeSelect?: (nodeId: string, item: SourceTreeItem) => void;
+}) {
   const data = sourceTree;
   const tree = useTree<SourceTreeItem>({
     initialState: {
@@ -53,28 +74,38 @@ function WorkspaceTreeContent({ sourceTree }: { sourceTree: SourceTreeSnapshot }
         label="Workspace source tree"
         tree={tree}
       >
-        {tree.getItems().map((item) => (
-          <TreeItem
-            key={item.getId()}
-            className="bg-[repeating-linear-gradient(to_right,transparent_0,transparent_calc(var(--tree-indent)-1px),var(--border)_calc(var(--tree-indent)-1px),var(--border)_var(--tree-indent))] bg-[length:var(--tree-item-indent)_100%] bg-no-repeat"
-            item={item}
-          >
-            <TreeItemLabel className="relative py-1 before:absolute before:inset-x-0 before:-inset-y-0.5 before:-z-10 before:bg-[var(--background)] text-xs leading-5 text-[var(--foreground)] hover:bg-[var(--muted)]">
-              <span className="flex min-w-0 items-center gap-1.5">
-                {item.isFolder() ? (
-                  item.isExpanded() ? (
-                    <FolderOpenIcon className="pointer-events-none size-3.5 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
+        {tree.getItems().map((item) => {
+          const itemId = item.getId();
+          const selected = itemId === selectedNodeId;
+          return (
+            <TreeItem
+              key={itemId}
+              className="bg-[repeating-linear-gradient(to_right,transparent_0,transparent_calc(var(--tree-indent)-1px),var(--border)_calc(var(--tree-indent)-1px),var(--border)_var(--tree-indent))] bg-[length:var(--tree-item-indent)_100%] bg-no-repeat"
+              item={item}
+            >
+              <TreeItemLabel
+                onClick={() => onNodeSelect?.(itemId, item.getItemData())}
+                className={[
+                  "relative py-1 before:absolute before:inset-x-0 before:-inset-y-0.5 before:-z-10 before:bg-[var(--background)] text-xs leading-5 text-[var(--foreground)] hover:bg-[var(--muted)]",
+                  selected ? "bg-[var(--muted)]" : "",
+                ].join(" ")}
+              >
+                <span className="flex min-w-0 items-center gap-1.5">
+                  {item.isFolder() ? (
+                    item.isExpanded() ? (
+                      <FolderOpenIcon className="pointer-events-none size-3.5 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
+                    ) : (
+                      <FolderIcon className="pointer-events-none size-3.5 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
+                    )
                   ) : (
-                    <FolderIcon className="pointer-events-none size-3.5 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
-                  )
-                ) : (
-                  <FileIcon className="pointer-events-none size-3.5 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
-                )}
-                <span className="truncate">{item.getItemName()}</span>
-              </span>
-            </TreeItemLabel>
-          </TreeItem>
-        ))}
+                    <FileIcon className="pointer-events-none size-3.5 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
+                  )}
+                  <span className="truncate">{item.getItemName()}</span>
+                </span>
+              </TreeItemLabel>
+            </TreeItem>
+          );
+        })}
       </Tree>
       {data.items.workspace?.children?.length ? null : (
         <p className="mt-3 text-xs leading-5 text-[var(--muted-foreground)]">Retrieved source structure will appear after the first backend chat turn.</p>

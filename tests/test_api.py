@@ -2372,12 +2372,14 @@ def test_retrieve_response_contract_fields_are_stable(monkeypatch: pytest.Monkey
         "document_title",
         "chunk_id",
         "reference_id",
+        "workspace_node_id",
         "metadata",
     }
     assert evidence["source_path"] == "manual.pdf"
     assert evidence["document_title"] == "Service Manual"
     assert evidence["chunk_id"] == "chunk-1"
     assert evidence["reference_id"] == "ref-1"
+    assert evidence["workspace_node_id"] == f"chunk:{document_id}:chunk-1"
 
 
 def test_lightrag_domain_admin_api_requires_admin_and_enabled(
@@ -3282,6 +3284,131 @@ def test_workspace_tree_filters_domain_and_returns_structure_references(
     assert asset_node["kind"] == "asset"
     assert asset_node["asset_id"] == "asset-1"
     assert asset_node["thumbnail_url"] == f"/documents/{manual_id}/assets/asset-1/thumbnail"
+
+
+def test_workspace_context_returns_exact_chunk_context(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    create_db_and_tables()
+    _configure_lightrag_manifest(monkeypatch, tmp_path, {"manualctx": "Manual Context"})
+    with SessionLocal() as session:
+        documents = DocumentRepository(session)
+        manual = documents.create(
+            owner_id=None,
+            lightrag_domain_id="manualctx",
+            filename="manual.pdf",
+            content_type="application/pdf",
+            storage_path=".data/uploads/manual.pdf",
+            metadata={"lightrag": {"domain_id": "manualctx"}},
+            status=DocumentStatus.READY,
+        )
+        section_id = f"{manual.id}-intro"
+        chunk_id = f"{manual.id}-chunk-ctx"
+        asset_id = f"{manual.id}-asset-ctx"
+        DocumentProcessingRepository(session).save_structure(
+            DocumentStructure(
+                document_id=manual.id,
+                source_file=manual.storage_path,
+                pages=[DocumentPage(page_number=4, text="Page four full source text.")],
+                sections=[
+                    DocumentSection(
+                        section_id=section_id,
+                        document_id=manual.id,
+                        title="Introduction",
+                        level=1,
+                        page_start=4,
+                        page_end=4,
+                    )
+                ],
+                source_chunks=[
+                    SourceChunk(
+                        chunk_id=chunk_id,
+                        document_id=manual.id,
+                        section_id=section_id,
+                        block_ids=[],
+                        text="Exact chunk source text.",
+                        page_start=4,
+                        page_end=4,
+                        asset_ids=[asset_id],
+                    )
+                ],
+                assets=[
+                    DocumentAsset(
+                        asset_id=asset_id,
+                        document_id=manual.id,
+                        asset_type="figure",
+                        storage_path=f".data/assets/{asset_id}.png",
+                        thumbnail_path=f".data/assets/{asset_id}-thumb.png",
+                        mime_type="image/png",
+                        content_hash="hash-asset-1",
+                        page_number=4,
+                        section_id=section_id,
+                        chunk_id=chunk_id,
+                        caption="Pump diagram",
+                    )
+                ],
+            )
+        )
+        manual_id = manual.id
+
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        response = client.get(
+            f"/lightrag/domains/manualctx/workspace-context?node_id=chunk:{manual_id}:{chunk_id}",
+            headers=user_headers,
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["kind"] == "chunk"
+    assert body["domain_id"] == "manualctx"
+    assert body["document"]["document_id"] == manual_id
+    assert body["section_id"] == section_id
+    assert body["page_start"] == 4
+    assert body["text"] == "Exact chunk source text."
+    assert body["assets"][0]["asset_id"] == asset_id
+    assert body["assets"][0]["thumbnail_url"] == f"/documents/{manual_id}/assets/{asset_id}/thumbnail"
+
+
+def test_workspace_context_rejects_invalid_and_cross_domain_nodes(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    create_db_and_tables()
+    _configure_lightrag_manifest(
+        monkeypatch,
+        tmp_path,
+        {"manualctx": "Manual Context", "otherctx": "Other Context"},
+    )
+    with SessionLocal() as session:
+        document = DocumentRepository(session).create(
+            owner_id=None,
+            lightrag_domain_id="manualctx",
+            filename="manual.pdf",
+            content_type="application/pdf",
+            storage_path=".data/uploads/manual.pdf",
+            metadata={"lightrag": {"domain_id": "manualctx"}},
+            status=DocumentStatus.READY,
+        )
+        document_id = document.id
+
+    with TestClient(app) as client:
+        _seed_users()
+        user_headers = _login(client, "user@example.com")
+        invalid = client.get(
+            "/lightrag/domains/manualctx/workspace-context?node_id=chunk:missing-value",
+            headers=user_headers,
+        )
+        cross_domain = client.get(
+            f"/lightrag/domains/otherctx/workspace-context?node_id=document:{document_id}",
+            headers=user_headers,
+        )
+
+    assert invalid.status_code == 400
+    assert invalid.json()["detail"] == "Invalid workspace node id"
+    assert cross_domain.status_code == 404
 
 
 def test_workspace_tree_supports_depth_and_asset_query_contract(

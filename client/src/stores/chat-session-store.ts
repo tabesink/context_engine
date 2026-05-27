@@ -6,6 +6,8 @@ import type {
   AssistantTurnContext,
   ChatMessage,
   PipelineProgressEvent,
+  SidePanelTab,
+  SourceNavigatorState,
   SourceTreeItem,
   SourceTreeSnapshot,
 } from "@/types/chat";
@@ -20,6 +22,8 @@ type ChatSessionState = {
   progressByAssistantId: Record<string, PipelineProgressEvent[]>;
   selectedAssistantMessageId?: string;
   sourceTree: SourceTreeSnapshot | null;
+  sidePanelTab: SidePanelTab;
+  sourceNavigator: SourceNavigatorState;
   status: ConnectionStatus;
   lastError?: string;
 };
@@ -35,6 +39,8 @@ let state: ChatSessionState = {
   contextByAssistantId: {},
   progressByAssistantId: {},
   sourceTree: null,
+  sidePanelTab: "context-stream",
+  sourceNavigator: { loading: false },
   status: "idle",
 };
 

@@ -2,12 +2,14 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
+from app.schemas.workspace_context import WorkspaceSourceContext
 from app.schemas.workspace_tree import WorkspaceTreeResponse
 from app.services.lightrag_domain_registry import (
     LightRAGDomainRegistry,
     LightRAGDomainRegistryError,
     lightrag_domain_http_exception,
 )
+from app.services.workspace_context_service import WorkspaceContextService
 from app.services.workspace_tree_service import WorkspaceTreeService
 from app.storage.db import get_session
 from app.storage.repositories.document_processing import DocumentProcessingRepository
@@ -42,5 +44,24 @@ def get_workspace_tree(
             depth=depth,
             include_assets=include_assets,
         )
+    except LightRAGDomainRegistryError as exc:
+        raise lightrag_domain_http_exception(exc) from exc
+
+
+@router.get("/{domain_id}/workspace-context")
+def get_workspace_context(
+    domain_id: str,
+    node_id: str = Query(..., min_length=1),
+    user: UserRow = Depends(get_current_user),
+    session: Session = Depends(get_session),
+    domain_registry: LightRAGDomainRegistry = Depends(get_domain_registry),
+) -> WorkspaceSourceContext:
+    service = WorkspaceContextService(
+        documents=DocumentRepository(session),
+        processing=DocumentProcessingRepository(session),
+        domain_registry=domain_registry,
+    )
+    try:
+        return service.build_for_node(domain_id=domain_id, node_id=node_id, user=user)
     except LightRAGDomainRegistryError as exc:
         raise lightrag_domain_http_exception(exc) from exc

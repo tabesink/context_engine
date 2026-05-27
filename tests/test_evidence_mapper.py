@@ -30,6 +30,7 @@ def test_evidence_mapper_preserves_page_and_section_metadata() -> None:
     assert response.page_start == 2
     assert response.page_end == 3
     assert response.section_title == "Installation"
+    assert response.workspace_node_id == f"page:{document_id}:2"
     assert response.metadata == {"source": "manual"}
 
 
@@ -54,9 +55,42 @@ def test_evidence_mapper_projects_display_metadata() -> None:
     assert response.document_title == "Service Manual"
     assert response.chunk_id == "chunk-001"
     assert response.reference_id == "ref-001"
+    assert response.workspace_node_id == f"chunk:{document_id}:chunk-001"
     assert response.metadata == {
         "source_path": "manual.pdf",
         "document_title": "Service Manual",
         "chunk_id": "chunk-001",
         "reference_id": "ref-001",
     }
+
+
+def test_evidence_mapper_preserves_explicit_workspace_node_id() -> None:
+    document_id = uuid4()
+    evidence = Evidence(
+        id="evidence-1",
+        document_id=document_id,
+        source_engine="lightrag",
+        text="Source evidence.",
+        metadata={
+            "chunk_id": "chunk-001",
+            "workspace_node_id": "section:doc-override:intro",
+        },
+    )
+
+    response = to_evidence_response(evidence)
+
+    assert response.workspace_node_id == "section:doc-override:intro"
+
+
+def test_evidence_mapper_falls_back_to_document_workspace_node_id() -> None:
+    document_id = uuid4()
+    evidence = Evidence(
+        id="evidence-1",
+        document_id=document_id,
+        source_engine="lightrag",
+        text="Source evidence.",
+    )
+
+    response = to_evidence_response(evidence)
+
+    assert response.workspace_node_id == f"document:{document_id}"

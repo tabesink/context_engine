@@ -107,6 +107,7 @@ export type ContextPanelItem = {
   source_type?: string | null;
   document_id?: string | null;
   reference_id?: string | null;
+  workspace_node_id?: string | null;
   score?: number | null;
   handles: Record<string, unknown>;
 };
@@ -150,6 +151,65 @@ export type SourceTreeSnapshot = {
   root_id: string;
   items: Record<string, SourceTreeItem>;
   expanded_item_ids?: string[];
+};
+
+export type SidePanelTab = "context-stream" | "source-navigator";
+
+export type WorkspaceContextBreadcrumbItem = {
+  id?: string | null;
+  kind: string;
+  title: string;
+};
+
+export type WorkspaceContextDocument = {
+  document_id: string;
+  title: string;
+  filename?: string | null;
+  content_type?: string | null;
+  status?: string | null;
+  source_path?: string | null;
+};
+
+export type WorkspaceContextAsset = {
+  asset_id: string;
+  document_id: string;
+  asset_type: string;
+  title: string;
+  caption?: string | null;
+  page_number?: number | null;
+  section_id?: string | null;
+  url?: string | null;
+  thumbnail_url?: string | null;
+  mime_type?: string | null;
+  metadata: Record<string, unknown>;
+};
+
+export type WorkspaceSourceContext = {
+  node_id: string;
+  kind: "domain" | "document" | "section" | "page" | "chunk" | "asset";
+  title: string;
+  domain_id: string;
+  breadcrumb: WorkspaceContextBreadcrumbItem[];
+  document?: WorkspaceContextDocument | null;
+  section_id?: string | null;
+  page_number?: number | null;
+  page_start?: number | null;
+  page_end?: number | null;
+  chunk_id?: string | null;
+  asset_id?: string | null;
+  summary?: string | null;
+  text?: string | null;
+  assets: WorkspaceContextAsset[];
+  metadata: Record<string, unknown>;
+};
+
+export type SourceNavigatorState = {
+  selectedDomainId?: string;
+  selectedNodeId?: string;
+  selectedTreeLabel?: string;
+  context?: WorkspaceSourceContext;
+  loading: boolean;
+  error?: string;
 };
 
 export type BackendStreamEvent =

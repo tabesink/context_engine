@@ -21,6 +21,7 @@ export function adaptRetrieveResponse(response: RetrieveResponse): AdaptedContex
     source_type: item.source_engine ?? null,
     document_id: item.document_id,
     reference_id: item.reference_id ?? null,
+    workspace_node_id: item.workspace_node_id ?? inferWorkspaceNodeId(item),
     score: item.score ?? null,
     handles: item.metadata ?? {},
   }));
@@ -33,4 +34,12 @@ export function adaptRetrieveResponse(response: RetrieveResponse): AdaptedContex
     retrievalSummary: summary,
     assistantText: assistantText || "No grounded answer text was returned.",
   };
+}
+
+function inferWorkspaceNodeId(item: RetrieveResponse["evidence"][number]) {
+  if (item.workspace_node_id) return item.workspace_node_id;
+  if (item.document_id && item.chunk_id) return `chunk:${item.document_id}:${item.chunk_id}`;
+  if (item.document_id && item.page_start) return `page:${item.document_id}:${item.page_start}`;
+  if (item.document_id) return `document:${item.document_id}`;
+  return null;
 }
