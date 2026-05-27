@@ -10,6 +10,7 @@ Path(".data").mkdir(parents=True, exist_ok=True)
 Path(".data/test_context_engine.db").unlink(missing_ok=True)
 
 import pytest  # noqa: E402
+import httpx  # noqa: E402
 from fastapi import HTTPException  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from pydantic import ValidationError  # noqa: E402
@@ -31,6 +32,7 @@ from app.lightrag_deploy.models import (  # noqa: E402
     LightRAGDomain,
     LightRAGDomainCreateRequest,
     LightRAGDomainOperationResult,
+    LightRAGDomainRepairResult,
     LightRAGDomainRemoveResponse,
 )
 from app.lightrag_deploy.service import LightRAGDomainService  # noqa: E402
@@ -1415,7 +1417,7 @@ def test_admin_upload_queues_lightrag_ingestion_when_enabled(
 ) -> None:
     manifest_path = tmp_path / "domains.json"
     manifest_path.write_text(
-        '{"domains":[{"id":"default","display_name":"Default","base_url":"http://lightrag-default.local","status":"ready"}]}',
+        '{"domains":[{"id":"default","display_name":"Default","base_url":"http://127.0.0.1:9621","status":"ready"}]}',
         encoding="utf-8",
     )
     monkeypatch.setenv("INDEX_JOBS_INLINE", "false")
@@ -1431,7 +1433,12 @@ def test_admin_upload_queues_lightrag_ingestion_when_enabled(
 
             return FakeQueuedJob()
 
+    def fake_health_get(url, **kwargs):
+        del url, kwargs
+        return httpx.Response(200)
+
     monkeypatch.setattr(JobService, "_queue", lambda self: FakeQueue())
+    monkeypatch.setattr("app.services.lightrag_reachability_service.httpx.get", fake_health_get)
 
     with TestClient(app) as client:
         _seed_users()
@@ -1532,6 +1539,55 @@ def test_admin_upload_to_selected_lightrag_domain_records_domain_metadata(
         stored = DocumentRepository(session).get(body["document"]["id"])
     assert stored is not None
     assert stored.lightrag_domain_id == "fatigue"
+
+
+def test_admin_upload_rejects_unreachable_lightrag_domain_before_queueing(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    settings = LightRAGDeploySettings(
+        enabled=True,
+        deploy_root=tmp_path / "lightrag",
+        domains_root=tmp_path / "lightrag/domains",
+        manifest_path=tmp_path / "lightrag/domains.json",
+        compose_file=tmp_path / "lightrag/compose.yml",
+        deleted_root=tmp_path / "lightrag/deleted",
+    )
+    LightRAGDomainService(settings=settings).create_domain(
+        LightRAGDomainCreateRequest(domain_id="fatigue", display_name="Fatigue Manuals")
+    )
+    monkeypatch.setenv("INDEX_JOBS_INLINE", "false")
+    monkeypatch.setenv("LIGHTRAG_DOMAIN_REGISTRY", str(settings.manifest_path))
+    get_settings.cache_clear()
+
+    class FailingQueue:
+        def enqueue(self, function: object, job_id: str):
+            del function, job_id
+            raise AssertionError("unreachable domain should not enqueue ingestion")
+
+    def fake_health_get(url, **kwargs):
+        del url, kwargs
+        raise httpx.ConnectError("[Errno -3] Temporary failure in name resolution")
+
+    monkeypatch.setattr(JobService, "_queue", lambda self: FailingQueue())
+    monkeypatch.setattr("app.services.lightrag_reachability_service.httpx.get", fake_health_get)
+
+    with TestClient(app) as client:
+        _seed_users()
+        admin_headers = _login(client, "admin@example.com")
+        response = client.post(
+            "/admin/documents/upload",
+            headers=admin_headers,
+            data={"lightrag_domain_id": "fatigue"},
+            files={"file": ("manual.txt", b"Remote document body.", "text/plain")},
+        )
+
+    assert response.status_code == 503
+    detail = response.json()["detail"]
+    assert detail["code"] == "lightrag_domain_unreachable"
+    assert detail["reason_code"] == "dns_failed"
+    assert detail["domain_id"] == "fatigue"
+    assert "not reachable from the current runtime network" in detail["message"]
 
 
 def test_lightrag_ingestion_job_uploads_polls_and_marks_document_ready(tmp_path: Path) -> None:
@@ -2456,6 +2512,28 @@ def test_lightrag_domain_admin_api_lifecycle_routes_remain_available() -> None:
                 service_name=f"lightrag_{domain_id}",
             )
 
+        def repair(self, domain_id: str) -> dict:
+            domains[domain_id] = domain_payload(domain_id, status="running")
+            return LightRAGDomainRepairResult(
+                id=domain_id,
+                domain_id=domain_id,
+                status="running",
+                service_name=f"lightrag_{domain_id}",
+                storage_backend="postgres",
+                postgres_database=f"lightrag_{domain_id}",
+                postgres_user=f"lightrag_{domain_id}",
+                postgres_role_exists=True,
+                postgres_database_exists=True,
+                extensions={"vector": {"name": "vector", "status": "ok", "message": None}},
+                host_base_url="http://127.0.0.1:9622",
+                container_base_url=f"http://lightrag_{domain_id}:9621",
+                runtime_base_url=f"http://lightrag_{domain_id}:9621",
+                docker_operation="succeeded",
+                health={"ok": True, "reason_code": None, "status_code": 200},
+                is_healthy=True,
+                message=None,
+            )
+
         def regenerate(self, domain_id: str) -> None:
             domains[domain_id] = domain_payload(domain_id, status="configured")
 
@@ -2482,6 +2560,7 @@ def test_lightrag_domain_admin_api_lifecycle_routes_remain_available() -> None:
             up = client.post("/admin/lightrag/domains/fatigue/up", headers=admin_headers)
             down = client.post("/admin/lightrag/domains/fatigue/down", headers=admin_headers)
             recreate = client.post("/admin/lightrag/domains/fatigue/recreate", headers=admin_headers)
+            repair = client.post("/admin/lightrag/domains/fatigue/repair", headers=admin_headers)
             remove = client.delete("/admin/lightrag/domains/fatigue", headers=admin_headers)
 
         assert create.status_code == 200
@@ -2492,6 +2571,14 @@ def test_lightrag_domain_admin_api_lifecycle_routes_remain_available() -> None:
         assert down.json()["operation"] == "down"
         assert recreate.status_code == 200
         assert recreate.json()["operation"] == "recreate"
+        assert repair.status_code == 200
+        assert repair.json()["runtime_base_url"] == "http://lightrag_fatigue:9621"
+        assert repair.json()["health"]["ok"] is True
+        assert repair.json()["storage_backend"] == "postgres"
+        assert repair.json()["postgres_database"] == "lightrag_fatigue"
+        assert repair.json()["postgres_user"] == "lightrag_fatigue"
+        assert repair.json()["postgres_role_exists"] is True
+        assert repair.json()["extensions"]["vector"]["status"] == "ok"
         assert remove.status_code == 200
         assert remove.json()["archived"] is True
     finally:

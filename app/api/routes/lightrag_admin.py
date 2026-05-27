@@ -9,6 +9,7 @@ from app.lightrag_deploy.models import (
     LightRAGDomainOperationResult,
     LightRAGDomainPurgePreview,
     LightRAGDomainPurgeResult,
+    LightRAGDomainRepairResult,
     LightRAGDomainRemoveResponse,
 )
 from app.lightrag_deploy.service import LightRAGDomainService
@@ -118,6 +119,26 @@ def recreate_domain(
     _ensure_deploy_enabled(service)
     result = _operation_or_404(service.recreate, domain_id)
     _audit(session, admin, "lightrag.domain.recreated", service.get_domain(domain_id))
+    return result
+
+
+@router.post("/admin/lightrag/domains/{domain_id}/repair")
+def repair_domain(
+    domain_id: str,
+    admin: UserRow = Depends(require_admin),
+    session: Session = Depends(get_session),
+    service: LightRAGDomainService = Depends(get_domain_service),
+) -> LightRAGDomainRepairResult:
+    _ensure_deploy_enabled(service)
+    try:
+        result = service.repair(domain_id)
+    except DomainNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    _audit(session, admin, "lightrag.domain.repaired", service.get_domain(domain_id))
+    if result.docker_operation != "succeeded":
+        raise HTTPException(status_code=502, detail=result.model_dump())
     return result
 
 

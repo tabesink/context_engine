@@ -25,6 +25,10 @@ from app.services.lightrag_domain_registry import (
 )
 from app.services.file_storage import FileStorage
 from app.services.job_service import JobService
+from app.services.lightrag_reachability_service import (
+    LightRAGReachabilityReport,
+    LightRAGReachabilityService,
+)
 from app.storage.repositories.ai_model_settings import AIModelSettingsRepository
 from app.storage.repositories.ai_provider_secrets import AIProviderSecretRepository
 from app.storage.repositories.documents import DocumentRepository
@@ -72,6 +76,7 @@ class DocumentService:
         domain = self._validate_lightrag_domain(lightrag_domain_id)
         domain_id = domain.id
         manifest_domain = self._validate_domain_provider_readiness(domain_id)
+        self._validate_domain_reachability(domain_id)
         path = self.storage.save_upload(file)
         lightrag_metadata = {
             "enabled": True,
@@ -137,6 +142,40 @@ class DocumentService:
                 detail=f"LightRAG domain '{domain_id}' is missing required provider secret: {secret_name}",
             )
         return domain
+
+    def _validate_domain_reachability(self, domain_id: str) -> None:
+        if self.settings.index_jobs_inline:
+            return
+        report = LightRAGReachabilityService(settings=self.settings).probe(domain_id)
+        if report.healthy:
+            return
+        raise HTTPException(
+            status_code=503,
+            detail=self._domain_reachability_error_detail(report),
+        )
+
+    def _domain_reachability_error_detail(self, report: LightRAGReachabilityReport) -> dict:
+        code = report.code or "lightrag_domain_unreachable"
+        if code == "lightrag_domain_unhealthy":
+            message = (
+                f"LightRAG domain '{report.domain_id}' is registered but its health endpoint "
+                f"is not healthy at {report.base_url}. Start or recreate the domain, then retry ingestion."
+            )
+        else:
+            message = (
+                f"LightRAG domain '{report.domain_id}' is registered but is not reachable from "
+                "the current runtime network. Start or recreate the domain on the Context Engine "
+                "Docker network or select a reachable domain."
+            )
+        return {
+            "code": code,
+            "domain_id": report.domain_id,
+            "base_url": report.base_url,
+            "message": message,
+            "reason_code": report.reason_code,
+            "reason": report.reason,
+            "status_code": report.status_code,
+        }
 
     def get_ready_or_404(self, document_id: str) -> DocumentRow:
         document = self.documents.get(document_id)

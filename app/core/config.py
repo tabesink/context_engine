@@ -35,18 +35,21 @@ class Settings(BaseSettings):
     lightrag_domains_root: Path = Path(".data/lightrag/domains")
     lightrag_compose_file: Path = Path(".data/lightrag/docker-compose.lightrag-domains.yml")
     lightrag_deleted_root: Path = Path(".data/lightrag/deleted")
-    lightrag_default_port_start: int = 9621
+    lightrag_default_port_start: int = 9622
     lightrag_default_container_port: int = 9621
     lightrag_docker_network: str = "context_engine_lightrag"
     lightrag_domain_env_filename: str = "domain.env"
     lightrag_dockerfile: Path = Path("docker/lightrag.Dockerfile")
     lightrag_build_context: Path = Path(".")
+    lightrag_storage_backend: str = "postgres"
     lightrag_postgres_url: str | None = None
     lightrag_postgres_host: str = "postgres"
     lightrag_postgres_port: int = 5432
     lightrag_postgres_database_prefix: str = "lightrag"
     lightrag_postgres_user_prefix: str = "lightrag"
     lightrag_postgres_password: str = "lightrag"
+    lightrag_postgres_provisioning_mode: str = "per_domain"
+    lightrag_postgres_vector_index_type: str = "HNSW"
     lightrag_redis_url: str | None = None
     lightrag_neo4j_uri: str | None = None
     lightrag_neo4j_username: str | None = None
@@ -142,6 +145,16 @@ class Settings(BaseSettings):
                 raise ValueError("LIGHTRAG_DOCKERFILE must be configured when deploy is enabled.")
             if not self.lightrag_build_context:
                 raise ValueError("LIGHTRAG_BUILD_CONTEXT must be configured when deploy is enabled.")
+        if self.lightrag_storage_backend not in {"postgres", "file"}:
+            raise ValueError("LIGHTRAG_STORAGE_BACKEND must be 'postgres' or 'file'.")
+        if self.lightrag_postgres_provisioning_mode not in {"per_domain", "shared_runtime"}:
+            raise ValueError(
+                "LIGHTRAG_POSTGRES_PROVISIONING_MODE must be 'per_domain' or 'shared_runtime'."
+            )
+        if self.lightrag_storage_backend == "postgres" and not self.lightrag_postgres_password:
+            raise ValueError(
+                "LIGHTRAG_POSTGRES_PASSWORD must be configured when LIGHTRAG_STORAGE_BACKEND=postgres."
+            )
         return self
 
 

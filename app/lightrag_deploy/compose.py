@@ -132,19 +132,29 @@ def render_domain_env(
             f"MAX_TOKEN_ENTITY_DESC={domain.retrieval_defaults.max_token_for_local_context}",
         ]
     )
-    if domain.postgres_database and domain.postgres_user:
+    if settings and settings.storage_backend == "postgres":
+        if settings.postgres_provisioning_mode == "shared_runtime":
+            postgres_database = settings.runtime_postgres_database
+            postgres_user = settings.runtime_postgres_user
+            postgres_password = settings.runtime_postgres_password
+        else:
+            postgres_database = domain.postgres_database
+            postgres_user = domain.postgres_user
+            postgres_password = settings.postgres_password
+        if not postgres_database or not postgres_user or not postgres_password:
+            raise ValueError("LightRAG postgres storage requires database, user, and password")
         lines.extend(
             [
                 "LIGHTRAG_KV_STORAGE=PGKVStorage",
                 "LIGHTRAG_DOC_STATUS_STORAGE=PGDocStatusStorage",
                 "LIGHTRAG_GRAPH_STORAGE=PGGraphStorage",
                 "LIGHTRAG_VECTOR_STORAGE=PGVectorStorage",
-                f"POSTGRES_HOST={(settings.postgres_host if settings else 'postgres')}",
-                f"POSTGRES_PORT={(settings.postgres_port if settings else 5432)}",
-                f"POSTGRES_DATABASE={settings.runtime_postgres_database if settings else domain.postgres_database}",
-                f"POSTGRES_USER={settings.runtime_postgres_user if settings else domain.postgres_user}",
-                f"POSTGRES_PASSWORD={(settings.runtime_postgres_password if settings else 'lightrag')}",
-                "POSTGRES_VECTOR_INDEX_TYPE=HNSW",
+                f"POSTGRES_HOST={settings.postgres_host}",
+                f"POSTGRES_PORT={settings.postgres_port}",
+                f"POSTGRES_DATABASE={postgres_database}",
+                f"POSTGRES_USER={postgres_user}",
+                f"POSTGRES_PASSWORD={postgres_password}",
+                f"POSTGRES_VECTOR_INDEX_TYPE={settings.postgres_vector_index_type}",
             ]
         )
     _append_provider_env(lines, domain, settings, provider_secrets)
@@ -171,6 +181,7 @@ class ComposeGenerator:
             [
                 "networks:",
                 f"  {self.settings.docker_network}:",
+                "    external: true",
                 f"    name: {self.settings.docker_network}",
                 "",
             ]
@@ -209,7 +220,9 @@ class ComposeGenerator:
                 f"      - {artifacts}:/app/data/artifacts",
                 f"      - {logs}:/app/data/logs",
                 "    networks:",
-                f"      - {self.settings.docker_network}",
+                f"      {self.settings.docker_network}:",
+                "        aliases:",
+                f"          - {domain.service_name}",
             ]
         )
         return lines

@@ -63,6 +63,11 @@ export const knowledgeGraphAdminApi = {
       method: "POST",
     });
   },
+  repair(domainId: string) {
+    return apiRequest(`/admin/lightrag/domains/${encodeURIComponent(domainId)}/repair`, {
+      method: "POST",
+    });
+  },
   regenerate(domainId: string) {
     return apiRequest(`/admin/lightrag/domains/${encodeURIComponent(domainId)}/regenerate`, {
       method: "POST",

@@ -32,11 +32,14 @@ def test_env_example_declares_lightrag_deployment_settings() -> None:
         "LIGHTRAG_DOCKER_EXECUTION_MODE",
         "LIGHTRAG_DOCKER_COMPOSE_BIN",
         "LIGHTRAG_DOCKER_TIMEOUT_SECONDS",
+        "LIGHTRAG_STORAGE_BACKEND",
         "LIGHTRAG_POSTGRES_HOST",
         "LIGHTRAG_POSTGRES_PORT",
         "LIGHTRAG_POSTGRES_DATABASE_PREFIX",
         "LIGHTRAG_POSTGRES_USER_PREFIX",
         "LIGHTRAG_POSTGRES_PASSWORD",
+        "LIGHTRAG_POSTGRES_PROVISIONING_MODE",
+        "LIGHTRAG_POSTGRES_VECTOR_INDEX_TYPE",
         "LIGHTRAG_LLM_BINDING",
         "LIGHTRAG_LLM_BINDING_HOST",
         "LIGHTRAG_LLM_BINDING_API_KEY",
@@ -79,11 +82,14 @@ def test_settings_parse_lightrag_deployment_fields(tmp_path: Path) -> None:
         lightrag_docker_execution_mode="socket",
         lightrag_docker_compose_bin="docker compose",
         lightrag_docker_timeout_seconds=30,
+        lightrag_storage_backend="postgres",
         lightrag_postgres_host="postgres",
         lightrag_postgres_port=5432,
         lightrag_postgres_database_prefix="lr",
         lightrag_postgres_user_prefix="lr_user",
         lightrag_postgres_password="secret",
+        lightrag_postgres_provisioning_mode="per_domain",
+        lightrag_postgres_vector_index_type="IVFFlat",
         lightrag_llm_binding="openai",
         lightrag_llm_binding_host="https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1",
         lightrag_llm_binding_api_key="bedrock-key",
@@ -114,9 +120,13 @@ def test_settings_parse_lightrag_deployment_fields(tmp_path: Path) -> None:
     assert deploy.dockerfile == Path("docker/lightrag.Dockerfile")
     assert deploy.build_context == Path(".")
     assert deploy.docker_execution_mode == "socket"
+    assert deploy.storage_backend == "postgres"
     assert deploy.postgres_host == "postgres"
     assert deploy.postgres_database_prefix == "lr"
     assert deploy.postgres_user_prefix == "lr_user"
+    assert deploy.postgres_provisioning_mode == "per_domain"
+    assert deploy.postgres_vector_index_type == "IVFFlat"
+    assert deploy.database_url_for_admin == "postgresql+psycopg://app_user:app_pw@localhost:5438/test_context_engine"
     assert deploy.runtime_postgres_database == "test_context_engine"
     assert deploy.runtime_postgres_user == "app_user"
     assert deploy.runtime_postgres_password == "app_pw"

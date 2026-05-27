@@ -1,0 +1,69 @@
+# Local Python environments and build artifacts
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+.installed.cfg
+uv.lock
+
+# Frontend (runs separately via npm, not in backend image)
+client/
+
+# Reference packages, docs, and planning material
+.references/
+docs/
+.prompts/
+*.md
+
+# VCS and tooling indexes
+.git/
+.gitnexus/
+.cursor/
+.claude/
+.vs/
+.idea/
+.vscode/
+
+# Local runtime data (mounted as volumes in compose)
+.data/
+
+# Tests and quality tooling
+tests/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.hypothesis/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+
+# Secrets and local env files (injected at runtime via compose env_file)
+.env
+.env.*
+
+# OS and editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Logs and temp
+*.log
+tmp/
+temp/
+scripts/
+
+# Understand-anything / other generated analysis output
+.understand-anything/

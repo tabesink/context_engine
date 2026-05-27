@@ -7,8 +7,13 @@ import pytest
 from app.lightrag_deploy.docker_runner import CommandResult
 from app.lightrag_deploy.errors import DomainNotFoundError, PermanentDeleteDisabledError
 from app.lightrag_deploy.models import LightRAGDomainCreateRequest
+from app.lightrag_deploy.postgres_provisioner import (
+    LightRAGPostgresProvisionResult,
+    PostgresExtensionStatus,
+)
 from app.lightrag_deploy.service import LightRAGDomainService
 from app.lightrag_deploy.settings import LightRAGDeploySettings
+from app.services.lightrag_reachability_service import LightRAGReachabilityReport
 
 
 class FakeProfile:
@@ -88,6 +93,42 @@ class FakeRunner:
         return CommandResult(exit_code=0, stdout="ok", stderr="")
 
 
+class FakePostgresProvisioner:
+    def __init__(self, env_file: Path | None = None) -> None:
+        self.env_file = env_file
+        self.calls: list[tuple[str | None, str | None]] = []
+
+    def provision_domain(self, domain) -> LightRAGPostgresProvisionResult:
+        if self.env_file is not None:
+            assert not self.env_file.exists()
+        self.calls.append((domain.postgres_database, domain.postgres_user))
+        return LightRAGPostgresProvisionResult(
+            database=domain.postgres_database or "",
+            user=domain.postgres_user or "",
+            role_exists=True,
+            database_exists=True,
+            extensions={"vector": PostgresExtensionStatus(name="vector", status="ok")},
+        )
+
+
+class FakeReachability:
+    def __init__(self, healthy: bool = True) -> None:
+        self.healthy = healthy
+        self.calls: list[str] = []
+
+    def probe(self, domain_id: str) -> LightRAGReachabilityReport:
+        self.calls.append(domain_id)
+        return LightRAGReachabilityReport(
+            domain_id=domain_id,
+            base_url=f"http://lightrag_{domain_id}:9621",
+            healthy=self.healthy,
+            code=None if self.healthy else "lightrag_domain_unreachable",
+            reason_code=None if self.healthy else "connection_refused",
+            reason=None if self.healthy else "Connection refused",
+            status_code=200 if self.healthy else None,
+        )
+
+
 def _settings(tmp_path: Path, *, allow_permanent_delete: bool = False) -> LightRAGDeploySettings:
     return LightRAGDeploySettings(
         enabled=True,
@@ -134,7 +175,7 @@ def test_create_domain_generates_manifest_env_and_compose(tmp_path: Path) -> Non
     )
 
     assert domain.id == "fatigue"
-    assert domain.host_port == 9621
+    assert domain.host_port == 9622
     assert domain.is_default is True
     assert service.list_domains() == [domain]
     assert (tmp_path / "lightrag/domains/fatigue/domain.env").is_file()
@@ -143,7 +184,25 @@ def test_create_domain_generates_manifest_env_and_compose(tmp_path: Path) -> Non
     )
 
 
-def test_create_domain_renders_shared_postgres_storage_without_manifest_secrets(
+def test_create_domain_provisions_domain_postgres_identity_before_writing_env(
+    tmp_path: Path,
+) -> None:
+    env_file = tmp_path / "lightrag/domains/fatigue/domain.env"
+    provisioner = FakePostgresProvisioner(env_file)
+    service = LightRAGDomainService(
+        settings=_settings(tmp_path),
+        runner=FakeRunner(),
+        postgres_provisioner=provisioner,
+        now=lambda: datetime(2026, 5, 18, 14, 30, tzinfo=UTC),
+    )
+
+    service.create_domain(LightRAGDomainCreateRequest(domain_id="fatigue"))
+
+    assert provisioner.calls == [("lightrag_fatigue", "lightrag_fatigue")]
+    assert "POSTGRES_DATABASE=lightrag_fatigue" in env_file.read_text(encoding="utf-8")
+
+
+def test_create_domain_renders_per_domain_postgres_storage_without_manifest_secrets(
     tmp_path: Path,
 ) -> None:
     service = _service(tmp_path)
@@ -160,9 +219,9 @@ def test_create_domain_renders_shared_postgres_storage_without_manifest_secrets(
     assert "LIGHTRAG_GRAPH_STORAGE=PGGraphStorage" in env_text
     assert "LIGHTRAG_VECTOR_STORAGE=PGVectorStorage" in env_text
     assert "POSTGRES_HOST=postgres" in env_text
-    assert "POSTGRES_DATABASE=context_engine" in env_text
-    assert "POSTGRES_USER=context_engine" in env_text
-    assert "POSTGRES_PASSWORD=context_engine" in env_text
+    assert "POSTGRES_DATABASE=lightrag_manual_domain" in env_text
+    assert "POSTGRES_USER=lightrag_manual_domain" in env_text
+    assert "POSTGRES_PASSWORD=lightrag" in env_text
     assert "postgres_database" in manifest_text
     assert "POSTGRES_PASSWORD" not in manifest_text
 
@@ -199,7 +258,7 @@ def test_create_domain_auto_selects_next_available_port(tmp_path: Path) -> None:
     service.create_domain(LightRAGDomainCreateRequest(domain_id="fatigue"))
     second = service.create_domain(LightRAGDomainCreateRequest(domain_id="abaqus"))
 
-    assert second.host_port == 9622
+    assert second.host_port == 9623
 
 
 def test_create_domain_persists_custom_retrieval_defaults(tmp_path: Path) -> None:
@@ -300,8 +359,8 @@ def test_docker_operations_update_manifest_runtime_status(tmp_path: Path) -> Non
     service.down("fatigue")
     stopped = service.get_domain("fatigue")
 
-    assert running.status == "running"
-    assert running.is_healthy is True
+    assert running.status == "running_unverified"
+    assert running.is_healthy is False
     assert stopped.status == "stopped"
     assert stopped.is_healthy is False
 
@@ -314,6 +373,93 @@ def test_docker_error_returns_failed_operation_result(tmp_path: Path) -> None:
 
     assert result.status == "failed"
     assert result.message == "docker failed"
+
+
+def test_repair_regenerates_recreates_probes_and_marks_healthy(tmp_path: Path) -> None:
+    runner = FakeRunner()
+    reachability = FakeReachability(healthy=True)
+    service = _service(tmp_path, runner)
+    service.create_domain(LightRAGDomainCreateRequest(domain_id="fatigue"))
+
+    result = service.repair(
+        "fatigue",
+        reachability=reachability,
+        attempts=1,
+        sleep_seconds=0,
+    )
+    domain = service.get_domain("fatigue")
+
+    assert runner.calls == [("recreate", "lightrag_fatigue")]
+    assert reachability.calls == ["fatigue"]
+    assert result.docker_operation == "succeeded"
+    assert result.postgres_database == "lightrag_fatigue"
+    assert result.postgres_user == "lightrag_fatigue"
+    assert result.postgres_role_exists is None
+    assert result.health == {
+        "ok": True,
+        "code": None,
+        "reason_code": None,
+        "reason": None,
+        "status_code": 200,
+    }
+    assert domain.status == "running"
+    assert domain.is_healthy is True
+
+
+def test_repair_marks_domain_unhealthy_when_probe_fails(tmp_path: Path) -> None:
+    service = _service(tmp_path, FakeRunner())
+    service.create_domain(LightRAGDomainCreateRequest(domain_id="fatigue"))
+
+    result = service.repair(
+        "fatigue",
+        reachability=FakeReachability(healthy=False),
+        attempts=1,
+        sleep_seconds=0,
+    )
+    domain = service.get_domain("fatigue")
+
+    assert result.health["reason_code"] == "connection_refused"
+    assert domain.status == "unhealthy"
+    assert domain.is_healthy is False
+
+
+def test_repair_provisions_missing_postgres_identity_and_rewrites_env(
+    tmp_path: Path,
+) -> None:
+    runner = FakeRunner()
+    reachability = FakeReachability(healthy=True)
+    provisioner = FakePostgresProvisioner()
+    service = LightRAGDomainService(
+        settings=_settings(tmp_path),
+        runner=runner,
+        postgres_provisioner=provisioner,
+        now=lambda: datetime(2026, 5, 18, 14, 30, tzinfo=UTC),
+    )
+    created = service.create_domain(LightRAGDomainCreateRequest(domain_id="legacy-domain"))
+    service.manifest.update_domain(
+        created.model_copy(update={"postgres_database": None, "postgres_user": None})
+    )
+
+    result = service.repair(
+        "legacy-domain",
+        reachability=reachability,
+        attempts=1,
+        sleep_seconds=0,
+    )
+
+    repaired = service.get_domain("legacy-domain")
+    env_text = (tmp_path / "lightrag/domains/legacy-domain/domain.env").read_text(
+        encoding="utf-8"
+    )
+    assert provisioner.calls[-1] == ("lightrag_legacy_domain", "lightrag_legacy_domain")
+    assert repaired.postgres_database == "lightrag_legacy_domain"
+    assert repaired.postgres_user == "lightrag_legacy_domain"
+    assert "POSTGRES_DATABASE=lightrag_legacy_domain" in env_text
+    assert "POSTGRES_USER=lightrag_legacy_domain" in env_text
+    assert runner.calls == [("recreate", "lightrag_legacy-domain")]
+    assert result.postgres_role_exists is True
+    assert result.postgres_database_exists is True
+    assert result.extensions["vector"]["status"] == "ok"
 
 
 def test_create_domain_persists_embedding_snapshot(tmp_path: Path) -> None:

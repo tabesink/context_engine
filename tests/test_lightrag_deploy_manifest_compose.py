@@ -50,6 +50,8 @@ def _domain(tmp_path: Path, domain_id: str = "fatigue", port: int = 9622) -> Lig
     return LightRAGDomain(
         id=domain_id,
         display_name="Fatigue Manuals",
+        postgres_database=f"lightrag_{domain_id.replace('-', '_')}",
+        postgres_user=f"lightrag_{domain_id.replace('-', '_')}",
         host="127.0.0.1",
         host_port=port,
         container_port=9621,
@@ -102,6 +104,8 @@ def test_manifest_writes_deterministic_domain_list(tmp_path: Path) -> None:
         f'        "rag_storage": "{(tmp_path / "lightrag/domains/fatigue/rag_storage").as_posix()}",\n'
         f'        "root": "{(tmp_path / "lightrag/domains/fatigue").as_posix()}"\n'
         "      },\n"
+        '      "postgres_database": "lightrag_fatigue",\n'
+        '      "postgres_user": "lightrag_fatigue",\n'
         '      "retrieval_defaults": {\n'
         '        "chunk_rerank_top_k": 10,\n'
         '        "chunk_top_k": 10,\n'
@@ -130,7 +134,7 @@ def test_manifest_rejects_duplicate_domain_id_and_port(tmp_path: Path) -> None:
         store.add_domain(_domain(tmp_path, "abaqus", 9622))
 
 
-def test_domain_env_is_generated_with_lightrag_runtime_keys(tmp_path: Path) -> None:
+def test_domain_env_uses_per_domain_postgres_credentials_by_default(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
     paths = DomainPathResolver(settings).ensure_domain_paths("fatigue")
     domain = _domain(tmp_path)
@@ -154,6 +158,16 @@ def test_domain_env_is_generated_with_lightrag_runtime_keys(tmp_path: Path) -> N
         "MAX_TOKEN_TEXT_CHUNK=4000\n"
         "MAX_TOKEN_RELATION_DESC=4000\n"
         "MAX_TOKEN_ENTITY_DESC=4000\n"
+        "LIGHTRAG_KV_STORAGE=PGKVStorage\n"
+        "LIGHTRAG_DOC_STATUS_STORAGE=PGDocStatusStorage\n"
+        "LIGHTRAG_GRAPH_STORAGE=PGGraphStorage\n"
+        "LIGHTRAG_VECTOR_STORAGE=PGVectorStorage\n"
+        "POSTGRES_HOST=postgres\n"
+        "POSTGRES_PORT=5432\n"
+        "POSTGRES_DATABASE=lightrag_fatigue\n"
+        "POSTGRES_USER=lightrag_fatigue\n"
+        "POSTGRES_PASSWORD=lightrag\n"
+        "POSTGRES_VECTOR_INDEX_TYPE=HNSW\n"
         "\n"
         "# Model provider configuration\n"
         "LLM_BINDING=openai\n"
@@ -163,6 +177,25 @@ def test_domain_env_is_generated_with_lightrag_runtime_keys(tmp_path: Path) -> N
         "\n"
         "# OpenAI-compatible provider tuning\n"
     )
+
+
+def test_domain_env_can_use_shared_runtime_postgres_credentials(tmp_path: Path) -> None:
+    settings = replace(
+        _settings(tmp_path),
+        postgres_provisioning_mode="shared_runtime",
+        runtime_postgres_database="context_engine",
+        runtime_postgres_user="context_engine",
+        runtime_postgres_password="context_engine",
+    )
+    paths = DomainPathResolver(settings).ensure_domain_paths("fatigue")
+    domain = _domain(tmp_path)
+
+    write_domain_env(domain, settings, paths)
+    env_text = paths.env_file.read_text(encoding="utf-8")
+
+    assert "POSTGRES_DATABASE=context_engine" in env_text
+    assert "POSTGRES_USER=context_engine" in env_text
+    assert "POSTGRES_PASSWORD=context_engine" in env_text
 
 
 def test_domain_env_includes_bedrock_openai_compatible_provider_config(tmp_path: Path) -> None:
@@ -261,6 +294,8 @@ def test_compose_generation_is_deterministic(tmp_path: Path) -> None:
     assert f"- {domain.paths['env_file']}" in output
     assert '- "127.0.0.1:9622:9621"' in output
     assert f"- {domain.paths['inputs']}:/app/data/inputs" in output
+    assert "    networks:\n      context_engine_lightrag:\n        aliases:\n          - lightrag_fatigue" in output
+    assert "    external: true" in output
     assert f"name: {settings.docker_network}" in output
 
 

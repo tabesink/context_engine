@@ -15,7 +15,10 @@ from app.integrations.lightrag_remote_adapter import (
     LightRAGServiceUnavailable,
     LightRAGUpstreamError,
 )
-from app.services.lightrag_domain_registry import LightRAGDomainNotFoundError
+from app.services.lightrag_domain_registry import (
+    LightRAGDomainNotFoundError,
+    LightRAGDomainRegistryInvalidError,
+)
 
 
 def test_domain_resolver_requires_registered_domain(tmp_path: Path) -> None:
@@ -68,6 +71,44 @@ def test_domain_resolver_prefers_container_url_in_socket_mode(tmp_path: Path) ->
     domain = resolve_lightrag_domain(settings=settings, domain="default")
 
     assert domain.base_url == "http://lightrag_default:9621"
+
+
+def test_domain_resolver_prefers_host_url_in_host_mode(tmp_path: Path) -> None:
+    registry_path = tmp_path / "domains.json"
+    registry_path.write_text(
+        (
+            '{"domains":[{"id":"default","base_url":"http://legacy.example",'
+            '"host_base_url":"http://127.0.0.1:9623",'
+            '"container_base_url":"http://lightrag_default:9621","status":"ready"}]}'
+        ),
+        encoding="utf-8",
+    )
+    settings = Settings(
+        environment="test",
+        database_url="sqlite:///./.data/test_context_engine.db",
+        lightrag_domain_registry=registry_path,
+        lightrag_docker_execution_mode="host",
+    )
+
+    domain = resolve_lightrag_domain(settings=settings, domain="default")
+
+    assert domain.base_url == "http://127.0.0.1:9623"
+
+
+def test_domain_resolver_rejects_manifest_without_runtime_url(tmp_path: Path) -> None:
+    registry_path = tmp_path / "domains.json"
+    registry_path.write_text(
+        '{"domains":[{"id":"default","status":"ready"}]}',
+        encoding="utf-8",
+    )
+    settings = Settings(
+        environment="test",
+        database_url="sqlite:///./.data/test_context_engine.db",
+        lightrag_domain_registry=registry_path,
+    )
+
+    with pytest.raises(LightRAGDomainRegistryInvalidError):
+        resolve_lightrag_domain(settings=settings, domain="default")
 
 
 def test_remote_adapter_normalizes_query_data_chunks_to_evidence() -> None:

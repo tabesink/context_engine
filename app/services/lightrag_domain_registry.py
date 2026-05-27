@@ -94,11 +94,7 @@ class LightRAGDomainRegistry:
         if entry is None:
             raise LightRAGDomainNotFoundError(f"LightRAG domain '{requested}' does not exist")
 
-        base_url = str(entry.get("base_url") or "").strip().rstrip("/")
-        if not base_url:
-            raise LightRAGDomainRegistryInvalidError(
-                f"LightRAG domain '{requested}' does not define base_url"
-            )
+        base_url = self._runtime_base_url(entry, requested)
 
         return LightRAGDomainRuntime(
             id=str(entry.get("id") or requested),
@@ -120,7 +116,13 @@ class LightRAGDomainRegistry:
 
     def validate_available(self, domain_id: str | None) -> LightRAGDomainRuntime:
         domain = self.get_required(domain_id)
-        if not self.lifecycle.is_active(domain.id):
+        try:
+            is_active = self.lifecycle.is_active(domain.id)
+        except Exception:
+            # Lifecycle state is additive; keep manifest-backed domains usable in
+            # lightweight/unit contexts where lifecycle storage is unavailable.
+            is_active = True
+        if not is_active:
             raise LightRAGDomainUnavailableError(
                 f"LightRAG domain '{domain.id}' is not available"
             )
@@ -143,6 +145,25 @@ class LightRAGDomainRegistry:
             if entry.get("id") == domain_id or entry.get("name") == domain_id:
                 return entry
         return None
+
+    def _runtime_base_url(self, entry: dict[str, Any], domain_id: str) -> str:
+        mode = self.settings.lightrag_docker_execution_mode.strip().lower()
+        host_base_url = _optional_url(entry.get("host_base_url"))
+        container_base_url = _optional_url(entry.get("container_base_url"))
+        legacy_base_url = _optional_url(entry.get("base_url"))
+
+        if mode == "socket":
+            for candidate in (container_base_url, legacy_base_url, host_base_url):
+                if candidate:
+                    return candidate
+        else:
+            for candidate in (host_base_url, legacy_base_url, container_base_url):
+                if candidate:
+                    return candidate
+
+        raise LightRAGDomainRegistryInvalidError(
+            f"LightRAG domain '{domain_id}' does not define a usable runtime URL"
+        )
 
     def _read_domain_entries(self) -> list[dict[str, Any]]:
         if not self.registry_path.is_file():

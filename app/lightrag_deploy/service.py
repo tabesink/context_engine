@@ -3,6 +3,8 @@ import re
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from time import sleep
+from typing import Any
 
 from app.core.config import get_settings
 from app.lightrag_deploy.compose import ComposeGenerator, write_domain_env
@@ -19,11 +21,17 @@ from app.lightrag_deploy.models import (
     LightRAGDomain,
     LightRAGDomainCreateRequest,
     LightRAGDomainOperationResult,
+    LightRAGDomainRepairResult,
     LightRAGDomainRemoveResponse,
 )
 from app.lightrag_deploy.paths import DomainPathResolver
+from app.lightrag_deploy.postgres_provisioner import LightRAGPostgresProvisioner
 from app.lightrag_deploy.settings import LightRAGDeploySettings
 from app.services.model_profile_resolver import ModelProfileResolver
+from app.services.lightrag_reachability_service import (
+    LightRAGReachabilityReport,
+    LightRAGReachabilityService,
+)
 
 
 class LightRAGDomainService:
@@ -33,6 +41,7 @@ class LightRAGDomainService:
         settings: LightRAGDeploySettings | None = None,
         runner: DockerComposeRunner | None = None,
         profile_resolver: ModelProfileResolver | None = None,
+        postgres_provisioner: Any | None = None,
         now: Callable[[], datetime] | None = None,
     ):
         self.settings = settings or LightRAGDeploySettings.from_app_settings(get_settings())
@@ -45,6 +54,7 @@ class LightRAGDomainService:
             timeout_seconds=self.settings.docker_timeout_seconds,
         )
         self.profile_resolver = profile_resolver
+        self.postgres_provisioner = postgres_provisioner or self._default_postgres_provisioner()
         self.now = now or (lambda: datetime.now(UTC))
 
     def list_domains(self) -> list[LightRAGDomain]:
@@ -118,6 +128,8 @@ class LightRAGDomainService:
             created_at=timestamp,
             updated_at=timestamp,
         )
+        domain = self._ensure_postgres_identity(domain)
+        self._provision_domain_postgres(domain)
         write_domain_env(domain, self.settings, paths, self._provider_secrets_for_domain(domain))
         self.manifest.add_domain(domain)
         self.compose.write(self.list_domains())
@@ -126,6 +138,8 @@ class LightRAGDomainService:
     def regenerate(self, domain_id: str | None = None) -> None:
         domains = [self.get_domain(domain_id)] if domain_id else self.list_domains()
         for domain in domains:
+            domain = self._ensure_postgres_identity(domain)
+            self._provision_domain_postgres(domain)
             write_domain_env(
                 domain,
                 self.settings,
@@ -179,6 +193,54 @@ class LightRAGDomainService:
         self._persist_domain_status(domain, command_succeeded=result.status == "succeeded", running=True)
         return result
 
+    def repair(
+        self,
+        domain_id: str,
+        *,
+        reachability: LightRAGReachabilityService | None = None,
+        attempts: int = 5,
+        sleep_seconds: float = 1.0,
+    ) -> LightRAGDomainRepairResult:
+        domain = self._ensure_postgres_identity(self.get_domain(domain_id))
+        provision_result = self._provision_domain_postgres(domain)
+        write_domain_env(
+            domain,
+            self.settings,
+            self.paths.ensure_domain_paths(domain.id),
+            self._provider_secrets_for_domain(domain),
+        )
+        self.compose.write(self.list_domains())
+        result = self._operation_result(domain, "repair", self.runner.recreate(domain.service_name))
+        if result.status != "succeeded":
+            updated = self._persist_domain_status(
+                domain,
+                command_succeeded=False,
+                running=False,
+            )
+            return self._repair_response(
+                domain=updated,
+                operation=result,
+                health=None,
+                provision_result=provision_result,
+            )
+
+        probe = reachability or LightRAGReachabilityService()
+        health: LightRAGReachabilityReport | None = None
+        for attempt in range(max(1, attempts)):
+            health = probe.probe(domain_id)
+            if health.healthy:
+                break
+            if attempt < attempts - 1:
+                sleep(sleep_seconds)
+
+        updated = self._persist_domain_health(domain, health)
+        return self._repair_response(
+            domain=updated,
+            operation=result,
+            health=health,
+            provision_result=provision_result,
+        )
+
     def remove(self, domain_id: str, *, permanent: bool = False) -> LightRAGDomainRemoveResponse:
         domain = self.get_domain(domain_id)
         if permanent and not self.settings.allow_permanent_delete:
@@ -221,6 +283,47 @@ class LightRAGDomainService:
             return None
         return {domain.embedding.api_key_env_var: secret_value}
 
+    def _default_postgres_provisioner(self) -> LightRAGPostgresProvisioner | None:
+        if self.settings.storage_backend != "postgres":
+            return None
+        if not self.settings.database_url_for_admin.startswith("postgresql"):
+            return None
+        return LightRAGPostgresProvisioner(self.settings)
+
+    def _ensure_postgres_identity(self, domain: LightRAGDomain) -> LightRAGDomain:
+        if self.settings.storage_backend != "postgres":
+            return domain
+        if self.settings.postgres_provisioning_mode == "shared_runtime":
+            updated = domain.model_copy(
+                update={
+                    "postgres_database": self.settings.runtime_postgres_database,
+                    "postgres_user": self.settings.runtime_postgres_user,
+                    "updated_at": self.now(),
+                }
+            )
+            if self.manifest.get_domain(domain.id) is not None:
+                self.manifest.update_domain(updated)
+            return updated
+
+        postgres_suffix = self._postgres_identifier(domain.id)
+        updates: dict[str, Any] = {}
+        if not domain.postgres_database:
+            updates["postgres_database"] = f"{self.settings.postgres_database_prefix}_{postgres_suffix}"
+        if not domain.postgres_user:
+            updates["postgres_user"] = f"{self.settings.postgres_user_prefix}_{postgres_suffix}"
+        if not updates:
+            return domain
+
+        updated = domain.model_copy(update={**updates, "updated_at": self.now()})
+        if self.manifest.get_domain(domain.id) is not None:
+            self.manifest.update_domain(updated)
+        return updated
+
+    def _provision_domain_postgres(self, domain: LightRAGDomain) -> Any | None:
+        if self.settings.storage_backend != "postgres" or self.postgres_provisioner is None:
+            return None
+        return self.postgres_provisioner.provision_domain(domain)
+
     def _archive_path(self, domain_id: str) -> Path:
         timestamp = self.now().strftime("%Y-%m-%d-%H%M%S")
         return self.settings.deleted_root / f"{domain_id}-{timestamp}"
@@ -257,13 +360,68 @@ class LightRAGDomainService:
         else:
             updated = domain.model_copy(
                 update={
-                    "status": "running" if running else "stopped",
-                    "is_healthy": True if running else False,
+                    "status": "running_unverified" if running else "stopped",
+                    "is_healthy": False,
                     "updated_at": self.now(),
                 }
             )
         self.manifest.update_domain(updated)
         return updated
+
+    def _persist_domain_health(
+        self,
+        domain: LightRAGDomain,
+        health: LightRAGReachabilityReport | None,
+    ) -> LightRAGDomain:
+        healthy = bool(health and health.healthy)
+        updated = domain.model_copy(
+            update={
+                "status": "running" if healthy else "unhealthy",
+                "is_healthy": healthy,
+                "updated_at": self.now(),
+            }
+        )
+        self.manifest.update_domain(updated)
+        return updated
+
+    def _repair_response(
+        self,
+        *,
+        domain: LightRAGDomain,
+        operation: LightRAGDomainOperationResult,
+        health: LightRAGReachabilityReport | None,
+        provision_result: Any | None,
+    ) -> LightRAGDomainRepairResult:
+        extensions = {}
+        if provision_result is not None:
+            extensions = {
+                name: {
+                    "name": status.name,
+                    "status": status.status,
+                    "message": status.message,
+                }
+                for name, status in getattr(provision_result, "extensions", {}).items()
+            }
+        return LightRAGDomainRepairResult(
+            id=domain.id,
+            domain_id=domain.id,
+            operation=operation.operation,
+            status=domain.status,
+            service_name=domain.service_name,
+            storage_backend=self.settings.storage_backend,
+            postgres_database=domain.postgres_database,
+            postgres_user=domain.postgres_user,
+            postgres_role_exists=getattr(provision_result, "role_exists", None),
+            postgres_database_exists=getattr(provision_result, "database_exists", None),
+            extensions=extensions,
+            host_base_url=domain.host_base_url,
+            container_base_url=domain.container_base_url,
+            runtime_base_url=health.base_url if health else domain.base_url,
+            docker_operation=operation.status,
+            health=health.as_dict() if health else None,
+            is_healthy=domain.is_healthy,
+            message=operation.message,
+        )
 
     def _sync_runtime_status(self, domain: LightRAGDomain) -> LightRAGDomain:
         ps = self.runner.ps()

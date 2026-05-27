@@ -46,12 +46,16 @@ function getErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof APIError) {
     const body = error.body as { detail?: unknown } | null;
     if (body && typeof body.detail === "string") return body.detail;
+    if (body && typeof body.detail === "object" && body.detail !== null && "message" in body.detail) {
+      const message = (body.detail as { message?: unknown }).message;
+      if (typeof message === "string") return message;
+    }
   }
   if (error instanceof Error && error.message) return error.message;
   return fallback;
 }
 
-type DomainAction = "up" | "down" | "recreate" | "regenerate" | "archive";
+type DomainAction = "up" | "down" | "recreate" | "repair" | "regenerate" | "archive";
 type ConfirmableAction = "recreate" | "regenerate" | "archive";
 type RetrievalProfile = "precise" | "balanced" | "broad" | "custom";
 
@@ -180,7 +184,10 @@ export function KnowledgeGraphSettingsPanel() {
 
   React.useEffect(() => {
     if (!logsDialogDomainId || auditLogs.length > 0) return;
-    void loadAuditLogs();
+    const task = window.setTimeout(() => {
+      void loadAuditLogs();
+    }, 0);
+    return () => window.clearTimeout(task);
   }, [auditLogs.length, loadAuditLogs, logsDialogDomainId]);
 
   const applyProfileDefaults = (profile: Exclude<RetrievalProfile, "custom">) => {
@@ -201,8 +208,10 @@ export function KnowledgeGraphSettingsPanel() {
       if (action === "up") await knowledgeGraphAdminApi.up(domainId);
       if (action === "down") await knowledgeGraphAdminApi.down(domainId);
       if (action === "recreate") await knowledgeGraphAdminApi.recreate(domainId);
+      if (action === "repair") await knowledgeGraphAdminApi.repair(domainId);
       if (action === "regenerate") await knowledgeGraphAdminApi.regenerate(domainId);
       if (action === "archive") await knowledgeGraphAdminApi.remove(domainId);
+      if (action === "repair") setNotice(`Repaired domain ${domainId}`);
       await refreshAll();
     } catch (nextError) {
       setError(getErrorMessage(nextError, `Failed to ${action} domain`));
@@ -658,6 +667,9 @@ export function KnowledgeGraphSettingsPanel() {
                       </DropdownMenuItem>
                       <DropdownMenuItem disabled={Boolean(busyAction)} onSelect={() => void runRestart(domain.id)}>
                         Restart domain
+                      </DropdownMenuItem>
+                      <DropdownMenuItem disabled={Boolean(busyAction)} onSelect={() => void runAction(domain.id, "repair")}>
+                        Repair domain
                       </DropdownMenuItem>
                       <DropdownMenuItem disabled={Boolean(busyAction)} onSelect={() => setConfirmAction({ domainId: domain.id, action: "recreate" })}>
                         Recreate container

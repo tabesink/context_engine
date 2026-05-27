@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings
 from app.services.lightrag_domain_registry import LightRAGDomainRegistry, LightRAGDomainRuntime
+from app.services.lightrag_reachability_service import LightRAGReachabilityService
 
 
 @dataclass(frozen=True)
@@ -155,21 +156,17 @@ class ReadinessService:
                 reason="Default LightRAG domain is unavailable.",
             )
 
-        headers: dict[str, str] = {}
-        if default_domain.api_key:
-            headers["X-API-Key"] = default_domain.api_key
         try:
-            response = httpx.get(
-                f"{default_domain.base_url}/health",
-                headers=headers,
-                timeout=self.settings.lightrag_timeout_seconds,
-            )
-            if response.status_code < 400:
+            report = LightRAGReachabilityService(
+                settings=self.settings,
+                http_get=httpx.get,
+            ).probe(default_domain.id)
+            if report.healthy:
                 return self._healthy_detail(started_at=started_at, checked_at=checked_at)
             return self._unhealthy_detail(
                 started_at=started_at,
                 checked_at=checked_at,
-                reason=f"LightRAG health endpoint returned HTTP {response.status_code}.",
+                reason=report.reason or "LightRAG health check failed.",
             )
         except Exception as exc:
             return self._unhealthy_detail(

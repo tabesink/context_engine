@@ -84,6 +84,27 @@ class LightRAGDomainOperationResult(BaseModel):
     message: str | None = None
 
 
+class LightRAGDomainRepairResult(BaseModel):
+    id: str
+    domain_id: str
+    operation: str = "repair"
+    status: str
+    service_name: str
+    storage_backend: str
+    postgres_database: str | None = None
+    postgres_user: str | None = None
+    postgres_role_exists: bool | None = None
+    postgres_database_exists: bool | None = None
+    extensions: dict[str, dict[str, str | None]] = Field(default_factory=dict)
+    host_base_url: str
+    container_base_url: str
+    runtime_base_url: str
+    docker_operation: str
+    health: dict[str, Any] | None = None
+    is_healthy: bool | None = None
+    message: str | None = None
+
+
 class LightRAGDomainRemoveResponse(BaseModel):
     id: str
     archived: bool
