@@ -133,14 +133,9 @@ def render_domain_env(
         ]
     )
     if settings and settings.storage_backend == "postgres":
-        if settings.postgres_provisioning_mode == "shared_runtime":
-            postgres_database = settings.runtime_postgres_database
-            postgres_user = settings.runtime_postgres_user
-            postgres_password = settings.runtime_postgres_password
-        else:
-            postgres_database = domain.postgres_database
-            postgres_user = domain.postgres_user
-            postgres_password = settings.postgres_password
+        postgres_database = domain.postgres_database
+        postgres_user = domain.postgres_user
+        postgres_password = settings.postgres_password
         if not postgres_database or not postgres_user or not postgres_password:
             raise ValueError("LightRAG postgres storage requires database, user, and password")
         lines.extend(
@@ -155,6 +150,7 @@ def render_domain_env(
                 f"POSTGRES_USER={postgres_user}",
                 f"POSTGRES_PASSWORD={postgres_password}",
                 f"POSTGRES_VECTOR_INDEX_TYPE={settings.postgres_vector_index_type}",
+                f"TIKTOKEN_CACHE_DIR={settings.tiktoken_cache_dir}",
             ]
         )
     _append_provider_env(lines, domain, settings, provider_secrets)

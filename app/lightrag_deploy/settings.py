@@ -28,7 +28,12 @@ class LightRAGDeploySettings:
     postgres_user_prefix: str = "lightrag"
     postgres_password: str = "lightrag"
     postgres_provisioning_mode: str = "per_domain"
+    postgres_admin_database: str = "context_engine"
+    postgres_vector_extension: str = "vector"
+    postgres_age_extension: str = "age"
     postgres_vector_index_type: str = "HNSW"
+    tokenizer_offline: bool = True
+    tiktoken_cache_dir: str = "/app/.cache/tiktoken"
     database_url_for_admin: str = ""
     runtime_postgres_database: str = "context_engine"
     runtime_postgres_user: str = "context_engine"
@@ -89,7 +94,12 @@ class LightRAGDeploySettings:
             postgres_user_prefix=settings.lightrag_postgres_user_prefix,
             postgres_password=settings.lightrag_postgres_password,
             postgres_provisioning_mode=settings.lightrag_postgres_provisioning_mode,
+            postgres_admin_database=settings.lightrag_postgres_admin_database,
+            postgres_vector_extension=settings.lightrag_postgres_vector_extension,
+            postgres_age_extension=settings.lightrag_postgres_age_extension,
             postgres_vector_index_type=settings.lightrag_postgres_vector_index_type,
+            tokenizer_offline=settings.lightrag_tokenizer_offline,
+            tiktoken_cache_dir=settings.lightrag_tiktoken_cache_dir,
             database_url_for_admin=settings.database_url,
             runtime_postgres_database=runtime_database,
             runtime_postgres_user=runtime_user,

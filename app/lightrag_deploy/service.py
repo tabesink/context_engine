@@ -174,8 +174,20 @@ class LightRAGDomainService:
         return updated
 
     def up(self, domain_id: str) -> LightRAGDomainOperationResult:
-        domain = self.get_domain(domain_id)
+        domain = self._ensure_postgres_identity(self.get_domain(domain_id))
+        self._provision_domain_postgres(domain)
+        write_domain_env(
+            domain,
+            self.settings,
+            self.paths.ensure_domain_paths(domain.id),
+            self._provider_secrets_for_domain(domain),
+        )
         self.compose.write(self.list_domains())
+        build_result = self.runner.build(domain.service_name)
+        if build_result.exit_code != 0:
+            result = self._operation_result(domain, "up", build_result)
+            self._persist_domain_status(domain, command_succeeded=False, running=False)
+            return result
         result = self._operation_result(domain, "up", self.runner.up(domain.service_name))
         self._persist_domain_status(domain, command_succeeded=result.status == "succeeded", running=True)
         return result
@@ -187,8 +199,20 @@ class LightRAGDomainService:
         return result
 
     def recreate(self, domain_id: str) -> LightRAGDomainOperationResult:
-        domain = self.get_domain(domain_id)
+        domain = self._ensure_postgres_identity(self.get_domain(domain_id))
+        self._provision_domain_postgres(domain)
+        write_domain_env(
+            domain,
+            self.settings,
+            self.paths.ensure_domain_paths(domain.id),
+            self._provider_secrets_for_domain(domain),
+        )
         self.compose.write(self.list_domains())
+        build_result = self.runner.build(domain.service_name)
+        if build_result.exit_code != 0:
+            result = self._operation_result(domain, "recreate", build_result)
+            self._persist_domain_status(domain, command_succeeded=False, running=False)
+            return result
         result = self._operation_result(domain, "recreate", self.runner.recreate(domain.service_name))
         self._persist_domain_status(domain, command_succeeded=result.status == "succeeded", running=True)
         return result
@@ -210,6 +234,20 @@ class LightRAGDomainService:
             self._provider_secrets_for_domain(domain),
         )
         self.compose.write(self.list_domains())
+        build_result = self.runner.build(domain.service_name)
+        if build_result.exit_code != 0:
+            result = self._operation_result(domain, "repair", build_result)
+            updated = self._persist_domain_status(
+                domain,
+                command_succeeded=False,
+                running=False,
+            )
+            return self._repair_response(
+                domain=updated,
+                operation=result,
+                health=None,
+                provision_result=provision_result,
+            )
         result = self._operation_result(domain, "repair", self.runner.recreate(domain.service_name))
         if result.status != "succeeded":
             updated = self._persist_domain_status(
@@ -293,18 +331,6 @@ class LightRAGDomainService:
     def _ensure_postgres_identity(self, domain: LightRAGDomain) -> LightRAGDomain:
         if self.settings.storage_backend != "postgres":
             return domain
-        if self.settings.postgres_provisioning_mode == "shared_runtime":
-            updated = domain.model_copy(
-                update={
-                    "postgres_database": self.settings.runtime_postgres_database,
-                    "postgres_user": self.settings.runtime_postgres_user,
-                    "updated_at": self.now(),
-                }
-            )
-            if self.manifest.get_domain(domain.id) is not None:
-                self.manifest.update_domain(updated)
-            return updated
-
         postgres_suffix = self._postgres_identifier(domain.id)
         updates: dict[str, Any] = {}
         if not domain.postgres_database:
@@ -423,20 +449,3 @@ class LightRAGDomainService:
             message=operation.message,
         )
 
-    def _sync_runtime_status(self, domain: LightRAGDomain) -> LightRAGDomain:
-        ps = self.runner.ps()
-        if ps.exit_code != 0:
-            return domain
-        text = ps.stdout.lower()
-        service_name = domain.service_name.lower()
-        if service_name not in text:
-            return domain
-        running = "running" in text or "up" in text
-        status = "running" if running else "stopped"
-        if domain.status == status and domain.is_healthy is running:
-            return domain
-        updated = domain.model_copy(
-            update={"status": status, "is_healthy": running, "updated_at": self.now()}
-        )
-        self.manifest.update_domain(updated)
-        return updated

@@ -49,7 +49,12 @@ class Settings(BaseSettings):
     lightrag_postgres_user_prefix: str = "lightrag"
     lightrag_postgres_password: str = "lightrag"
     lightrag_postgres_provisioning_mode: str = "per_domain"
+    lightrag_postgres_admin_database: str = "context_engine"
+    lightrag_postgres_vector_extension: str = "vector"
+    lightrag_postgres_age_extension: str = "age"
     lightrag_postgres_vector_index_type: str = "HNSW"
+    lightrag_tokenizer_offline: bool = True
+    lightrag_tiktoken_cache_dir: str = "/app/.cache/tiktoken"
     lightrag_redis_url: str | None = None
     lightrag_neo4j_uri: str | None = None
     lightrag_neo4j_username: str | None = None
@@ -145,13 +150,13 @@ class Settings(BaseSettings):
                 raise ValueError("LIGHTRAG_DOCKERFILE must be configured when deploy is enabled.")
             if not self.lightrag_build_context:
                 raise ValueError("LIGHTRAG_BUILD_CONTEXT must be configured when deploy is enabled.")
-        if self.lightrag_storage_backend not in {"postgres", "file"}:
-            raise ValueError("LIGHTRAG_STORAGE_BACKEND must be 'postgres' or 'file'.")
-        if self.lightrag_postgres_provisioning_mode not in {"per_domain", "shared_runtime"}:
+        if self.lightrag_storage_backend != "postgres":
+            raise ValueError("LIGHTRAG_STORAGE_BACKEND must be 'postgres'.")
+        if self.lightrag_postgres_provisioning_mode != "per_domain":
             raise ValueError(
-                "LIGHTRAG_POSTGRES_PROVISIONING_MODE must be 'per_domain' or 'shared_runtime'."
+                "LIGHTRAG_POSTGRES_PROVISIONING_MODE must be 'per_domain'."
             )
-        if self.lightrag_storage_backend == "postgres" and not self.lightrag_postgres_password:
+        if not self.lightrag_postgres_password:
             raise ValueError(
                 "LIGHTRAG_POSTGRES_PASSWORD must be configured when LIGHTRAG_STORAGE_BACKEND=postgres."
             )

@@ -27,7 +27,10 @@ class LightRAGPostgresProvisionResult:
 class LightRAGPostgresProvisioner:
     def __init__(self, settings: LightRAGDeploySettings):
         self.settings = settings
-        self.admin_dsn = _psycopg_dsn(settings.database_url_for_admin)
+        self.admin_dsn = _dsn_with_database(
+            _psycopg_dsn(settings.database_url_for_admin),
+            settings.postgres_admin_database,
+        )
 
     def provision_domain(self, domain: LightRAGDomain) -> LightRAGPostgresProvisionResult:
         if not domain.postgres_database or not domain.postgres_user:
@@ -128,13 +131,28 @@ class LightRAGPostgresProvisioner:
                         "GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO {}"
                     ).format(sql.Identifier(username))
                 )
+                cur.execute(
+                    sql.SQL(
+                        "ALTER DEFAULT PRIVILEGES IN SCHEMA public "
+                        "GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO {}"
+                    ).format(sql.Identifier(username))
+                )
+                cur.execute(
+                    sql.SQL(
+                        "ALTER DEFAULT PRIVILEGES IN SCHEMA public "
+                        "GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO {}"
+                    ).format(sql.Identifier(username))
+                )
 
     def _ensure_extensions(self, database: str) -> dict[str, PostgresExtensionStatus]:
         db_dsn = _dsn_with_database(self.admin_dsn, database)
         statuses: dict[str, PostgresExtensionStatus] = {}
         with psycopg.connect(db_dsn, autocommit=True) as conn:
             with conn.cursor() as cur:
-                for extension in ("vector", "age"):
+                for extension in (
+                    self.settings.postgres_vector_extension,
+                    self.settings.postgres_age_extension,
+                ):
                     try:
                         cur.execute(
                             sql.SQL("CREATE EXTENSION IF NOT EXISTS {}").format(
@@ -152,6 +170,13 @@ class LightRAGPostgresProvisioner:
                             name=extension,
                             status="ok",
                         )
+        vector_status = statuses.get(self.settings.postgres_vector_extension)
+        if vector_status is None or vector_status.status != "ok":
+            message = vector_status.message if vector_status else "extension was not attempted"
+            raise RuntimeError(
+                f"{self.settings.postgres_vector_extension} extension is required for "
+                f"LightRAG PGVectorStorage in {database}: {message}"
+            )
         return statuses
 
 

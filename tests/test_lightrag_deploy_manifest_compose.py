@@ -168,6 +168,7 @@ def test_domain_env_uses_per_domain_postgres_credentials_by_default(tmp_path: Pa
         "POSTGRES_USER=lightrag_fatigue\n"
         "POSTGRES_PASSWORD=lightrag\n"
         "POSTGRES_VECTOR_INDEX_TYPE=HNSW\n"
+        "TIKTOKEN_CACHE_DIR=/app/.cache/tiktoken\n"
         "\n"
         "# Model provider configuration\n"
         "LLM_BINDING=openai\n"
@@ -179,10 +180,9 @@ def test_domain_env_uses_per_domain_postgres_credentials_by_default(tmp_path: Pa
     )
 
 
-def test_domain_env_can_use_shared_runtime_postgres_credentials(tmp_path: Path) -> None:
+def test_domain_env_does_not_use_app_runtime_postgres_credentials(tmp_path: Path) -> None:
     settings = replace(
         _settings(tmp_path),
-        postgres_provisioning_mode="shared_runtime",
         runtime_postgres_database="context_engine",
         runtime_postgres_user="context_engine",
         runtime_postgres_password="context_engine",
@@ -193,9 +193,9 @@ def test_domain_env_can_use_shared_runtime_postgres_credentials(tmp_path: Path) 
     write_domain_env(domain, settings, paths)
     env_text = paths.env_file.read_text(encoding="utf-8")
 
-    assert "POSTGRES_DATABASE=context_engine" in env_text
-    assert "POSTGRES_USER=context_engine" in env_text
-    assert "POSTGRES_PASSWORD=context_engine" in env_text
+    assert "POSTGRES_DATABASE=context_engine" not in env_text
+    assert "POSTGRES_USER=context_engine" not in env_text
+    assert "POSTGRES_PASSWORD=context_engine" not in env_text
 
 
 def test_domain_env_includes_bedrock_openai_compatible_provider_config(tmp_path: Path) -> None:

@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Context Engine — Knowledge Graph Domains with Left Navigation</title>
+  <style>
+    * { box-sizing: border-box; }
+    * { margin: 0; }
+    :root {
+      color-scheme: light;
+      --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+
+      /* Requested fixed visual direction */
+      --accent: #5b7894;
+      --accent-strong: #3f5f78;
+      --accent-soft: #f0f5f8;
+      --accent-border: #d2e0e8;
+      --accent-text: #34546b;
+
+      --background: #fbfbfa;
+      --canvas: #ffffff;
+      --surface: #ffffff;
+      --surface-muted: #f7f7f4;
+      --surface-raised: #f1f1ee;
+      --foreground: #101010;
+      --muted: #72726d;
+      --muted-strong: #4e4e49;
+      --muted-faint: #9a9a94;
+      --border: #e5e5de;
+      --border-strong: #d2d2c9;
+      --inverse: #111111;
+      --inverse-foreground: #ffffff;
+
+      --ready: #6f948e;
+      --ingesting: #b38b50;
+      --stopped: #a9aaa4;
+
+      --radius-control: 6px;     /* requested: small shape */
+      --radius-card: 10px;
+      --radius-shell: 12px;
+      --shadow-float: 0 16px 36px rgba(17, 17, 17, .075);
+      --shadow-card: 0 10px 24px rgba(17, 17, 17, .052);
+      --focus: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+    }
+
+    body {
+      min-height: 100vh;
+      font-family: var(--font-sans);
+      background:
+        radial-gradient(circle at 30% -16%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 32rem),
+        var(--background);
+      color: var(--foreground);
+      line-height: 1.45;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+    :focus-visible { outline: none; box-shadow: var(--focus); }
+
+    .page {
+      min-height: 100vh;
+      padding: 24px;
+      display: grid;
+      place-items: start center;
+    }
+
+    .settings-shell {
+      width: min(1220px, 100%);
+      min-height: 740px;
+      background: var(--canvas);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-shell);
+      box-shadow: var(--shadow-float);
+      display: grid;
+      grid-template-columns: 162px minmax(0, 1fr);
+      overflow: hidden;
+    }
+
+    .settings-nav {
+      background: var(--surface-muted);
+      border-right: 1px solid var(--border);
+      padding: 16px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .close-btn {
+      width: 34px;
+      height: 34px;
+      border: 0;
+      background: transparent;
+      border-radius: var(--radius-control);
+      color: var(--foreground);
+      margin-bottom: 16px;
+      display: inline-grid;
+      place-items: center;
+      font-size: 17px;
+    }
+
+    .nav-item {
+      min-height: 35px;
+      border-radius: 8px;
+      padding: 7px 9px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted-strong);
+      font-size: 13px;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+
+    .nav-item.active {
+      background: var(--surface);
+      border-color: var(--border);
+      color: var(--foreground);
+      box-shadow: 0 8px 18px rgba(17, 17, 17, .045);
+    }
+
+    .nav-icon {
+      width: 15px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .content {
+      min-width: 0;
+      padding: 22px 20px 28px;
+      overflow: auto;
+    }
+
+    .route-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      gap: 18px;
+      margin-bottom: 14px;
+    }
+
+    .route-title h1 {
+      font-size: 16px;
+      letter-spacing: -.02em;
+      font-weight: 680;
+    }
+
+    .route-title p {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 5px;
+    }
+
+    .btn {
+      min-height: 34px;
+      padding: 7px 12px;
+      border-radius: var(--radius-control);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--foreground);
+      font-size: 13px;
+      font-weight: 560;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      white-space: nowrap;
+    }
+
+    .btn:hover { background: var(--surface-muted); }
+    .btn.primary { background: var(--inverse); border-color: var(--inverse); color: var(--inverse-foreground); }
+    .btn.soft { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent-text); }
+    .btn.quiet { background: transparent; border-color: transparent; color: var(--muted-strong); }
+    .btn.text { border-color: transparent; background: transparent; min-height: 28px; padding: 4px 0; }
+
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow-card); /* requested: subtle floating cards */
+    }
+
+    .panel-pad { padding: 17px; }
+
+    .panel-title {
+      font-size: 14px;
+      font-weight: 680;
+      letter-spacing: -.015em;
+    }
+
+    .panel-desc {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 4px;
+    }
+
+    .create-panel {
+      margin-bottom: 20px;
+    }
+
+    .form-grid {
+      display: grid;
+      gap: 16px;
+      margin-top: 15px;
+    }
+
+    .section-label {
+      font-size: 12px;
+      font-weight: 680;
+      margin-bottom: 9px;
+    }
+
+    .fields-2 {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 14px;
+    }
+
+    .field {
+      display: grid;
+      gap: 4px;
+    }
+
+    .field label {
+      font-size: 12px;
+      font-weight: 650;
+      color: var(--foreground);
+    }
+
+    .help {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    /* Requested: underline fields */
+    .input, .select, .textarea {
+      width: 100%;
+      min-height: 34px;
+      border: 0;
+      border-radius: 0;
+      border-bottom: 1px solid var(--border-strong);
+      background: transparent;
+      color: var(--foreground);
+      padding: 6px 2px 7px;
+      font-size: 13px;
+      outline: none;
+    }
+
+    .input:focus, .select:focus, .textarea:focus {
+      border-bottom-color: var(--accent);
+      box-shadow: 0 1px 0 var(--accent);
+    }
+
+    .select {
+      appearance: none;
+      background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+      background-position: calc(100% - 14px) 52%, calc(100% - 9px) 52%;
+      background-size: 5px 5px, 5px 5px;
+      background-repeat: no-repeat;
+      padding-right: 28px;
+    }
+
+    .radio-list {
+      display: grid;
+      gap: 6px;
+    }
+
+    .radio-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 24px;
+      color: var(--muted-strong);
+      font-size: 13px;
+    }
+
+    .radio {
+      width: 14px;
+      height: 14px;
+      border-radius: 99px;
+      border: 1px solid var(--border-strong);
+      display: inline-grid;
+      place-items: center;
+      flex: 0 0 auto;
+    }
+
+    .radio.selected { border-color: var(--accent); }
+    .radio.selected::after {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 99px;
+      background: var(--accent);
+    }
+
+    .disclosure {
+      min-height: 36px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      padding: 0 2px;
+      color: var(--muted-strong);
+      font-size: 13px;
+    }
+
+    .form-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .domains-panel {
+      margin-top: 10px;
+    }
+
+    .domains-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      gap: 12px;
+      padding: 22px 18px 10px;
+    }
+
+    .domain-table-wrap {
+      padding: 0 18px 22px;
+    }
+
+    .domain-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .domain-table th {
+      text-align: left;
+      color: var(--muted-strong);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 13px 8px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .domain-table td {
+      padding: 12px 8px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+
+    .domain-table tr:last-child td { border-bottom: 0; }
+    .domain-table td:nth-child(4), .domain-table th:nth-child(4) { text-align: right; }
+
+    .domain-name {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 650;
+      letter-spacing: -.02em;
+    }
+
+    .domain-sub {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    .mono { font-family: var(--font-mono); letter-spacing: -.02em; }
+
+    .status-pill {
+      min-height: 25px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface-muted);
+      color: var(--foreground);
+      font-size: 12px;
+      font-weight: 560;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      display: inline-block;
+      background: currentColor;
+    }
+
+    .status-ready { color: var(--ready); }
+    .status-ingesting { color: var(--ingesting); }
+    .status-stopped { color: var(--stopped); }
+
+    .inline-actions {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .table-note {
+      padding: 0 18px 18px;
+      color: var(--muted);
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .mini-meta {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .mini-meta::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+      opacity: .7;
+    }
+
+    @media (max-width: 860px) {
+      .page { padding: 12px; }
+      .settings-shell { grid-template-columns: 1fr; }
+      .settings-nav {
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+        flex-direction: row;
+        overflow-x: auto;
+        padding: 10px;
+      }
+      .close-btn { display: none; }
+      .fields-2 { grid-template-columns: 1fr; }
+      .route-header, .toolbar, .domains-header { flex-direction: column; align-items: stretch; }
+      .domain-table th:nth-child(2), .domain-table td:nth-child(2) { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="settings-shell" aria-label="Context Engine settings preview">
+      <nav class="settings-nav" aria-label="Settings navigation">
+        <button class="close-btn" aria-label="Close settings">×</button>
+        <div class="nav-item"><span class="nav-icon">⚙</span>General</div>
+        <div class="nav-item"><span class="nav-icon">♙</span>Account</div>
+        <div class="nav-item active"><span class="nav-icon">⌬</span>Knowledge Gra...</div>
+        <div class="nav-item"><span class="nav-icon">▣</span>Providers</div>
+      </nav>
+
+      <section class="content">
+        <header class="route-header">
+          <div class="route-title">
+            <h1>Knowledge Graph</h1>
+            <p>Manage retrieval domains, document uploads, and lifecycle actions.</p>
+          </div>
+          <button class="btn"><span>↻</span>Refresh</button>
+        </header>
+
+        <div class="toolbar">
+          <button class="btn soft">− Hide create form</button>
+          <span class="mini-meta">Steel blue · underline fields · small shape · floating cards</span>
+        </div>
+
+        <section class="panel panel-pad create-panel">
+          <div class="panel-title">Create knowledge graph domain</div>
+          <div class="panel-desc">Create an isolated retrieval domain for documents and evidence.</div>
+
+          <div class="form-grid">
+            <div>
+              <div class="section-label">Domain identity</div>
+              <div class="fields-2">
+                <div class="field">
+                  <label for="domain-id">Domain ID</label>
+                  <input id="domain-id" class="input mono" value="fatigue" />
+                </div>
+                <div class="field">
+                  <label for="display-name">Display name</label>
+                  <input id="display-name" class="input" value="Fatigue Manuals" />
+                </div>
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="embedding-model">Embedding model</label>
+              <select id="embedding-model" class="select mono">
+                <option>openai · text-embedding-3-small · 1536 dims</option>
+                <option>openai · text-embedding-3-large · 3072 dims</option>
+                <option>ollama · nomic-embed-text</option>
+              </select>
+              <div class="help">Locked after creation. All documents in this domain share the same embedding space.</div>
+            </div>
+
+            <div>
+              <div class="section-label">Host port</div>
+              <div class="help" style="margin-bottom:6px">Choose automatic assignment or provide a fixed port.</div>
+              <div class="radio-list">
+                <label class="radio-row"><span class="radio selected"></span> Auto-assign available port</label>
+                <label class="radio-row"><span class="radio"></span> Use custom port</label>
+              </div>
+            </div>
+
+            <div class="disclosure">
+              <span>Advanced retrieval defaults</span>
+              <span>⌄</span>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn quiet">Cancel</button>
+            <button class="btn primary">Create</button>
+          </div>
+        </section>
+
+        <section class="panel domains-panel" aria-labelledby="domains-title">
+          <div class="domains-header">
+            <div>
+              <h2 id="domains-title" class="panel-title">Knowledge graph domains</h2>
+              <p class="panel-desc">Admin operations should look controlled, not flashy.</p>
+            </div>
+            <button class="btn soft">＋ Create domain</button>
+          </div>
+
+          <div class="domain-table-wrap">
+            <table class="domain-table">
+              <thead>
+                <tr>
+                  <th>Domain</th>
+                  <th>Display name</th>
+                  <th>Status</th>
+                  <th>Port</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><div class="domain-name">fatigue</div><div class="domain-sub">OpenAI embeddings · 12 documents</div></td>
+                  <td>Fatigue Manuals</td>
+                  <td><span class="status-pill"><span class="status-dot status-ready"></span>Ready</span></td>
+                  <td class="mono">9622</td>
+                  <td><div class="inline-actions"><button class="btn">Open</button></div></td>
+                </tr>
+                <tr>
+                  <td><div class="domain-name">policies</div><div class="domain-sub">3 queued jobs · parsing tables</div></td>
+                  <td>Policy Docs</td>
+                  <td><span class="status-pill"><span class="status-dot status-ingesting"></span>Ingesting</span></td>
+                  <td class="mono">9623</td>
+                  <td><div class="inline-actions"><button class="btn">Jobs</button></div></td>
+                </tr>
+                <tr>
+                  <td><div class="domain-name">archive-test</div><div class="domain-sub">Archived trial domain</div></td>
+                  <td>Archive Test</td>
+                  <td><span class="status-pill"><span class="status-dot status-stopped"></span>Stopped</span></td>
+                  <td class="mono">—</td>
+                  <td><div class="inline-actions"><button class="btn text">Restore</button></div></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="table-note">
+            <span>Use table rows for comparable lifecycle state instead of one card per domain.</span>
+            <span class="mono">reference pattern: domain · status · port · action</span>
+          </div>
+        </section>
+      </section>
+    </section>
+  </main>
+</body>
+</html>

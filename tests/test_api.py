@@ -62,8 +62,8 @@ def _settings_cache(
     manifest_path.write_text(
         (
             '{"domains":['
-            '{"id":"default","display_name":"Default","base_url":"http://lightrag-default.local","status":"ready","is_default":true},'
-            '{"id":"fatigue","display_name":"Fatigue","base_url":"http://lightrag-fatigue.local","status":"ready"}'
+            '{"id":"default","display_name":"Default","host_base_url":"http://127.0.0.1:9622","container_base_url":"http://lightrag_default:9621","status":"ready","is_default":true},'
+            '{"id":"fatigue","display_name":"Fatigue","host_base_url":"http://127.0.0.1:9623","container_base_url":"http://lightrag_fatigue:9621","status":"ready"}'
             "]}"
         ),
         encoding="utf-8",
@@ -1417,7 +1417,7 @@ def test_admin_upload_queues_lightrag_ingestion_when_enabled(
 ) -> None:
     manifest_path = tmp_path / "domains.json"
     manifest_path.write_text(
-        '{"domains":[{"id":"default","display_name":"Default","base_url":"http://127.0.0.1:9621","status":"ready"}]}',
+        '{"domains":[{"id":"default","display_name":"Default","host_base_url":"http://127.0.0.1:9621","container_base_url":"http://lightrag_default:9621","status":"ready"}]}',
         encoding="utf-8",
     )
     monkeypatch.setenv("INDEX_JOBS_INLINE", "false")

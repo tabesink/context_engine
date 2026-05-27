@@ -13,6 +13,8 @@ class CommandResult:
 
 
 class DockerComposeRunner(Protocol):
+    def build(self, service_name: str) -> CommandResult: ...
+
     def up(self, service_name: str) -> CommandResult: ...
 
     def stop(self, service_name: str) -> CommandResult: ...
@@ -30,6 +32,9 @@ class SubprocessDockerComposeRunner:
 
     def up(self, service_name: str) -> CommandResult:
         return self._run(["up", "-d", service_name])
+
+    def build(self, service_name: str) -> CommandResult:
+        return self._run(["build", service_name])
 
     def stop(self, service_name: str) -> CommandResult:
         return self._run(["stop", service_name])

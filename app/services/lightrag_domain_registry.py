@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException
+from sqlalchemy.exc import OperationalError
 
 from app.core.config import Settings, get_settings
 from app.services.lightrag_domain_lifecycle_service import LightRAGDomainLifecycleService
@@ -97,8 +98,8 @@ class LightRAGDomainRegistry:
         base_url = self._runtime_base_url(entry, requested)
 
         return LightRAGDomainRuntime(
-            id=str(entry.get("id") or requested),
-            display_name=str(entry.get("display_name") or entry.get("name") or requested),
+            id=str(entry["id"]),
+            display_name=str(entry.get("display_name") or entry["id"]),
             base_url=base_url,
             host_base_url=_optional_url(entry.get("host_base_url")),
             container_base_url=_optional_url(entry.get("container_base_url")),
@@ -111,16 +112,15 @@ class LightRAGDomainRegistry:
     def get_default(self) -> LightRAGDomainRuntime:
         for entry in self._read_domain_entries():
             if entry.get("is_default") is True:
-                return self.get_required(str(entry.get("id") or entry.get("name") or ""))
+                return self.get_required(str(entry.get("id") or ""))
         raise LightRAGDomainNotFoundError("No default LightRAG domain is registered")
 
     def validate_available(self, domain_id: str | None) -> LightRAGDomainRuntime:
         domain = self.get_required(domain_id)
         try:
             is_active = self.lifecycle.is_active(domain.id)
-        except Exception:
-            # Lifecycle state is additive; keep manifest-backed domains usable in
-            # lightweight/unit contexts where lifecycle storage is unavailable.
+        except OperationalError:
+            # Test/local bootstrap environments may not have lifecycle tables yet.
             is_active = True
         if not is_active:
             raise LightRAGDomainUnavailableError(
@@ -136,13 +136,12 @@ class LightRAGDomainRegistry:
     def _blocked_domain_ids(self) -> set[str]:
         try:
             return self.lifecycle.blocked_domain_ids()
-        except Exception:
-            # Lifecycle state is additive; keep registry readable if DB state is unavailable.
+        except OperationalError:
             return set()
 
     def _domain_entry(self, domain_id: str) -> dict[str, Any] | None:
         for entry in self._read_domain_entries():
-            if entry.get("id") == domain_id or entry.get("name") == domain_id:
+            if entry.get("id") == domain_id:
                 return entry
         return None
 
@@ -150,19 +149,15 @@ class LightRAGDomainRegistry:
         mode = self.settings.lightrag_docker_execution_mode.strip().lower()
         host_base_url = _optional_url(entry.get("host_base_url"))
         container_base_url = _optional_url(entry.get("container_base_url"))
-        legacy_base_url = _optional_url(entry.get("base_url"))
 
         if mode == "socket":
-            for candidate in (container_base_url, legacy_base_url, host_base_url):
-                if candidate:
-                    return candidate
-        else:
-            for candidate in (host_base_url, legacy_base_url, container_base_url):
-                if candidate:
-                    return candidate
+            if container_base_url:
+                return container_base_url
+        elif host_base_url:
+            return host_base_url
 
         raise LightRAGDomainRegistryInvalidError(
-            f"LightRAG domain '{domain_id}' does not define a usable runtime URL"
+            f"LightRAG domain '{domain_id}' does not define the required runtime URL for {mode!r} mode"
         )
 
     def _read_domain_entries(self) -> list[dict[str, Any]]:
@@ -170,12 +165,6 @@ class LightRAGDomainRegistry:
             return []
         payload = json.loads(self.registry_path.read_text(encoding="utf-8"))
         domains = payload.get("domains", []) if isinstance(payload, dict) else []
-        if isinstance(domains, dict):
-            return [
-                {"id": key, **value}
-                for key, value in domains.items()
-                if isinstance(key, str) and isinstance(value, dict)
-            ]
         if isinstance(domains, list):
             return [entry for entry in domains if isinstance(entry, dict) and entry.get("id")]
         return []

@@ -35,7 +35,7 @@ def test_domain_resolver_requires_registered_domain(tmp_path: Path) -> None:
 def test_domain_resolver_uses_registered_runtime_connection(tmp_path: Path) -> None:
     registry_path = tmp_path / "domains.json"
     registry_path.write_text(
-        '{"domains":[{"id":"default","base_url":"http://lightrag.example","api_key":"secret","status":"ready"}]}',
+        '{"domains":[{"id":"default","host_base_url":"http://127.0.0.1:9623","container_base_url":"http://lightrag.example:9621","api_key":"secret","status":"ready"}]}',
         encoding="utf-8",
     )
     settings = Settings(
@@ -47,7 +47,7 @@ def test_domain_resolver_uses_registered_runtime_connection(tmp_path: Path) -> N
     domain = resolve_lightrag_domain(settings=settings, domain="default")
 
     assert domain.name == "default"
-    assert domain.base_url == "http://lightrag.example"
+    assert domain.base_url == "http://127.0.0.1:9623"
     assert domain.api_key == "secret"
 
 
@@ -347,45 +347,33 @@ def test_remote_adapter_ingests_source_chunks_with_metadata() -> None:
     assert response["track_id"] == "track-chunks"
 
 
-def test_remote_adapter_falls_back_to_texts_when_ingest_chunks_not_supported() -> None:
-    calls: list[str] = []
-
+def test_remote_adapter_raises_on_missing_ingest_chunks_endpoint() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        calls.append(request.url.path)
-        if request.url.path == "/documents/ingest_chunks":
-            return httpx.Response(404, json={"detail": "Not Found"})
-        if request.url.path == "/documents/texts":
-            payload = request.read().decode()
-            assert '"texts":["See figure."]' in payload
-            assert '"file_sources":["manual.pdf"]' in payload
-            return httpx.Response(200, json={"status": "success", "track_id": "track-fallback"})
-        return httpx.Response(500, json={"detail": "unexpected path"})
+        assert request.url.path == "/documents/ingest_chunks"
+        return httpx.Response(404, json={"detail": "Not Found"})
 
     adapter = LightRAGRemoteAdapter(
         base_url="http://lightrag.local",
         client=httpx.Client(transport=httpx.MockTransport(handler), base_url="http://lightrag.local"),
     )
 
-    response = adapter.ingest_source_chunks(
-        domain="manuals",
-        chunks=[
-            SourceChunk(
-                chunk_id="chunk-1",
-                document_id="doc-1",
-                section_id="sec-1",
-                block_ids=["block-1"],
-                text="See figure.",
-                page_start=1,
-                page_end=1,
-                asset_ids=["asset-1"],
-                metadata={"source_path": "manual.pdf"},
-            )
-        ],
-    )
-
-    assert calls == ["/documents/ingest_chunks", "/documents/texts"]
-    assert response["status"] == "indexing"
-    assert response["track_id"] == "track-fallback"
+    with pytest.raises(LightRAGUpstreamError):
+        adapter.ingest_source_chunks(
+            domain="manuals",
+            chunks=[
+                SourceChunk(
+                    chunk_id="chunk-1",
+                    document_id="doc-1",
+                    section_id="sec-1",
+                    block_ids=["block-1"],
+                    text="See figure.",
+                    page_start=1,
+                    page_end=1,
+                    asset_ids=["asset-1"],
+                    metadata={"source_path": "manual.pdf"},
+                )
+            ],
+        )
 
 
 def test_remote_adapter_normalizes_track_status() -> None:

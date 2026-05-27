@@ -42,3 +42,31 @@ def test_runner_returns_timeout_result_when_compose_command_times_out(
 
     assert result.exit_code == 124
     assert result.stderr == "Command timed out after 30s"
+
+
+def test_runner_build_uses_compose_build_subcommand(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run(args, **kwargs):
+        captured["args"] = args
+        del kwargs
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    runner = SubprocessDockerComposeRunner(
+        compose_file=Path("/tmp/compose.yml"),
+        compose_bin="docker compose",
+        timeout_seconds=30,
+    )
+
+    result = runner.build("lightrag_test")
+
+    assert result.exit_code == 0
+    assert captured["args"] == [
+        "docker",
+        "compose",
+        "-f",
+        "/tmp/compose.yml",
+        "build",
+        "lightrag_test",
+    ]

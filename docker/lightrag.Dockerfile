@@ -34,7 +34,9 @@ RUN mkdir -p "$TIKTOKEN_CACHE_DIR" \
             text-embedding-3-small \
             text-embedding-3-large \
             cl100k_base \
-            o200k_base
+            o200k_base \
+    && test -d "$TIKTOKEN_CACHE_DIR" \
+    && find "$TIKTOKEN_CACHE_DIR" -maxdepth 2 -type f | grep -q .
 
 EXPOSE 9621
 

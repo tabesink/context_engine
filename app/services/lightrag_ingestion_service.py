@@ -89,7 +89,7 @@ class LightRAGIngestionService:
         if not document:
             raise ValueError(f"Document {document_id} not found")
         lightrag = dict(document.meta.get("lightrag") or {})
-        domain_id = lightrag.get("domain_id") or lightrag.get("domain")
+        domain_id = lightrag.get("domain_id")
         if not domain_id:
             raise ValueError(f"Document {document_id} has no LightRAG domain")
 
@@ -206,7 +206,7 @@ class LightRAGIngestionService:
         if status == "ready":
             self.documents.update_status(document, DocumentStatus.READY)
             self._lock_domain_embedding(
-                domain_id=str(lightrag.get("domain_id") or lightrag.get("domain") or ""),
+                domain_id=str(lightrag.get("domain_id") or ""),
                 document_id=document.id,
             )
         elif status == "failed":
@@ -221,10 +221,7 @@ class LightRAGIngestionService:
     def _lock_domain_embedding(self, *, domain_id: str, document_id: str) -> None:
         if not domain_id:
             return
-        try:
-            domain = self.domain_manifest.get_domain(domain_id)
-        except Exception:
-            return
+        domain = self.domain_manifest.get_domain(domain_id)
         if domain is None or domain.embedding is None or domain.embedding_locked_at is not None:
             return
         now = self.now()

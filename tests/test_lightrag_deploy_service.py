@@ -75,6 +75,10 @@ class FakeRunner:
         self.calls.append(("up", service_name))
         return self._result()
 
+    def build(self, service_name: str) -> CommandResult:
+        self.calls.append(("build", service_name))
+        return self._result()
+
     def stop(self, service_name: str) -> CommandResult:
         self.calls.append(("stop", service_name))
         return self._result()
@@ -343,8 +347,10 @@ def test_docker_operations_call_runner_with_domain_service_name(tmp_path: Path) 
     assert service.recreate("fatigue").status == "succeeded"
 
     assert runner.calls == [
+        ("build", "lightrag_fatigue"),
         ("up", "lightrag_fatigue"),
         ("stop", "lightrag_fatigue"),
+        ("build", "lightrag_fatigue"),
         ("recreate", "lightrag_fatigue"),
     ]
 
@@ -389,7 +395,7 @@ def test_repair_regenerates_recreates_probes_and_marks_healthy(tmp_path: Path) -
     )
     domain = service.get_domain("fatigue")
 
-    assert runner.calls == [("recreate", "lightrag_fatigue")]
+    assert runner.calls == [("build", "lightrag_fatigue"), ("recreate", "lightrag_fatigue")]
     assert reachability.calls == ["fatigue"]
     assert result.docker_operation == "succeeded"
     assert result.postgres_database == "lightrag_fatigue"
@@ -456,7 +462,7 @@ def test_repair_provisions_missing_postgres_identity_and_rewrites_env(
     assert repaired.postgres_user == "lightrag_legacy_domain"
     assert "POSTGRES_DATABASE=lightrag_legacy_domain" in env_text
     assert "POSTGRES_USER=lightrag_legacy_domain" in env_text
-    assert runner.calls == [("recreate", "lightrag_legacy-domain")]
+    assert runner.calls == [("build", "lightrag_legacy-domain"), ("recreate", "lightrag_legacy-domain")]
     assert result.postgres_role_exists is True
     assert result.postgres_database_exists is True
     assert result.extensions["vector"]["status"] == "ok"
