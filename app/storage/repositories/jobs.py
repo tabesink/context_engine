@@ -55,6 +55,14 @@ class JobRepository:
             )
         )
 
+    def list_latest_by_document_ids(self, document_ids: Sequence[str]) -> List[JobRow]:
+        rows = self.list_by_document_ids(document_ids)
+        latest: dict[str, JobRow] = {}
+        for row in rows:
+            if row.document_id and row.document_id not in latest:
+                latest[row.document_id] = row
+        return list(latest.values())
+
     def clear_document_references(self, document_ids: Sequence[str]) -> int:
         if not document_ids:
             return 0

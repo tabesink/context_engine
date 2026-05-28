@@ -188,6 +188,21 @@ try {
             -WorkingDirectory $repoRoot `
             -PassThru `
             -NoNewWindow
+
+        $apiBaseUrl = "http://${apiHost}:${apiPort}"
+        $null = Start-Job -ScriptBlock {
+            param($Root, $ApiBase)
+            Set-Location $Root
+            for ($attempt = 0; $attempt -lt 90; $attempt++) {
+                try {
+                    Invoke-RestMethod -Uri "$ApiBase/health" -TimeoutSec 2 | Out-Null
+                    break
+                } catch {
+                    Start-Sleep -Seconds 2
+                }
+            }
+            docker compose exec -T api python -c "from app.seed import ensure_seed_admin; user = ensure_seed_admin(sync_password=True); print('Seed admin ready:', user.email)"
+        } -ArgumentList $repoRoot.Path, $apiBaseUrl
     }
 
     Write-Host 'Starting client...'
@@ -210,6 +225,11 @@ try {
     Write-Host "API host:port: ${apiHost}:${apiPort}"
     Write-Host "Client host:port: ${clientHost}:${clientPort}"
     Write-Host "Client API base: $clientApiBase"
+    $seedUsername = Get-EnvValue -Key 'SEED_ADMIN_USERNAME' -Path $envFile
+    if (-not $seedUsername) { $seedUsername = 'admin' }
+    $seedPassword = Get-EnvValue -Key 'SEED_ADMIN_PASSWORD' -Path $envFile
+    if (-not $seedPassword) { $seedPassword = 'admin-password' }
+    Write-Host "Login: $seedUsername / $seedPassword (from .env SEED_ADMIN_*)"
     Write-Host 'Press Ctrl+C to stop both processes.'
 
     while ($true) {

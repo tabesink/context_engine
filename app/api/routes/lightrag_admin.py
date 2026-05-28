@@ -52,7 +52,6 @@ def list_admin_domains(
     service: LightRAGDomainService = Depends(get_domain_service),
 ) -> dict[str, list[LightRAGDomain]]:
     del admin
-    _ensure_deploy_enabled(service)
     return {"domains": service.list_domains()}
 
 
@@ -63,7 +62,6 @@ def create_domain(
     session: Session = Depends(get_session),
     service: LightRAGDomainService = Depends(get_domain_service),
 ) -> LightRAGDomain:
-    _ensure_deploy_enabled(service)
     try:
         domain = service.create_domain(request)
     except ValueError as exc:
@@ -84,7 +82,6 @@ def show_domain(
     service: LightRAGDomainService = Depends(get_domain_service),
 ) -> LightRAGDomain:
     del admin
-    _ensure_deploy_enabled(service)
     return _domain_or_404(service, domain_id)
 
 
@@ -95,7 +92,6 @@ def up_domain(
     session: Session = Depends(get_session),
     service: LightRAGDomainService = Depends(get_domain_service),
 ) -> LightRAGDomainOperationResult:
-    _ensure_deploy_enabled(service)
     result = _operation_or_404(service.up, domain_id)
     _audit(session, admin, "lightrag.domain.started", service.get_domain(domain_id))
     return result
@@ -108,7 +104,6 @@ def down_domain(
     session: Session = Depends(get_session),
     service: LightRAGDomainService = Depends(get_domain_service),
 ) -> LightRAGDomainOperationResult:
-    _ensure_deploy_enabled(service)
     result = _operation_or_404(service.down, domain_id)
     _audit(session, admin, "lightrag.domain.stopped", service.get_domain(domain_id))
     return result
@@ -121,7 +116,8 @@ def recreate_domain(
     session: Session = Depends(get_session),
     service: LightRAGDomainService = Depends(get_domain_service),
 ) -> LightRAGDomainOperationResult:
-    _ensure_deploy_enabled(service)
+    # Advanced compatibility operation: kept for existing clients.
+    # Normal admin UX should prefer repair for safe recovery semantics.
     result = _operation_or_404(service.recreate, domain_id)
     _audit(session, admin, "lightrag.domain.recreated", service.get_domain(domain_id))
     return result
@@ -134,7 +130,8 @@ def repair_domain(
     session: Session = Depends(get_session),
     service: LightRAGDomainService = Depends(get_domain_service),
 ) -> LightRAGDomainRepairResult:
-    _ensure_deploy_enabled(service)
+    # Primary recovery operation: reprovisions runtime artifacts, restarts, and
+    # returns detailed health/provisioning status for operators.
     try:
         result = service.repair(domain_id)
     except DomainNotFoundError as exc:
@@ -154,7 +151,8 @@ def regenerate_domain(
     session: Session = Depends(get_session),
     service: LightRAGDomainService = Depends(get_domain_service),
 ) -> dict[str, str]:
-    _ensure_deploy_enabled(service)
+    # Advanced maintenance operation: rewrites domain artifacts without being
+    # the canonical lifecycle action for normal admin flows.
     _domain_or_404(service, domain_id)
     service.regenerate(domain_id)
     _audit(session, admin, "lightrag.domain.regenerated", service.get_domain(domain_id))
@@ -169,14 +167,24 @@ def remove_domain(
     session: Session = Depends(get_session),
     service: LightRAGDomainService = Depends(get_domain_service),
 ) -> LightRAGDomainRemoveResponse:
-    _ensure_deploy_enabled(service)
+    # Permanent delete via query parameter is deprecated in favor of
+    # purge-preview + purge so operators see destructive impact before commit.
+    if permanent:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Permanent delete via query parameter is deprecated; "
+                "use /admin/lightrag/domains/{domain_id}/purge-preview then "
+                "/admin/lightrag/domains/{domain_id}/purge"
+            ),
+        )
     lifecycle = LightRAGDomainLifecycleRepository(session)
     lifecycle.set_state(
         domain_id=domain_id,
-        state="purging" if permanent else "archiving",
+        state="archiving",
     )
     try:
-        result = service.remove(domain_id, permanent=permanent)
+        result = service.remove(domain_id, permanent=False)
     except DomainNotFoundError as exc:
         lifecycle.set_state(domain_id=domain_id, state="failed", error_message=str(exc))
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -185,9 +193,9 @@ def remove_domain(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     lifecycle.set_state(
         domain_id=domain_id,
-        state="purged" if result.permanent else "archived",
+        state="archived",
     )
-    event = "lightrag.domain.deleted_permanently" if result.permanent else "lightrag.domain.archived"
+    event = "lightrag.domain.archived"
     LogRepository(session).record_audit(
         actor_id=admin.id,
         event=event,
@@ -251,11 +259,6 @@ def list_user_domains(
             for domain in registry.list_domains()
         ]
     }
-
-
-def _ensure_deploy_enabled(service: LightRAGDomainService) -> None:
-    if not service.settings.enabled:
-        raise HTTPException(status_code=400, detail="LightRAG deployment is disabled")
 
 
 def _domain_or_404(service: LightRAGDomainService, domain_id: str) -> LightRAGDomain:

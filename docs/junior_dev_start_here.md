@@ -14,7 +14,7 @@ Evidence can come from:
 LightRAG is external and is the only semantic retrieval engine. Local navigation/page browsing remains separate local capability.
 The public retrieval API is evidence-only through `POST /retrieve`.
 
-Admins can optionally manage same-machine LightRAG domain containers through Context Engine when `LIGHTRAG_DEPLOY_ENABLED=true`. That deployment control plane writes generated files under `.data/lightrag/`; runtime retrieve/upload/graph traffic still goes through `LightRAGRemoteAdapter`.
+Admins can manage same-machine LightRAG domain containers through Context Engine. That deployment control plane writes generated files under `.data/lightrag/`; runtime retrieve/upload/graph traffic still goes through `LightRAGRemoteAdapter`.
 
 For model providers in managed domains:
 
@@ -100,6 +100,14 @@ Domain deployment and user listing:
 ```text
 admin -> /admin/lightrag/domains ... -> LightRAGDomainService -> .data/lightrag + Docker Compose runner
 user -> GET /lightrag/domains -> safe domain list for query/UI selection (same router module as admin domain APIs)
+```
+
+Processing status (normalized API boundary):
+
+```text
+user -> /lightrag/domains/{domain_id}/processing-status or /documents/{document_id}/processing-status
+admin -> /admin/lightrag/domains/{domain_id}/processing-status or /admin/documents/{document_id}/processing-status
+-> ProcessingStatusService -> local docs/jobs + LightRAG status enrichment -> normalized response
 ```
 
 ## Rules of Thumb

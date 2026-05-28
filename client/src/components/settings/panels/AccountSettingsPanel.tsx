@@ -36,6 +36,11 @@ import { APIError } from "@/lib/api/client";
 import { usersApi } from "@/lib/api/users";
 import { selectIsAdmin, useAuthStore } from "@/stores/auth-store";
 import type { AdminUser, CreateUserPayload, UpdateUserPayload, UserRole } from "@/types/user";
+import {
+  settingsButtonClassName,
+  settingsInputClassName,
+  settingsSelectTriggerClassName,
+} from "@/components/settings/settings-controls";
 
 interface CreateState {
   open: boolean;
@@ -86,9 +91,9 @@ function getErrorMessage(error: unknown, fallback: string): string {
 }
 
 const panelClassName = "rounded-xl border border-[var(--border)] bg-[var(--background)]";
-const inputClassName = "rounded-full border-[var(--border)] bg-[var(--background)] shadow-none";
-const selectTriggerClassName = "rounded-full border-[var(--border)] bg-[var(--background)] shadow-none";
-const pillButtonClassName = "rounded-full shadow-none";
+const inputClassName = settingsInputClassName;
+const selectTriggerClassName = settingsSelectTriggerClassName;
+const pillButtonClassName = settingsButtonClassName;
 
 export function AccountSettingsPanel({ embedded = false }: { embedded?: boolean }) {
   const currentUser = useAuthStore((state) => state.user);

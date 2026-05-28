@@ -15,7 +15,7 @@ First-time setup for both options:
 copy .env.example .env
 ```
 
-Optional overlays for LightRAG deployment/provider settings are available in `.env.lightrag-deploy.example` and `.env.lightrag-provider.example`.
+Optional overlay for LightRAG provider settings is available in `.env.lightrag-provider.example`. Domain lifecycle settings are included in `.env.example`.
 
 Edit `.env` if your database or Redis URLs differ. Admin login is configured with `SEED_ADMIN_USERNAME` and `SEED_ADMIN_PASSWORD`.
 
@@ -45,7 +45,7 @@ docker compose up --build
 Seed the admin user (first run, or after changing seed credentials):
 
 ```powershell
-docker compose exec api python -m scripts.seed_admin
+docker compose exec api python -c "from app.seed import ensure_seed_admin; ensure_seed_admin(sync_password=True)"
 ```
 
 Health check:

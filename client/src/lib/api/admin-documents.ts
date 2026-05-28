@@ -56,6 +56,12 @@ export const adminDocumentsApi = {
     }
     return payload as AdminDocumentUploadResponse;
   },
+  reingest(documentId: string) {
+    return apiRequest<{ document_id: string; job_id: string }>(
+      `/admin/documents/${encodeURIComponent(documentId)}/reingest`,
+      { method: "POST" },
+    );
+  },
 };
 
 async function readBody(response: Response): Promise<unknown> {

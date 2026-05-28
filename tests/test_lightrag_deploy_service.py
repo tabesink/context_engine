@@ -159,7 +159,6 @@ class FakeReachability:
 
 def _settings(tmp_path: Path, *, allow_permanent_delete: bool = False) -> LightRAGDeploySettings:
     return LightRAGDeploySettings(
-        enabled=True,
         deploy_root=tmp_path / "lightrag",
         domains_root=tmp_path / "lightrag" / "domains",
         manifest_path=tmp_path / "lightrag" / "domains.json",

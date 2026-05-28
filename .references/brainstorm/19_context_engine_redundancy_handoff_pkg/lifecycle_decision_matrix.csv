@@ -1,0 +1,11 @@
+Operation,Keep public API,Keep service method,Make private helper,Hide from normal admin UI,Replace with,Notes
+create,Yes,Yes,No,No,,Keep as domain creation
+up,Yes,Yes,Shared helpers,No,Start domain,Keep as Start
+down,Yes,Yes,Shared status helper,No,Stop domain,Keep as Stop
+recreate,Temporarily,Maybe,Yes,Yes,Repair domain,Compatibility/advanced only
+repair,Yes,Yes,Uses shared helpers,No,,Main recovery action
+regenerate,Advanced/temporary,Yes,Mostly yes,Yes,Repair/internal maintenance,Not normal lifecycle action
+remove/archive,Yes,Yes,Archive helper,No,Archive domain,Label as Archive in UI
+remove permanent,Deprecated compatibility only,Only for purge internals,Yes,Yes,Purge domain,Do not expose as normal deletion
+purge-preview,Yes,Yes,No,No,,Mandatory safety step
+purge,Yes,Yes,No,No but gated,,Only full permanent deletion path

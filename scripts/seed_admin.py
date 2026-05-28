@@ -1,16 +1,9 @@
-from app.core.config import get_settings
-from app.storage.db import SessionLocal
-from app.storage.repositories.users import UserRepository
+from app.seed import ensure_seed_admin
 
 
 def main() -> None:
-    settings = get_settings()
-    with SessionLocal() as session:
-        user = UserRepository(session).ensure_admin(
-            username=settings.seed_admin_username,
-            password=settings.seed_admin_password,
-        )
-        print(f"Seed admin ready: {user.email}")
+    user = ensure_seed_admin(sync_password=True)
+    print(f"Seed admin ready: {user.email}")
 
 
 if __name__ == "__main__":

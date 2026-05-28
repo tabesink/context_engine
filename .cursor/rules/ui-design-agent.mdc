@@ -1,0 +1,32 @@
+---
+description: Context Engine UI design-agent rules
+globs:
+  - "client/src/app/**/*.tsx"
+  - "client/src/components/**/*.tsx"
+  - "client/src/components/**/*.ts"
+  - "client/src/hooks/**/*.ts"
+  - "client/src/hooks/**/*.tsx"
+  - "client/src/api/**/*.ts"
+  - "client/src/lib/api/**/*.ts"
+  - "DESIGN.md"
+  - "docs/design/**/*.md"
+  - "docs/agent-workflows/**/*.md"
+alwaysApply: false
+---
+
+# Context Engine UI Design Rules
+
+When changing frontend UI:
+
+1. Treat `DESIGN.md` as the authoritative product design source.
+2. For meaningful UI surface changes, create or update `specs/<surface>/requirements.md` before coding.
+3. For meaningful UI surface changes, research shadcn components/blocks and write `specs/<surface>/component-research.md` before implementation.
+4. Preserve existing user capabilities and backend API contracts.
+5. Keep shadcn primitives in `client/src/components/ui/`.
+6. Keep shared surface primitives in `client/src/components/surfaces/`.
+7. Keep feature-specific UI close to the existing surface folders, such as `client/src/components/settings/`, `client/src/components/chat/`, and related `client/src/api/`, `client/src/lib/api/`, `client/src/hooks/`, and store modules.
+8. Implement loading, empty, error, success, disabled, and permission states when the changed surface can enter those states.
+9. Run visual/UX verification for meaningful UI surface changes and write `specs/<surface>/verification-report.md`.
+10. Do not use one-off color systems or bespoke component variants unless added to shared design tokens and documented.
+11. Do not hide primary persistent configuration inside temporary sheets/dialogs unless explicitly requested.
+12. For tiny visual fixes, apply this as a lightweight checklist without creating a full spec folder unless the change grows into a surface redesign.

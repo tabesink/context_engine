@@ -7,7 +7,6 @@ from app.core.config import Settings
 
 @dataclass(frozen=True)
 class LightRAGDeploySettings:
-    enabled: bool = False
     deploy_root: Path = Path(".data/lightrag")
     domains_root: Path = Path(".data/lightrag/domains")
     manifest_path: Path = Path(".data/lightrag/domains.json")
@@ -73,7 +72,6 @@ class LightRAGDeploySettings:
             settings.database_url
         )
         return cls(
-            enabled=settings.lightrag_deploy_enabled,
             deploy_root=settings.lightrag_deploy_root,
             domains_root=settings.lightrag_domains_root,
             manifest_path=settings.lightrag_domain_registry,
@@ -84,8 +82,8 @@ class LightRAGDeploySettings:
             host=settings.lightrag_host,
             docker_network=settings.lightrag_docker_network,
             domain_env_filename=settings.lightrag_domain_env_filename,
-            dockerfile=settings.lightrag_dockerfile,
-            build_context=settings.lightrag_build_context,
+            dockerfile=settings.lightrag_dockerfile or Path("docker/lightrag.Dockerfile"),
+            build_context=settings.lightrag_build_context or Path("."),
             storage_backend=settings.lightrag_storage_backend,
             postgres_url=settings.lightrag_postgres_url,
             postgres_host=settings.lightrag_postgres_host,

@@ -101,7 +101,6 @@ def _configure_lightrag_manifest(
     domains: dict[str, str],
 ) -> None:
     settings = LightRAGDeploySettings(
-        enabled=True,
         deploy_root=tmp_path / "lightrag",
         domains_root=tmp_path / "lightrag/domains",
         manifest_path=tmp_path / "lightrag/domains.json",
@@ -1495,7 +1494,6 @@ def test_admin_upload_to_selected_lightrag_domain_records_domain_metadata(
     tmp_path: Path,
 ) -> None:
     settings = LightRAGDeploySettings(
-        enabled=True,
         deploy_root=tmp_path / "lightrag",
         domains_root=tmp_path / "lightrag/domains",
         manifest_path=tmp_path / "lightrag/domains.json",
@@ -1509,6 +1507,10 @@ def test_admin_upload_to_selected_lightrag_domain_records_domain_metadata(
     monkeypatch.setenv("LIGHTRAG_DOMAIN_REGISTRY", str(settings.manifest_path))
     get_settings.cache_clear()
 
+    def fake_health_get(url, **kwargs):
+        del url, kwargs
+        return httpx.Response(200)
+
     class FakeQueue:
         def enqueue(self, function: object, job_id: str):
             del function
@@ -1519,6 +1521,7 @@ def test_admin_upload_to_selected_lightrag_domain_records_domain_metadata(
             return FakeQueuedJob()
 
     monkeypatch.setattr(JobService, "_queue", lambda self: FakeQueue())
+    monkeypatch.setattr("app.services.lightrag_reachability_service.httpx.get", fake_health_get)
 
     with TestClient(app) as client:
         _seed_users()
@@ -1546,7 +1549,6 @@ def test_admin_upload_rejects_unreachable_lightrag_domain_before_queueing(
     tmp_path: Path,
 ) -> None:
     settings = LightRAGDeploySettings(
-        enabled=True,
         deploy_root=tmp_path / "lightrag",
         domains_root=tmp_path / "lightrag/domains",
         manifest_path=tmp_path / "lightrag/domains.json",
@@ -1868,7 +1870,6 @@ def test_admin_upload_to_missing_lightrag_domain_fails_before_forwarding(
     tmp_path: Path,
 ) -> None:
     settings = LightRAGDeploySettings(
-        enabled=True,
         deploy_root=tmp_path / "lightrag",
         domains_root=tmp_path / "lightrag/domains",
         manifest_path=tmp_path / "lightrag/domains.json",
@@ -2382,11 +2383,15 @@ def test_retrieve_response_contract_fields_are_stable(monkeypatch: pytest.Monkey
     assert evidence["workspace_node_id"] == f"chunk:{document_id}:chunk-1"
 
 
-def test_lightrag_domain_admin_api_requires_admin_and_enabled(
+def test_lightrag_domain_admin_api_requires_admin(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    monkeypatch.setenv("LIGHTRAG_DEPLOY_ENABLED", "false")
+    monkeypatch.setenv("LIGHTRAG_DEPLOY_ROOT", str(tmp_path / "lightrag"))
+    monkeypatch.setenv("LIGHTRAG_DOMAINS_ROOT", str(tmp_path / "lightrag/domains"))
+    monkeypatch.setenv("LIGHTRAG_DOMAIN_REGISTRY", str(tmp_path / "lightrag/domains.json"))
+    monkeypatch.setenv("LIGHTRAG_COMPOSE_FILE", str(tmp_path / "lightrag/compose.yml"))
+    monkeypatch.setenv("LIGHTRAG_DELETED_ROOT", str(tmp_path / "lightrag/deleted"))
     get_settings.cache_clear()
 
     with TestClient(app) as client:
@@ -2399,22 +2404,21 @@ def test_lightrag_domain_admin_api_requires_admin_and_enabled(
             headers=user_headers,
             json={"domain_id": "fatigue"},
         )
-        disabled = client.post(
+        allowed = client.post(
             "/admin/lightrag/domains",
             headers=admin_headers,
-            json={"domain_id": "fatigue"},
+            json={"domain_id": "fatigue", "display_name": "Fatigue Manuals"},
         )
 
     assert blocked.status_code == 403
-    assert disabled.status_code == 400
-    assert disabled.json()["detail"] == "LightRAG deployment is disabled"
+    assert allowed.status_code == 200
+    assert allowed.json()["id"] == "fatigue"
 
 
 def test_lightrag_domain_admin_api_create_list_and_operate(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    monkeypatch.setenv("LIGHTRAG_DEPLOY_ENABLED", "true")
     monkeypatch.setenv("LIGHTRAG_DEPLOY_ROOT", str(tmp_path / "lightrag"))
     monkeypatch.setenv("LIGHTRAG_DOMAINS_ROOT", str(tmp_path / "lightrag/domains"))
     monkeypatch.setenv("LIGHTRAG_DOMAIN_REGISTRY", str(tmp_path / "lightrag/domains.json"))
@@ -2471,11 +2475,6 @@ def test_lightrag_domain_admin_api_lifecycle_routes_remain_available() -> None:
         )
 
     class FakeDomainService:
-        class _Settings:
-            enabled = True
-
-        settings = _Settings()
-
         def list_domains(self) -> list[LightRAGDomain]:
             return list(domains.values())
 
@@ -2635,7 +2634,6 @@ def test_lightrag_admin_and_user_domain_responses_do_not_leak_provider_secrets(
 ) -> None:
     bedrock_key = "test-bedrock-key"
     embedding_key = "test-openai-key"
-    monkeypatch.setenv("LIGHTRAG_DEPLOY_ENABLED", "true")
     monkeypatch.setenv("LIGHTRAG_DEPLOY_ROOT", str(tmp_path / "lightrag"))
     monkeypatch.setenv("LIGHTRAG_DOMAINS_ROOT", str(tmp_path / "lightrag/domains"))
     monkeypatch.setenv("LIGHTRAG_DOMAIN_REGISTRY", str(tmp_path / "lightrag/domains.json"))
@@ -2677,7 +2675,6 @@ def test_lightrag_domain_user_safe_list_hides_paths_and_container_details(
     tmp_path: Path,
 ) -> None:
     settings = LightRAGDeploySettings(
-        enabled=True,
         deploy_root=tmp_path / "lightrag",
         domains_root=tmp_path / "lightrag/domains",
         manifest_path=tmp_path / "lightrag/domains.json",
@@ -2701,7 +2698,7 @@ def test_lightrag_domain_user_safe_list_hides_paths_and_container_details(
     assert domain == {
         "id": "fatigue",
         "display_name": "Fatigue Manuals",
-        "host_port": 9621,
+        "host_port": 9622,
         "is_healthy": None,
         "is_default": True,
         "status": "configured",
@@ -2955,7 +2952,6 @@ def test_lightrag_domain_purge_hard_deletes_domain_documents_and_artifacts(
     storage_root = tmp_path / "uploads"
     storage_root.mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
-    monkeypatch.setenv("LIGHTRAG_DEPLOY_ENABLED", "true")
     monkeypatch.setenv("LIGHTRAG_ALLOW_PERMANENT_DELETE", "true")
     monkeypatch.setenv("LIGHTRAG_DEPLOY_ROOT", str(tmp_path / "lightrag"))
     monkeypatch.setenv("LIGHTRAG_DOMAINS_ROOT", str(tmp_path / "lightrag/domains"))
@@ -3063,6 +3059,27 @@ def test_lightrag_domain_purge_hard_deletes_domain_documents_and_artifacts(
     assert (tmp_path / "lightrag/domains/default").exists()
 
 
+def test_admin_domain_remove_rejects_permanent_query_parameter(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _configure_lightrag_manifest(monkeypatch, tmp_path, {"fatigue": "Fatigue Manuals"})
+    create_db_and_tables()
+
+    with TestClient(app) as client:
+        _seed_users()
+        admin_headers = _login(client, "admin@example.com")
+        response = client.delete(
+            "/admin/lightrag/domains/fatigue?permanent=true",
+            headers=admin_headers,
+        )
+
+    assert response.status_code == 400
+    assert "deprecated" in response.json()["detail"]
+    assert "purge-preview" in response.json()["detail"]
+    assert "purge" in response.json()["detail"]
+
+
 def test_archive_domain_is_non_destructive_and_blocks_user_document_reads(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -3070,7 +3087,6 @@ def test_archive_domain_is_non_destructive_and_blocks_user_document_reads(
     storage_root = tmp_path / "uploads"
     storage_root.mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
-    monkeypatch.setenv("LIGHTRAG_DEPLOY_ENABLED", "true")
     monkeypatch.setenv("LIGHTRAG_DEPLOY_ROOT", str(tmp_path / "lightrag"))
     monkeypatch.setenv("LIGHTRAG_DOMAINS_ROOT", str(tmp_path / "lightrag/domains"))
     monkeypatch.setenv("LIGHTRAG_DOMAIN_REGISTRY", str(tmp_path / "lightrag/domains.json"))

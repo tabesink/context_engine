@@ -122,7 +122,6 @@ export type AssistantTurnContext = {
   assistantMessageId: string;
   contextItems: ContextPanelItem[];
   retrievalSummary: string;
-  sourceTree: SourceTreeSnapshot;
 };
 
 export type PipelineProgressStep =

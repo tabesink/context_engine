@@ -1,5 +1,6 @@
 import { apiRequest } from "@/lib/api/client";
 import type { LightRagDomain } from "@/types/chat";
+import type { RetrievalDefaults } from "@/types/lightrag";
 
 export type CreateKnowledgeGraphDomainPayload = {
   domain_id: string;
@@ -38,7 +39,7 @@ type AdminDomain = {
     model: string;
     dimensions?: number | null;
   } | null;
-  retrieval_defaults?: LightRagDomain["retrieval_defaults"];
+  retrieval_defaults?: RetrievalDefaults;
 };
 
 export const knowledgeGraphAdminApi = {
@@ -76,6 +77,20 @@ export const knowledgeGraphAdminApi = {
   },
   remove(domainId: string) {
     return apiRequest(`/admin/lightrag/domains/${encodeURIComponent(domainId)}`, {
+      method: "DELETE",
+    });
+  },
+  purgePreview(domainId: string) {
+    return apiRequest<{
+      domain_id: string;
+      document_count: number;
+      active_jobs: number;
+    }>(`/admin/lightrag/domains/${encodeURIComponent(domainId)}/purge-preview`, {
+      method: "POST",
+    });
+  },
+  purge(domainId: string) {
+    return apiRequest(`/admin/lightrag/domains/${encodeURIComponent(domainId)}/purge?confirm_domain_id=${encodeURIComponent(domainId)}`, {
       method: "DELETE",
     });
   },

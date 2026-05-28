@@ -1,5 +1,6 @@
 from app.document_processing.models import DocumentAsset, DocumentPage, DocumentSection, SourceChunk
 from app.schemas.workspace_tree import WorkspaceTreeNode, WorkspaceTreeResponse
+from app.services.asset_urls import document_asset_thumbnail_url, document_asset_url
 from app.services.document_access_policy import DocumentAccessPolicy
 from app.services.lightrag_domain_registry import LightRAGDomainRegistry
 from app.storage.repositories.document_processing import DocumentProcessingRepository
@@ -339,9 +340,12 @@ class WorkspaceTreeService:
 
     def _asset_node(self, *, document_id: str, asset: DocumentAsset) -> WorkspaceTreeNode:
         title = asset.caption or f"{asset.asset_type.replace('_', ' ').title()} {asset.asset_id}"
-        thumbnail_url = None
-        if asset.thumbnail_path:
-            thumbnail_url = f"/documents/{document_id}/assets/{asset.asset_id}/thumbnail"
+        asset_url = document_asset_url(document_id, asset.asset_id)
+        thumbnail_url = document_asset_thumbnail_url(
+            document_id,
+            asset.asset_id,
+            has_thumbnail=bool(asset.thumbnail_path),
+        )
         return WorkspaceTreeNode(
             id=f"asset:{document_id}:{asset.asset_id}",
             kind="asset",
@@ -353,7 +357,7 @@ class WorkspaceTreeService:
             asset_type=asset.asset_type,
             thumbnail_url=thumbnail_url,
             metadata={
-                "url": f"/documents/{document_id}/assets/{asset.asset_id}",
+                "url": asset_url,
                 "caption": asset.caption,
                 "mime_type": asset.mime_type,
             },

@@ -13,7 +13,6 @@ from app.lightrag_deploy.settings import LightRAGDeploySettings
 
 def _settings(tmp_path: Path) -> LightRAGDeploySettings:
     return LightRAGDeploySettings(
-        enabled=True,
         deploy_root=tmp_path / "lightrag",
         domains_root=tmp_path / "lightrag" / "domains",
         manifest_path=tmp_path / "lightrag" / "domains.json",
@@ -336,7 +335,6 @@ def test_compose_generation_is_deterministic(tmp_path: Path) -> None:
 
 def test_compose_generation_can_build_lightrag_from_local_source(tmp_path: Path) -> None:
     settings = LightRAGDeploySettings(
-        enabled=True,
         deploy_root=tmp_path / "lightrag",
         domains_root=tmp_path / "lightrag" / "domains",
         manifest_path=tmp_path / "lightrag" / "domains.json",
@@ -358,7 +356,6 @@ def test_compose_generation_can_build_lightrag_from_local_source(tmp_path: Path)
 
 def test_compose_generation_resolves_relative_domain_paths_for_env_and_volumes() -> None:
     settings = LightRAGDeploySettings(
-        enabled=True,
         deploy_root=Path(".data/lightrag"),
         domains_root=Path(".data/lightrag/domains"),
         manifest_path=Path(".data/lightrag/domains.json"),

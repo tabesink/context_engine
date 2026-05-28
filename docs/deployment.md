@@ -10,12 +10,9 @@ Copy `.env.example` and change production-sensitive values before running outsid
 cp .env.example .env
 ```
 
-Append optional overlays only when needed:
+Append optional provider overlay when needed:
 
 ```bash
-# Enable admin-managed LightRAG domain lifecycle:
-cat .env.lightrag-deploy.example >> .env
-
 # Include provider settings written into generated domain.env files:
 cat .env.lightrag-provider.example >> .env
 ```
@@ -36,10 +33,10 @@ Important settings:
 - `LIGHTRAG_DOMAIN_REGISTRY`: required LightRAG domain registry path. Every upload, retrieve, graph, and workspace-tree request must target a domain registered in this file.
 - `LIGHTRAG_TIMEOUT_SECONDS`: HTTP timeout for LightRAG calls.
 - `QUERY_LOG_STORE_TEXT` and `QUERY_LOG_RETENTION_DAYS`: query log text persistence and retention controls.
-- `LIGHTRAG_DEPLOY_ENABLED`: gates **mutating** LightRAG domain deployment APIs (`/admin/lightrag/domains...`). The read-only `GET /lightrag/domains` listing remains available to authenticated users so clients can choose `lightrag_domain_id` when manifests exist. Use `.env.lightrag-deploy.example` only when Context Engine manages LightRAG containers.
-- LightRAG provider settings (`LIGHTRAG_LLM_*`, `LIGHTRAG_EMBEDDING_*`) live in `.env.lightrag-provider.example` because they are written into generated LightRAG domain env files, not needed for fixed external LightRAG retrieval.
+- `LIGHTRAG_DEPLOY_ROOT`, `LIGHTRAG_DOMAINS_ROOT`, `LIGHTRAG_COMPOSE_FILE`, `LIGHTRAG_DOCKERFILE`, and related deploy settings in `.env.example`: required for admin LightRAG domain lifecycle (`/admin/lightrag/domains...`). The read-only `GET /lightrag/domains` listing remains available to authenticated users so clients can choose `lightrag_domain_id` when manifests exist.
+- LightRAG provider settings (`LIGHTRAG_LLM_*`, `LIGHTRAG_EMBEDDING_*`) live in `.env.lightrag-provider.example` because they are written into generated LightRAG domain env files.
 
-In `app/core/config.py`, LightRAG runtime resolution uses only the domain registry. `lightrag_deploy_enabled` remains `false` by default so domain lifecycle control stays opt-in.
+In `app/core/config.py`, LightRAG deploy settings (including docker/build paths) are validated at startup. Runtime resolution uses the domain registry for upload, retrieve, graph, and workspace-tree calls.
 
 ## First Run With Compose
 
@@ -55,10 +52,12 @@ Then start the stack and seed admin (adjust service name if your compose file di
 
 ```bash
 docker compose up --build
-docker compose exec api python -m scripts.seed_admin
+docker compose exec api python -c "from app.seed import ensure_seed_admin; ensure_seed_admin(sync_password=True)"
 ```
 
-Alternatively, `docker compose run --rm api python -m scripts.seed_admin` works before the stack is fully up; use whichever fits your workflow.
+Alternatively, `docker compose run --rm api python -c "from app.seed import ensure_seed_admin; ensure_seed_admin(sync_password=True)"` works before the stack is fully up; use whichever fits your workflow.
+
+`scripts/deploy-all.ps1` and `scripts/deploy-all.sh` wait for `/health` and run this seed step automatically. The API also ensures the seed admin exists on startup; in `ENVIRONMENT=local`, the password is synced to match `SEED_ADMIN_PASSWORD` when it drifts.
 
 The `worker` service must stay up when `INDEX_JOBS_INLINE=false`. It consumes indexing jobs and moves them through `queued`, `running`, `succeeded`, or `failed`.
 The `status-poller` service should also stay up in that mode so documents that remain `indexing` in LightRAG can transition to `ready`/`failed` without manual refresh calls.
@@ -126,20 +125,19 @@ LIGHTRAG_DOMAIN_REGISTRY=.data/lightrag/domains.json
 - `hybrid` may add local navigation evidence when available.
 - `navigation` query mode remains local page/tree retrieval.
 - Admin uploads enqueue `document_ingest`; the worker builds canonical structure/source chunks, ingests chunks to LightRAG, polls status, and updates `documents.metadata.lightrag`.
-- Admin/WebUI status flow should poll `GET /jobs/{job_id}` and `GET /admin/documents/{document_id}/ingestion-status` until document status reaches a terminal state.
+- Admin/WebUI status flow should poll `GET /jobs/{job_id}` plus normalized processing-status endpoints; legacy `GET /admin/documents/{document_id}/ingestion-status` remains available for compatibility.
+- Processing status views should use normalized endpoints exposed by Context Engine (not raw LightRAG status APIs):
+  - `GET /lightrag/domains/{domain_id}/processing-status`
+  - `GET /admin/lightrag/domains/{domain_id}/processing-status`
+  - `GET /documents/{document_id}/processing-status`
+  - `GET /admin/documents/{document_id}/processing-status`
 - Structure-processing failures fail ingestion explicitly (no raw LightRAG upload fallback).
 - Unknown upstream LightRAG statuses surface as integration errors instead of silently normalizing to `indexing`.
 - `/lightrag/domains/{domain_id}/graphs` and `/lightrag/domains/{domain_id}/graph/labels...` proxy to LightRAG.
 
 ## LightRAG Domain Deployment Control
 
-Deployment control is off by default:
-
-```env
-LIGHTRAG_DEPLOY_ENABLED=false
-```
-
-When enabled, admins can manage domains through `/admin/lightrag/domains...`. Generated state lives under:
+Admins manage domains through `/admin/lightrag/domains...`. Deploy settings are required in `.env.example`; docker/build paths are validated at startup. Generated state lives under:
 
 ```text
 .data/lightrag/

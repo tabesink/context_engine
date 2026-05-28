@@ -11,13 +11,13 @@ def test_env_example_declares_lightrag_deployment_settings() -> None:
     env_examples = "\n".join(
         [
             Path(".env.example").read_text(encoding="utf-8"),
-            Path(".env.lightrag-deploy.example").read_text(encoding="utf-8"),
             Path(".env.lightrag-provider.example").read_text(encoding="utf-8"),
         ]
     )
 
+    assert "LIGHTRAG_DEPLOY_ENABLED=" not in env_examples
+
     for key in [
-        "LIGHTRAG_DEPLOY_ENABLED",
         "LIGHTRAG_DEPLOY_ROOT",
         "LIGHTRAG_DOMAINS_ROOT",
         "LIGHTRAG_DOMAIN_REGISTRY",
@@ -72,7 +72,6 @@ def test_settings_parse_lightrag_deployment_fields(tmp_path: Path) -> None:
     settings = Settings(
         environment="test",
         database_url="postgresql+psycopg://app_user:app_pw@localhost:5438/test_context_engine",
-        lightrag_deploy_enabled=True,
         lightrag_domain_registry=tmp_path / "lightrag" / "domains.json",
         lightrag_deploy_root=tmp_path / "lightrag",
         lightrag_domains_root=tmp_path / "lightrag" / "domains",
@@ -123,7 +122,7 @@ def test_settings_parse_lightrag_deployment_fields(tmp_path: Path) -> None:
 
     deploy = LightRAGDeploySettings.from_app_settings(settings)
 
-    assert deploy.enabled is True
+    assert not hasattr(deploy, "enabled")
     assert deploy.domains_root == tmp_path / "lightrag" / "domains"
     assert deploy.manifest_path == tmp_path / "lightrag" / "domains.json"
     assert deploy.default_port_start == 9700
@@ -178,9 +177,18 @@ def test_settings_default_to_internal_lightrag_build_paths() -> None:
     assert deploy.build_context == Path(".")
 
 
+def test_settings_reject_missing_lightrag_dockerfile() -> None:
+    with pytest.raises(ValueError, match="LIGHTRAG_DOCKERFILE"):
+        Settings(
+            environment="test",
+            database_url="postgresql+psycopg://app_user:app_pw@localhost:5438/test_context_engine",
+            lightrag_dockerfile=None,
+            lightrag_build_context=Path("."),
+        )
+
+
 def test_domain_path_resolver_creates_expected_domain_tree(tmp_path: Path) -> None:
     deploy = LightRAGDeploySettings(
-        enabled=True,
         deploy_root=tmp_path / "lightrag",
         domains_root=tmp_path / "lightrag" / "domains",
         manifest_path=tmp_path / "lightrag" / "domains.json",

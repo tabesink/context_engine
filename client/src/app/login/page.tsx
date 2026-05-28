@@ -46,6 +46,13 @@ export default function LoginPage() {
           <div>
             <h1 className="text-xl font-semibold tracking-tight text-[var(--foreground)]">Sign in</h1>
             <p className="mt-1 text-sm text-[var(--muted-foreground)]">Use your local team account to access chat.</p>
+            {process.env.NODE_ENV === "development" ? (
+              <p className="mt-2 text-xs text-[var(--muted-foreground)]">
+                Local dev credentials are in <code className="text-[var(--foreground)]">.env</code> as{" "}
+                <code className="text-[var(--foreground)]">SEED_ADMIN_USERNAME</code> /{" "}
+                <code className="text-[var(--foreground)]">SEED_ADMIN_PASSWORD</code> (default admin / admin123).
+              </p>
+            ) : null}
           </div>
         </div>
 

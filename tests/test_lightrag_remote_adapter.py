@@ -456,6 +456,38 @@ def test_remote_adapter_rejects_unknown_track_status() -> None:
         adapter.document_status("track-1")
 
 
+def test_remote_adapter_pipeline_status_and_counts() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/documents/pipeline_status":
+            return httpx.Response(200, json={"busy": True, "job_name": "indexing"})
+        if request.url.path == "/documents/status_counts":
+            return httpx.Response(200, json={"status_counts": {"processing": 2, "processed": 5}})
+        return httpx.Response(404, json={"detail": "not found"})
+
+    adapter = LightRAGRemoteAdapter(
+        base_url="http://lightrag.local",
+        client=httpx.Client(transport=httpx.MockTransport(handler), base_url="http://lightrag.local"),
+    )
+
+    assert adapter.pipeline_status()["busy"] is True
+    assert adapter.status_counts()["status_counts"]["processed"] == 5
+
+
+def test_remote_adapter_pipeline_status_and_counts_validate_dict() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=["invalid"])
+
+    adapter = LightRAGRemoteAdapter(
+        base_url="http://lightrag.local",
+        client=httpx.Client(transport=httpx.MockTransport(handler), base_url="http://lightrag.local"),
+    )
+
+    with pytest.raises(LightRAGInvalidResponse):
+        adapter.pipeline_status()
+    with pytest.raises(LightRAGInvalidResponse):
+        adapter.status_counts()
+
+
 def test_remote_adapter_rejects_unknown_upload_status(tmp_path: Path) -> None:
     upload = tmp_path / "manual.txt"
     upload.write_text("manual body")

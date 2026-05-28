@@ -10,7 +10,6 @@ from app.lightrag_deploy.settings import LightRAGDeploySettings
 
 def _settings(tmp_path: Path) -> LightRAGDeploySettings:
     return LightRAGDeploySettings(
-        enabled=True,
         deploy_root=tmp_path / "lightrag",
         domains_root=tmp_path / "lightrag" / "domains",
         manifest_path=tmp_path / "lightrag" / "domains.json",

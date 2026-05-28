@@ -3,6 +3,7 @@
 import { ShieldCheck } from "lucide-react";
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
+import { settingsButtonClassName } from "@/components/settings/settings-controls";
 import { useAuthStore } from "@/stores/auth-store";
 import { setSettingsDialogRoute } from "@/stores/settings-dialog-store";
 
@@ -17,7 +18,7 @@ export function GeneralSettingsPanel() {
   return (
     <div className="space-y-1">
       <div className="rounded-xl bg-[var(--secondary)]/60 p-4">
-        <div className="mb-3 flex size-6 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--background)]">
+        <div className="mb-3 flex size-6 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--background)]">
           <ShieldCheck className="size-4 text-[var(--foreground)]" />
         </div>
         <p className="text-sm font-medium text-[var(--foreground)]">Review your account</p>
@@ -29,7 +30,7 @@ export function GeneralSettingsPanel() {
           variant="outline"
           size="sm"
           onClick={() => setSettingsDialogRoute("account")}
-          className="mt-3 rounded-full bg-[var(--background)] px-4 shadow-none"
+          className={`mt-3 ${settingsButtonClassName} bg-[var(--background)] px-4`}
         >
           Open account
         </Button>

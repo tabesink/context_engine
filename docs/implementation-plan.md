@@ -142,6 +142,12 @@ Implemented:
 - Remote retrieval through `/query/data`.
 - Queued LightRAG ingestion through `document_ingest` jobs.
 - Status normalization helper for `/documents/track_status/{track_id}`.
+- Normalized processing-status APIs and service-level aggregation:
+  - `GET /lightrag/domains/{domain_id}/processing-status`
+  - `GET /admin/lightrag/domains/{domain_id}/processing-status`
+  - `GET /documents/{document_id}/processing-status`
+  - `GET /admin/documents/{document_id}/processing-status`
+  - `ProcessingStatusService` joins local docs/jobs with remote `pipeline_status` + `status_counts` and applies user/admin projections.
 - Authenticated graph proxy routes:
   - `GET /lightrag/domains/{domain_id}/graphs`
   - `GET /lightrag/domains/{domain_id}/graph/labels`
@@ -156,6 +162,7 @@ Current behavior:
 - `navigation` stays local.
 - Admin upload stores a local mirror record/file, records LightRAG metadata, and enqueues `document_ingest`.
 - LightRAG ingestion status is tracked through `documents.metadata.lightrag` and can be refreshed through the admin status endpoint.
+- Processing status polling is backend-coalesced with short TTL caching to reduce upstream LightRAG fanout.
 - Graph routes return HTTP `400` when LightRAG is disabled.
 
 ## LightRAG Domain Deployment Control
@@ -175,13 +182,16 @@ Implemented:
 
 Current behavior:
 
-- Admin create/up/down/recreate/regenerate/remove endpoints require `LIGHTRAG_DEPLOY_ENABLED=true` (HTTP `400` when disabled).
+- Admin create/up/down/repair/remove/purge-preview/purge endpoints require admin auth; deploy settings are validated at startup.
+- Advanced compatibility endpoints (`recreate`, `regenerate`) remain available but are not part of the normal admin lifecycle workflow.
 - `GET /lightrag/domains` returns a safe field subset for any authenticated user whenever the manifest can be read (used to populate `lightrag_domain_id` selections).
 - Domains are stored under `.data/lightrag/domains/<domain>/`.
 - Each LightRAG domain uses a LightRAG-owned PostgreSQL database such as `lightrag_manuals`; manifests record non-secret metadata only.
 - Provider API keys are intentionally scoped to per-domain `domain.env` only; compose and manifest artifacts remain secret-free.
 - The generated compose file is `.data/lightrag/docker-compose.lightrag-domains.yml`.
-- Domain removal archives by default; permanent delete requires both explicit request and config opt-in.
+- Domain removal archives by default.
+- Permanent deletion must use `purge-preview` followed by `purge` (with confirm-domain-id and config opt-in).
+- `DELETE /admin/lightrag/domains/{id}?permanent=true` is deprecated and rejected with migration guidance.
 - Default tests use fake runners and temp directories, not live Docker or live LightRAG.
 - Bedrock OpenAI-compatible deployments are supported by keeping `LIGHTRAG_LLM_BINDING=openai` and targeting a Bedrock OpenAI-compatible host URL (`.../openai/v1`) instead of switching to a native Bedrock binding.
 

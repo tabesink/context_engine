@@ -83,7 +83,7 @@ export function AppPageFrame({ children, contentClassName = "" }: AppPageFramePr
           </Link>
           <button
             type="button"
-            onClick={() => openSettingsDialog("general")}
+            onClick={() => openSettingsDialog("account")}
             aria-label="Settings"
             className={`inline-flex size-10 items-center justify-center rounded-xl transition-colors ${
               settingsOpen || pathname.startsWith("/settings")

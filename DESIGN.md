@@ -1,271 +1,438 @@
-# Design System Inspired by Ollama
+# Context Engine DESIGN.md — shadcn Theme Alignment Update
 
-## 1. Visual Theme & Atmosphere
+## Design Direction
 
-Ollama's interface is radical minimalism taken to its logical conclusion — a pure-white void where content floats without decoration, shadow, or color. The design philosophy mirrors the product itself: strip away everything unnecessary until only the essential tool remains. This is the digital equivalent of a Dieter Rams object — every pixel earns its place, and the absence of design IS the design.
+Context Engine should retain its low-entropy, technical, workspace-first interface while allowing the default visual language of shadcn/ui blocks to come through. The app should no longer be described as strictly flat grayscale only. Instead, the baseline should be:
 
-The entire page exists in pure grayscale. There is zero chromatic color in the interface — no brand blue, no accent green, no semantic red. The only colors that exist are shades between pure black (`#000000`) and pure white (`#ffffff`), creating a monochrome environment that lets the user's mental model of "open models" remain uncolored by brand opinion. The Ollama llama mascot, rendered in simple black line art, is the only illustration — and even it's monochrome.
+- shadcn default theme tokens first
+- restrained neutral base color
+- subtle semantic color accents
+- compact technical UI density
+- low visual noise
+- no decorative gradients or heavy marketing polish
+- wholesale shadcn block imports are allowed and preferred when they improve professional UI quality
 
-What makes Ollama distinctive is the combination of SF Pro Rounded (Apple's rounded system font) with an exclusively pill-shaped geometry (9999px radius on everything interactive). The rounded letterforms + rounded buttons + rounded containers create a cohesive "softness language" that makes a developer CLI tool feel approachable and friendly rather than intimidating. This is minimalism with warmth — not cold Swiss-style grid minimalism, but the kind where the edges are literally softened.
+The goal is to make Context Engine feel like a clean shadcn-native application, not a custom grayscale shell fighting against shadcn defaults.
 
-**Key Characteristics:**
-- Pure white canvas with zero chromatic color — completely grayscale
-- SF Pro Rounded headlines creating a distinctively Apple-like softness
-- Binary border-radius system: 12px (containers) or 9999px (everything interactive)
-- Zero shadows — depth comes exclusively from background color shifts and borders
-- Pill-shaped geometry on all interactive elements (buttons, tabs, inputs, tags)
-- The Ollama llama as the sole illustration — black line art, no color
-- Extreme content restraint — the homepage is short, focused, and uncluttered
+## Theme Foundation
 
-### App-Specific Interpretation
+Use shadcn/ui CSS variables as the design-system source of truth.
 
-For production application surfaces, preserve the same restraint while working with the existing tokenized client theme. Prefer pure grayscale tokens, flat depth, 12px non-interactive containers, and pill-shaped controls. Dark mode may use token-equivalent inverted surfaces, but should keep the same relationships: quiet backgrounds, subtle single-pixel borders, restrained text weights, and no decorative color. Settings panels should follow a calm left-nav + row-content layout: compact enough for real configuration work, but visually light, with section dividers and inline controls doing the structural work instead of shadows or ornament.
+Preferred configuration:
 
-## 2. Color Palette & Roles
+```json
+{
+  "style": "default",
+  "tailwind": {
+    "baseColor": "neutral",
+    "cssVariables": true
+  }
+}
+```
 
-### Primary
-- **Pure Black** (`#000000`): Primary headlines, primary links, and the darkest text. The only "color" that demands attention.
-- **Near Black** (`#262626`): Button text on light surfaces, secondary headline weight.
-- **Darkest Surface** (`#090909`): The darkest possible surface — barely distinguishable from pure black, used for footer or dark containers.
+Acceptable base colors:
 
-### Surface & Background
-- **Pure White** (`#ffffff`): The primary page background — not off-white, not cream, pure white. Button surfaces for secondary actions.
-- **Snow** (`#fafafa`): The subtlest possible surface distinction from white — used for section backgrounds and barely-elevated containers.
-- **Light Gray** (`#e5e5e5`): Button backgrounds, borders, and the primary containment color. The workhorse neutral.
+- `neutral` — preferred default; clean, technical, balanced
+- `zinc` — acceptable if the UI needs slightly cooler contrast
+- `slate` — acceptable for more blue-gray system surfaces
 
-### Neutrals & Text
-- **Stone** (`#737373`): Secondary body text, footer links, and de-emphasized content. The primary "muted" tone.
-- **Mid Gray** (`#525252`): Emphasized secondary text, slightly darker than Stone.
-- **Silver** (`#a3a3a3`): Tertiary text, placeholders, and deeply de-emphasized metadata.
-- **Button Text Dark** (`#404040`): Specific to white-surface button text.
+Avoid defining many custom one-off colors in components. Use semantic tokens such as:
 
-### Semantic & Accent
-- **Ring Blue** (`#3b82f6` at 50%): The ONLY non-gray color in the entire system — Tailwind's default focus ring, used exclusively for keyboard accessibility. Never visible in normal interaction flow.
-- **Border Light** (`#d4d4d4`): A slightly darker gray for white-surface button borders.
+- `background`
+- `foreground`
+- `card`
+- `card-foreground`
+- `muted`
+- `muted-foreground`
+- `border`
+- `input`
+- `primary`
+- `secondary`
+- `accent`
+- `destructive`
+- `ring`
+- `sidebar`
 
-### Gradient System
-- **None.** Ollama uses absolutely no gradients. Visual separation comes from flat color blocks and single-pixel borders. This is a deliberate, almost philosophical design choice.
+## Color Philosophy
 
-## 3. Typography Rules
+The UI should use shadcn’s default neutral color system as the foundation, with small semantic accents only where they communicate state or hierarchy.
 
-### Font Family
-- **Display**: `SF Pro Rounded`, with fallbacks: `system-ui, -apple-system, system-ui`
-- **Body / UI**: `ui-sans-serif`, with fallbacks: `system-ui, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji`
-- **Monospace**: `ui-monospace`, with fallbacks: `SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New`
+Use color for:
 
-*Note: SF Pro Rounded is Apple's system font — it renders with rounded terminals on macOS/iOS and falls back to the system sans-serif on other platforms.*
+- active selected route
+- selected domain
+- active lifecycle state
+- processing / queued / failed / indexed status
+- destructive warnings
+- focused inputs
+- primary actions
+- subtle charts or counters when useful
 
-### Hierarchy
+Do not use color for:
 
-| Role | Font | Size | Weight | Line Height | Letter Spacing | Notes |
-|------|------|------|--------|-------------|----------------|-------|
-| Display / Hero | SF Pro Rounded | 48px (3rem) | 500 | 1.00 (tight) | normal | Maximum impact, rounded letterforms |
-| Section Heading | SF Pro Rounded | 36px (2.25rem) | 500 | 1.11 (tight) | normal | Feature section titles |
-| Sub-heading | SF Pro Rounded / ui-sans-serif | 30px (1.88rem) | 400–500 | 1.20 (tight) | normal | Card headings, feature names |
-| Card Title | ui-sans-serif | 24px (1.5rem) | 400 | 1.33 | normal | Medium emphasis headings |
-| Body Large | ui-sans-serif | 18px (1.13rem) | 400–500 | 1.56 | normal | Hero descriptions, button text |
-| Body / Link | ui-sans-serif | 16px (1rem) | 400–500 | 1.50 | normal | Standard body text, navigation |
-| Caption | ui-sans-serif | 14px (0.88rem) | 400 | 1.43 | normal | Metadata, descriptions |
-| Small | ui-sans-serif | 12px (0.75rem) | 400 | 1.33 | normal | Smallest sans-serif text |
-| Code Body | ui-monospace | 16px (1rem) | 400 | 1.50 | normal | Inline code, commands |
-| Code Caption | ui-monospace | 14px (0.88rem) | 400 | 1.43 | normal | Code snippets, secondary |
-| Code Small | ui-monospace | 12px (0.75rem) | 400–700 | 1.63 | normal | Tags, labels |
+- decorative card backgrounds
+- arbitrary section branding
+- random icons
+- every badge in a list
+- large gradient panels
+- dense rainbow dashboards
 
-### Principles
-- **Rounded display, standard body**: SF Pro Rounded carries display headlines with its distinctive rounded terminals, while the standard system sans handles all body text. The rounded font IS the brand expression.
-- **Weight restraint**: Only two weights matter — 400 (regular) for body and 500 (medium) for headings. No bold, no light, no black weight. This extreme restraint reinforces the minimal philosophy.
-- **Tight display, comfortable body**: Headlines compress to 1.0 line-height, while body text relaxes to 1.43–1.56. The contrast creates clear hierarchy without needing weight contrast.
-- **Monospace for developer identity**: Code blocks and terminal commands appear throughout as primary content, using the system monospace stack.
+## Recommended Semantic Status Colors
 
-## 4. Component Stylings
+Use existing shadcn semantic tokens where possible.
 
-### Buttons
+Suggested mapping:
 
-**Gray Pill (Primary)**
-- Background: Light Gray (`#e5e5e5`)
-- Text: Near Black (`#262626`)
-- Padding: 10px 24px
-- Border: thin solid Light Gray (`1px solid #e5e5e5`)
-- Radius: pill-shaped (9999px)
-- The primary action button — understated, grayscale, always pill-shaped
+| State | Visual Treatment |
+|---|---|
+| Ready / indexed / healthy | subtle success chip, restrained green or default primary only if success tokens exist |
+| Queued / pending | muted chip |
+| Processing / scanning | accent or primary outline chip |
+| Warning / stale | warning token if added globally; otherwise muted amber utility with restraint |
+| Failed / unhealthy | destructive token |
+| Archived / stopped | secondary or muted chip |
+| Purging / destructive operation | destructive outline or destructive filled confirmation state |
 
-**White Pill (Secondary)**
-- Background: Pure White (`#ffffff`)
-- Text: Button Text Dark (`#404040`)
-- Padding: 10px 24px
-- Border: thin solid Border Light (`1px solid #d4d4d4`)
-- Radius: pill-shaped (9999px)
-- Secondary action — visually lighter than Gray Pill
+If warning/success tokens are needed, add them globally as CSS variables rather than hardcoding colors in individual components.
 
-**Black Pill (CTA)**
-- Background: Pure Black (`#000000`)
-- Text: Pure White (`#ffffff`)
-- Radius: pill-shaped (9999px)
-- Inferred from "Create account" and "Explore" buttons
-- Maximum emphasis — black on white
+## Layout and Component Grammar
 
-### Cards & Containers
-- Background: Pure White or Snow (`#fafafa`)
-- Border: thin solid Light Gray (`1px solid #e5e5e5`) when needed
-- Radius: comfortably rounded (12px) — the ONLY non-pill radius in the system
-- Shadow: **none** — zero shadows on any element
-- Hover: likely subtle background shift or border darkening
+Prefer importing shadcn blocks wholesale as the default approach, then make only minimal Context Engine-specific adjustments.
 
-### Inputs & Forms
-- Background: Pure White
-- Border: `1px solid #e5e5e5`
-- Radius: pill-shaped (9999px) — search inputs and form fields are pill-shaped
-- Focus: Ring Blue (`#3b82f6` at 50%) ring
-- Placeholder: Silver (`#a3a3a3`)
+Use:
 
-### Navigation
-- Clean horizontal nav with minimal elements
-- Logo: Ollama llama icon + wordmark in black
-- Links: "Models", "Docs", "Pricing" in black at 16px, weight 400
-- Search bar: pill-shaped with placeholder text
-- Right side: "Sign in" link + "Download" black pill CTA
-- No borders, no background — transparent nav on white page
+- compact cards
+- quiet borders
+- semantic badges
+- tabs for mode switching
+- data tables for registries
+- alert/banner rows for active processing
+- timeline/activity rows for lifecycle events
+- dialogs/sheets for advanced or destructive operations
+- skeletons for loading states
+- empty states for no domains, no documents, no jobs, or no source selected
 
-### Image Treatment
-- The Ollama llama mascot is the only illustration — black line art on white
-- Code screenshots/terminal outputs shown in bordered containers (12px radius)
-- Integration logos displayed as simple icons in a grid
-- No photographs, no gradients, no decorative imagery
+Avoid:
 
-### Distinctive Components
+- oversized hero sections
+- landing-page CTA blocks
+- decorative glassmorphism
+- heavy drop shadows
+- unnecessary charts
+- duplicate cards that repeat the same status in different words
+- showing every backend operation as a primary button
 
-**Tab Pills**
-- Pill-shaped tab selectors (e.g., "Coding" | "OpenClaw")
-- Active: Light Gray bg; Inactive: transparent
-- All pill-shaped (9999px)
+## Radius and Shape
 
-**Model Tags**
-- Small pill-shaped tags (e.g., "ollama", "launch", "claude")
-- Light Gray background, dark text
-- The primary way to browse models
+Use the shadcn radius scale rather than custom ad hoc radii. Settings and admin surfaces follow **Option C2 subtle rounding** (~6–8px), not pill-shaped controls.
 
-**Terminal Command Block**
-- Monospace code showing `ollama run` commands
-- Minimal styling — just a bordered 12px-radius container
-- Copy button integrated
+Guidance:
 
-**Integration Grid**
-- Grid of integration logos (Codex, Claude Code, OpenCode, LangChain, etc.)
-- Each in a bordered pill or card with icon + name
-- Tabbed by category (Coding, Documents & RAG, Automation, Chat)
+- **`rounded-md`** — default for buttons, inputs, selects, textareas, and compact settings controls (maps to `--radius-md`, ~6px when `--radius: 0.5rem`)
+- **`rounded-lg`** — row groups, profile lists, bordered list containers with internal dividers
+- **`rounded-xl`** — dialog shell, sparing card/panel chrome; prefer borderless settings rows over nested boxed cards
+- **`rounded-full`** — reserved for status dots, avatars, progress tracks, switch thumbs, and tiny circular affordances only — **not** standard settings buttons or inputs
+- Avoid mixing many radius styles on one surface
 
-## 5. Layout Principles
+Do not override shadcn `Button` / `Input` defaults with `rounded-full` in settings panels. Use shared tokens in `client/src/components/settings/settings-controls.ts` when local class overrides are needed.
 
-### Spacing System
-- Base unit: 8px
-- Scale: 4px, 6px, 8px, 9px, 10px, 12px, 14px, 16px, 20px, 24px, 32px, 40px, 48px, 88px, 112px
-- Button padding: 10px 24px (consistent across all buttons)
-- Card internal padding: approximately 24–32px
-- Section vertical spacing: very generous (88px–112px)
+The global `--radius` token in `client/src/app/globals.css` is the source of truth; let components scale consistently from it.
 
-### Grid & Container
-- Max container width: approximately 1024–1280px, centered
-- Hero: centered single-column with llama illustration
-- Feature sections: 2-column layout (text left, code right)
-- Integration grid: responsive multi-column
-- Footer: clean single-row
+### Settings Provider (Option C2)
 
-### Whitespace Philosophy
-- **Emptiness as luxury**: The page is remarkably short and sparse — no feature section overstays its welcome. Each concept gets minimal but sufficient space.
-- **Content density is low by design**: Where other AI companies pack feature after feature, Ollama presents three ideas (run models, use with apps, integrations) and stops.
-- **The white space IS the brand**: Pure white space with zero decoration communicates "this tool gets out of your way."
+The **Settings → Provider** route is the reference implementation for flat, low-noise admin settings:
 
-### Border Radius Scale
-- Comfortably rounded (12px): The sole container radius — code blocks, cards, panels
-- Pill-shaped (9999px): Everything interactive — buttons, tabs, inputs, tags, badges
+- Three regions: settings sidebar | provider list column (~360px) | selected-provider detail pane
+- Leading provider brand icon (OpenAI, AWS, Ollama) in list rows and detail header
+- Selected row: soft accent background + 2–3px left accent bar; avoid heavy nested card borders
+- Connection health: thin dividers, status dots, profile counts — not noisy cards
+- Credentials: lock/info banner, `rounded-md` input with reveal toggle, primary Save action
+- Model profiles: grouped `rounded-lg` container, green status dot, model name only, trailing chevron
 
-*This binary system is extreme and distinctive. There is no 4px, no 8px, no gradient of roundness. Elements are either containers (12px) or interactive (pill).*
+## Shadows and Elevation
 
-## 6. Depth & Elevation
+Default stance: avoid decorative shadows.
 
-| Level | Treatment | Use |
-|-------|-----------|-----|
-| Flat (Level 0) | No shadow, no border | Page background, most content |
-| Bordered (Level 1) | `1px solid #e5e5e5` | Cards, code blocks, buttons |
+Allowed:
 
-**Shadow Philosophy**: Ollama uses **zero shadows**. This is not an oversight — it's a deliberate design decision. Every other major AI product site uses at least subtle shadows. Ollama's flat, shadowless approach creates a paper-like experience where elements are distinguished purely by background color and single-pixel borders. Depth is communicated through **content hierarchy and typography weight**, not visual layering.
+- very subtle native shadcn shadow only if the imported block relies on it for separation
+- focus rings
+- popover/dialog/sheet elevation where needed for layering
 
-## 7. Do's and Don'ts
+Avoid:
 
-### Do
-- Use pure white (`#ffffff`) as the page background — never off-white or cream
-- Use pill-shaped (9999px) radius on all interactive elements — buttons, tabs, inputs, tags
-- Use 12px radius on all non-interactive containers — code blocks, cards, panels
-- Keep the palette strictly grayscale — no chromatic colors except the blue focus ring
-- Use SF Pro Rounded at weight 500 for display headings — the rounded terminals are the brand expression
-- Maintain zero shadows — depth comes from borders and background shifts only
-- Keep content density low — each section should present one clear idea
-- Use monospace for terminal commands and code — it's primary content, not decoration
-- Keep all buttons at 10px 24px padding with pill shape — consistency is absolute
+- stacked shadow cards
+- glossy panels
+- heavy dashboard depth
+- animated glow or gradient shadow effects
 
-### Don't
-- Don't introduce any chromatic color — no brand blue, no accent green, no warm tones
-- Don't use border-radius between 12px and 9999px — the system is binary
-- Don't add shadows to any element — the flat aesthetic is intentional
-- Don't use font weights above 500 — no bold, no black weight
-- Don't add decorative illustrations beyond the llama mascot
-- Don't use gradients anywhere — flat blocks and borders only
-- Don't overcomplicate the layout — two columns maximum, no complex grids
-- Don't use borders heavier than 1px — containment is always the lightest possible touch
-- Don't add hover animations or transitions — interactions should feel instant and direct
+## Typography
 
-## 8. Responsive Behavior
+Keep typography restrained and technical.
 
-### Breakpoints
-| Name | Width | Key Changes |
-|------|-------|-------------|
-| Mobile | <640px | Single column, stacked everything, hamburger nav |
-| Small Tablet | 640–768px | Minor adjustments to spacing |
-| Tablet | 768–850px | 2-column layouts begin |
-| Desktop | 850–1024px | Standard layout, expanded features |
-| Large Desktop | 1024–1280px | Maximum content width |
+Use:
 
-### Touch Targets
-- All buttons are pill-shaped with generous padding (10px 24px)
-- Navigation links at comfortable 16px size
-- Minimum touch area easily exceeds 44x44px
+- clear section titles
+- small supporting descriptions
+- tabular numbers for metrics when useful
+- compact metadata labels
+- uppercase micro-labels only sparingly
 
-### Collapsing Strategy
-- **Navigation**: Collapses to hamburger menu on mobile
-- **Feature sections**: 2-column → stacked single column
-- **Hero text**: 48px → 36px → 30px progressive scaling
-- **Integration grid**: Multi-column → 2-column → single column
-- **Code blocks**: Horizontal scroll maintained
+Avoid:
 
-### Image Behavior
-- Llama mascot scales proportionally
-- Code blocks maintain monospace formatting
-- Integration icons reflow to fewer columns
-- No art direction changes
+- marketing-style oversized headings inside the app shell
+- excessive font weights
+- dense all-caps labels
 
-## 9. Agent Prompt Guide
+## Recommended shadcn Block Patterns for Context Engine
 
-### Quick Color Reference
-- Primary Text: "Pure Black (#000000)"
-- Page Background: "Pure White (#ffffff)"
-- Secondary Text: "Stone (#737373)"
-- Button Background: "Light Gray (#e5e5e5)"
-- Borders: "Light Gray (#e5e5e5)"
-- Muted Text: "Silver (#a3a3a3)"
-- Dark Text: "Near Black (#262626)"
-- Subtle Surface: "Snow (#fafafa)"
+Use shadcn blocks as direct implementation baselines. Preserve block visual quality unless a concrete product constraint requires adaptation.
 
-### Example Component Prompts
-- "Create a hero section on pure white (#ffffff) with an illustration centered above a headline at 48px SF Pro Rounded weight 500, line-height 1.0. Use Pure Black (#000000) text. Below, add a black pill-shaped CTA button (9999px radius, 10px 24px padding) and a gray pill button."
-- "Design a code block with a 12px border-radius, 1px solid Light Gray (#e5e5e5) border on white background. Use ui-monospace at 16px for the terminal command. No shadow."
-- "Build a tab bar with pill-shaped tabs (9999px radius). Active tab: Light Gray (#e5e5e5) background, Near Black (#262626) text. Inactive: transparent background, Stone (#737373) text."
-- "Create an integration card grid. Each card is a bordered pill (9999px radius) or a 12px-radius card with 1px solid #e5e5e5 border. Icon + name inside. Grid of 4 columns on desktop."
-- "Design a navigation bar: transparent background, no border. Ollama logo on the left, 3 text links (Pure Black, 16px, weight 400), pill search input in the center, 'Sign in' text link and black pill 'Download' button on the right."
+### Admin LightRAG Domain Lifecycle
 
-### Iteration Guide
-1. Focus on ONE component at a time
-2. Keep all values grayscale — "Stone (#737373)" not "use a light color"
-3. Always specify pill (9999px) or container (12px) radius — nothing in between
-4. Shadows are always zero — never add them
-5. Weight is always 400 or 500 — never bold
-6. If something feels too decorated, remove it — less is always more for Ollama
+Use dashboard, monitoring, workflow, settings, and danger-zone block patterns.
+
+Recommended composition:
+
+- domain health overview
+- domain registry table
+- selected-domain runtime card
+- lifecycle workflow card
+- processing queue card
+- recent lifecycle events
+- danger zone for archive/purge
+
+### Document Processing Status
+
+Use processing dashboard, job queue, table, badge, and timeline patterns.
+
+Show:
+
+- per-document status
+- current stage
+- job id or job chip
+- chunks/assets count when available
+- retry or inspect-failure actions for admins
+
+### Chat and Workspace
+
+Use subtle status indicators only.
+
+Show:
+
+- small domain indexing badge near domain selector or workspace tree
+- source navigator status badge for selected documents
+- no admin-only lifecycle detail in normal user chat
+
+Do not mix document-processing status with retrieval evidence cards. Evidence display and processing status are separate concerns.
+
+## Lifecycle Action Design
+
+Do not expose backend lifecycle verbs one-to-one as top-level UI buttons.
+
+Avoid this flat action row:
+
+```text
+Up | Down | Recreate | Repair | Regenerate | Archive | Delete | Purge Preview | Purge
+```
+
+Preferred user-facing actions:
+
+| User Action | UI Placement | Notes |
+|---|---|---|
+| Start | normal action | Maps to backend start/up behavior |
+| Stop | normal action | Maps to backend stop/down behavior |
+| Repair | primary recovery action | Should absorb common recreate/regenerate recovery needs if backend semantics allow |
+| Advanced recreate | advanced/debug menu only | Do not show as everyday action unless truly needed |
+| Advanced regenerate config | advanced/internal only | Prefer hiding from standard admin UI |
+| Archive | danger-zone, reversible/destructive-low | Clear copy, not permanent |
+| Preview purge | danger-zone required pre-step | Shows what will be deleted |
+| Purge permanently | danger-zone final action | Requires explicit confirmation |
+
+## Admin vs User Visual Boundaries
+
+Admin surfaces may show:
+
+- lifecycle state
+- job queue
+- failed documents
+- retry actions
+- purge preview
+- runtime health details
+- limited recent operational messages
+
+Regular user surfaces may show:
+
+- domain available/unavailable
+- domain indexing indicator
+- document still processing badge
+- safe counts such as indexed/processing/failed
+
+Regular users should not see:
+
+- provider secrets
+- raw LightRAG internals
+- destructive actions
+- repair/recreate/regenerate controls
+- verbose backend logs
+
+## Frontend Implementation Rules
+
+- Use shadcn semantic tokens, not hardcoded colors.
+- Prefer full block imports first; simplify only when a specific interaction, data contract, or auth boundary requires it.
+- Do not create a second design system on top of shadcn.
+- Do not duplicate status cards across chat, settings, and documents.
+- Extract shared chips/cards only after two or more real surfaces need them.
+- Keep status polling state separate from retrieval/evidence state.
+- Keep Source Navigator and Context Stream visually related but conceptually separate.
+
+## Importing shadcn Blocks
+
+When using a shadcn block:
+
+1. Identify the closest matching full block and import it wholesale.
+2. Keep original structure, spacing, and visual treatment by default.
+3. Wire the block to Context Engine data/contracts with minimal UI surgery.
+4. Ensure admin-only data/actions stay behind admin-only routes.
+5. Run lint/build before committing.
+
+## Design Principle Summary
+
+Context Engine should feel like a native shadcn application with a technical workspace personality:
+
+- neutral by default
+- color only where state matters
+- compact but readable
+- calm under active processing
+- explicit about destructive operations
+- consistent across domains, documents, jobs, chat, and source navigation
+
+## Tooling: Using shadcn.io MCP in Cursor
+
+Use the shadcn.io MCP server as a block-discovery and implementation-assistance tool, not as an authority to overwrite Context Engine's design system.
+
+The purpose of MCP use is to help Cursor retrieve real shadcn.io block metadata, examples, icons, and install commands so the coding agent does not hallucinate props, paths, or component APIs.
+
+### Recommended Cursor Setup
+
+For individual local use, configure the MCP server globally in Cursor.
+
+For team/project use, prefer a project-level `.cursor/mcp.json` committed with a token placeholder, not a real token.
+
+Recommended project-safe shape:
+
+```json
+{
+  "mcpServers": {
+    "shadcnio": {
+      "url": "https://www.shadcn.io/api/mcp?token=${SHADCNIO_TOKEN}"
+    }
+  }
+}
+```
+
+Each developer should provide `SHADCNIO_TOKEN` through their shell or a git-ignored local environment file. Do not commit a real shadcn.io token. Treat the full MCP URL like an API key.
+
+### Cursor Usage Rules
+
+When asking Cursor to use shadcn.io, name the MCP server explicitly:
+
+```text
+use shadcnio to search for compact dashboard/job queue/status workflow blocks that could fit this Context Engine admin surface
+```
+
+Prefer this workflow:
+
+1. Search for candidate blocks.
+2. Inspect the block metadata and component structure.
+3. Select the best-fit block and import it wholesale by default.
+4. Wire data and auth constraints with minimal visual changes.
+5. Run lint/build before committing.
+
+### Approved MCP-Assisted Tasks
+
+Use shadcn.io MCP for:
+
+- finding dashboard, monitoring, workflow, job queue, table, danger-zone, timeline, skeleton, and empty-state patterns
+- checking exact block names/slugs before installation
+- retrieving install commands
+- inspecting component structure before adapting it
+- finding icons or small UI primitives that match an existing surface
+- comparing multiple candidate blocks for the same admin workflow
+
+Do not use shadcn.io MCP for:
+
+- deciding backend architecture
+- changing API contracts
+- introducing new state management patterns
+- replacing existing Context Engine routing/state boundaries
+- bypassing `DESIGN.md`
+- exposing LightRAG directly to the frontend
+- creating a second component system outside shadcn/ui
+
+### Context Engine Block Adaptation Checklist
+
+Before committing any MCP-sourced block, verify:
+
+- The block remains visually close to the original shadcn design.
+- The block does not expose backend-only actions to regular users.
+- The block does not duplicate an existing card/table/status component.
+- The block does not create another polling loop.
+- The block does not merge retrieval evidence state with processing-status state.
+- The block does not make frontend calls to LightRAG.
+- The block follows the simplified lifecycle action model:
+  - Start
+  - Stop
+  - Repair
+  - Archive
+  - Preview purge
+  - Purge permanently
+- Advanced actions such as recreate/regenerate remain hidden, internal, or clearly marked as advanced/debug-only.
+
+### Good Cursor Prompts for This Project
+
+Use prompts like:
+
+```text
+use shadcnio to find three compact status workflow blocks. Do not install yet. Compare their structure for a LightRAG domain lifecycle card with Start, Stop, Repair, Archive, Preview purge, and Purge permanently actions.
+```
+
+```text
+use shadcnio to inspect a dashboard job queue block. Adapt only the table and status chip structure for Context Engine jobs. Keep existing API client and store boundaries. Do not add a new polling loop.
+```
+
+```text
+use shadcnio to find a danger-zone block. Adapt it for Archive, Preview purge, and Purge permanently. Use existing shadcn tokens and require explicit confirmation for purge.
+```
+
+Avoid prompts like:
+
+```text
+wire this block directly to LightRAG APIs
+```
+
+### Dependency and File Hygiene
+
+If a block installation adds files under `components/ui/`, review every generated file before committing.
+
+Keep app-specific composites near the feature surface first, for example:
+
+```text
+client/src/components/settings/lightrag/DomainLifecycleCard.tsx
+client/src/components/settings/lightrag/DomainProcessingStatusCard.tsx
+client/src/components/settings/lightrag/DomainDangerZone.tsx
+```
+
+Only promote a component to a shared location after at least two real Context Engine surfaces use it.
+
+### Token and Security Rules
+
+- Do not commit a real shadcn.io MCP token.
+- Do not paste a real MCP URL with token into documentation, issues, screenshots, or prompts.
+- Prefer `${SHADCNIO_TOKEN}` placeholders in project config.
+- Keep `.env` files and local token files ignored by git.
+- If a token is accidentally committed, rotate/revoke it immediately.
+
+### Final Rule
+
+MCP should speed up accurate shadcn block discovery. It should not weaken Context Engine's architecture boundaries, auth model, polling model, or frontend/backend contracts.

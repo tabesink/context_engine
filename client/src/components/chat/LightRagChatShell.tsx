@@ -57,6 +57,8 @@ export function LightRagChatShell() {
   const lastError = useChatSessionStore((session) => session.lastError);
   const [retrievalSettings, setRetrievalSettings] = useState<RetrievalSettings>(DEFAULT_RETRIEVAL_SETTINGS);
   const [sidePanelOpen, setSidePanelOpen] = useState(false);
+  const [treeLoading, setTreeLoading] = useState(false);
+  const [treeError, setTreeError] = useState<string | undefined>();
   const lightragDomains = useLightRagDomainStore((domainState) => domainState.domains);
   const selectedPort = useLightRagDomainStore((domainState) => domainState.selectedPort);
   const selectedDomain = useLightRagDomainStore((domainState) => domainState.selectedDomain);
@@ -94,13 +96,26 @@ export function LightRagChatShell() {
   }, [loadDomains]);
 
   const loadWorkspaceForDomain = useCallback(async (domainId: string) => {
+    setTreeLoading(true);
+    setTreeError(undefined);
     try {
       const tree = await fetchWorkspaceTree(domainId);
       setChatSessionState({ sourceTree: tree });
-    } catch {
-      // Keep chat interactive even if workspace-tree fetch fails.
+    } catch (error) {
+      setTreeError(errorMessage(error, "Could not load workspace sources."));
+    } finally {
+      setTreeLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    const domainId = selectedDomain?.domain_id;
+    if (!domainId) return;
+    const task = window.setTimeout(() => {
+      void loadWorkspaceForDomain(domainId);
+    }, 0);
+    return () => window.clearTimeout(task);
+  }, [loadWorkspaceForDomain, selectedDomain?.domain_id]);
 
   useEffect(() => {
     const defaults = selectedDomain?.retrieval_defaults;
@@ -116,9 +131,8 @@ export function LightRagChatShell() {
         max_token_for_local_context: defaults.max_token_for_local_context,
       }));
     }, 0);
-    void loadWorkspaceForDomain(selectedDomain.domain_id);
     return () => window.clearTimeout(task);
-  }, [loadWorkspaceForDomain, selectedDomain]);
+  }, [selectedDomain]);
 
   const effectiveRetrievalSettings: RetrievalSettings = useMemo(
     () => ({
@@ -198,11 +212,11 @@ export function LightRagChatShell() {
             assistantMessageId: activeAssistantId,
             contextItems: adapted.contextItems,
             retrievalSummary: adapted.retrievalSummary,
-            sourceTree: workspaceTree ?? sourceTree ?? { root_id: "root", items: {} },
           },
         }));
         if (workspaceTree) {
           setChatSessionState({ sourceTree: workspaceTree });
+          setTreeError(undefined);
         }
         setProgressByAssistantId((current) => ({
           ...current,
@@ -252,7 +266,6 @@ export function LightRagChatShell() {
       setSelectedAssistantMessageId,
       setSidePanelTab,
       setStatus,
-      sourceTree,
     ],
   );
 
@@ -335,6 +348,8 @@ export function LightRagChatShell() {
           sourceTree={displayedSourceTree}
           selectedNodeId={sourceNavigator.selectedNodeId}
           onNodeSelect={handleWorkspaceNodeSelect}
+          loading={treeLoading}
+          error={treeError}
         />
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">

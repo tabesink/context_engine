@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 
-export type SettingsRoute = "general" | "account" | "knowledge-graph" | "provider";
+export type SettingsRoute = "account" | "provider" | "lightrag-domains" | "documents" | "jobs" | "system";
 
 type SettingsDialogState = {
   isOpen: boolean;
@@ -13,7 +13,7 @@ const listeners = new Set<() => void>();
 
 let state: SettingsDialogState = {
   isOpen: false,
-  route: "general",
+  route: "account",
 };
 
 function emit() {
@@ -40,7 +40,7 @@ export function useSettingsDialogStore<T = SettingsDialogState>(
   return useSyncExternalStore(subscribe, () => selector(getSnapshot()), () => selector(getSnapshot()));
 }
 
-export function openSettingsDialog(route: SettingsRoute = "general") {
+export function openSettingsDialog(route: SettingsRoute = "account") {
   setState({ isOpen: true, route });
 }
 

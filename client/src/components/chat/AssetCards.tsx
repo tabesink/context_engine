@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { getAccessToken, resolveApiBase } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import type { ContextPanelItem, WorkspaceContextAsset } from "@/types/chat";
+import type { VisualAsset } from "@/types/lightrag";
 
 export type AssetCardKind = "figure" | "table" | "asset";
 
@@ -38,6 +39,10 @@ type AssetCardProps = {
 };
 
 export function assetCardFromWorkspaceAsset(asset: WorkspaceContextAsset): AssetCardModel {
+  return assetCardFromVisualAsset(asset);
+}
+
+export function assetCardFromVisualAsset(asset: VisualAsset): AssetCardModel {
   const kind = classifyAsset(asset.asset_type, asset.mime_type);
   return {
     id: asset.asset_id,
@@ -61,28 +66,43 @@ export function assetCardFromWorkspaceAsset(asset: WorkspaceContextAsset): Asset
 export function assetCardFromContextItem(item: ContextPanelItem): AssetCardModel {
   const handles = item.handles as Record<string, unknown> | undefined;
   const rawAsset = handles?.asset as Partial<WorkspaceContextAsset> | undefined;
+  const normalizedAsset: VisualAsset | null = rawAsset
+    ? {
+        asset_id: rawAsset.asset_id ?? item.asset_id ?? item.id,
+        document_id: rawAsset.document_id ?? item.document_id ?? null,
+        asset_type: rawAsset.asset_type ?? item.asset_type ?? null,
+        title: rawAsset.title ?? item.title,
+        caption: rawAsset.caption ?? item.caption ?? null,
+        page_number: rawAsset.page_number ?? item.page_start ?? null,
+        section_id: rawAsset.section_id ?? null,
+        url: rawAsset.url ?? item.url ?? null,
+        thumbnail_url: rawAsset.thumbnail_url ?? item.thumbnail_url ?? null,
+        mime_type: rawAsset.mime_type ?? item.mime_type ?? null,
+        metadata: rawAsset.metadata ?? null,
+      }
+    : null;
   const kind = item.kind === "figure" || item.kind === "table"
     ? item.kind
-    : classifyAsset(item.asset_type ?? rawAsset?.asset_type ?? null, item.mime_type ?? rawAsset?.mime_type ?? null);
+    : classifyAsset(item.asset_type ?? normalizedAsset?.asset_type ?? null, item.mime_type ?? normalizedAsset?.mime_type ?? null);
 
   return {
-    id: item.asset_id ?? rawAsset?.asset_id ?? item.id,
+    id: item.asset_id ?? normalizedAsset?.asset_id ?? item.id,
     kind,
-    title: item.title || defaultAssetTitle(kind, item.asset_type ?? rawAsset?.asset_type),
+    title: item.title || defaultAssetTitle(kind, item.asset_type ?? normalizedAsset?.asset_type),
     content: item.content,
-    caption: item.caption ?? rawAsset?.caption ?? null,
-    documentId: item.document_id ?? rawAsset?.document_id ?? null,
-    assetId: item.asset_id ?? rawAsset?.asset_id ?? null,
-    assetType: item.asset_type ?? rawAsset?.asset_type ?? null,
-    pageNumber: item.page_start ?? rawAsset?.page_number ?? null,
+    caption: item.caption ?? normalizedAsset?.caption ?? null,
+    documentId: item.document_id ?? normalizedAsset?.document_id ?? null,
+    assetId: item.asset_id ?? normalizedAsset?.asset_id ?? null,
+    assetType: item.asset_type ?? normalizedAsset?.asset_type ?? null,
+    pageNumber: item.page_start ?? normalizedAsset?.page_number ?? null,
     pageStart: item.page_start,
     pageEnd: item.page_end,
-    sectionId: rawAsset?.section_id ?? null,
-    url: item.url ?? rawAsset?.url ?? null,
-    thumbnailUrl: item.thumbnail_url ?? rawAsset?.thumbnail_url ?? null,
-    mimeType: item.mime_type ?? rawAsset?.mime_type ?? null,
+    sectionId: normalizedAsset?.section_id ?? null,
+    url: item.url ?? normalizedAsset?.url ?? null,
+    thumbnailUrl: item.thumbnail_url ?? normalizedAsset?.thumbnail_url ?? null,
+    mimeType: item.mime_type ?? normalizedAsset?.mime_type ?? null,
     workspaceNodeId: item.workspace_node_id,
-    metadata: rawAsset?.metadata ?? null,
+    metadata: normalizedAsset?.metadata ?? null,
   };
 }
 

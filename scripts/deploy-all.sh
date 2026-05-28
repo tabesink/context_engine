@@ -113,6 +113,7 @@ fi
 compose_pid=""
 server_pid=""
 client_pid=""
+seed_pid=""
 
 cleanup() {
   local exit_code=$?
@@ -122,6 +123,9 @@ cleanup() {
   fi
   if [[ -n "$server_pid" ]] && kill -0 "$server_pid" >/dev/null 2>&1; then
     kill "$server_pid" >/dev/null 2>&1 || true
+  fi
+  if [[ -n "$seed_pid" ]] && kill -0 "$seed_pid" >/dev/null 2>&1; then
+    kill "$seed_pid" >/dev/null 2>&1 || true
   fi
   if [[ -n "$compose_pid" ]] && kill -0 "$compose_pid" >/dev/null 2>&1; then
     kill -INT "$compose_pid" >/dev/null 2>&1 || kill "$compose_pid" >/dev/null 2>&1 || true
@@ -137,6 +141,19 @@ if [[ "$backend_mode" == "compose" ]]; then
   printf '%s\n' "Starting backend via docker compose (api + worker + status-poller)..."
   (cd "$repo_root" && docker compose up --build) &
   compose_pid=$!
+
+  api_base_url="http://${api_host}:${api_port}"
+  (
+    cd "$repo_root"
+    for _ in $(seq 1 90); do
+      if curl -fsS "${api_base_url}/health" >/dev/null 2>&1; then
+        break
+      fi
+      sleep 2
+    done
+    docker compose exec -T api python -c "from app.seed import ensure_seed_admin; user = ensure_seed_admin(sync_password=True); print(f'Seed admin ready: {user.email}')"
+  ) &
+  seed_pid=$!
 else
   printf '%s\n' "Starting backend via local API script..."
   "$server_script" "${server_args[@]}" &
@@ -164,6 +181,11 @@ printf 'Client PID: %s\n' "$client_pid"
 printf 'API host:port: %s:%s\n' "$api_host" "$api_port"
 printf 'Client host:port: %s:%s\n' "$client_host" "$client_port"
 printf 'Client API base: %s\n' "$client_api_base"
+seed_username="$(read_env_value SEED_ADMIN_USERNAME "$env_file")"
+seed_username="${seed_username:-admin}"
+seed_password="$(read_env_value SEED_ADMIN_PASSWORD "$env_file")"
+seed_password="${seed_password:-admin-password}"
+printf 'Login: %s / %s (from .env SEED_ADMIN_*)\n' "$seed_username" "$seed_password"
 printf '%s\n' "Press Ctrl+C to stop both processes."
 
 if [[ -n "$compose_pid" ]]; then

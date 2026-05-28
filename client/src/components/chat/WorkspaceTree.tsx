@@ -12,7 +12,7 @@ const emptyTree: SourceTreeSnapshot = {
     root: { name: "Root", children: ["workspace"] },
     workspace: { name: "Workspace", children: [] },
   },
-  expanded_item_ids: ["workspace"],
+  expanded_item_ids: ["root", "workspace"],
 };
 
 const indent = 20;
@@ -21,9 +21,11 @@ type WorkspaceTreeProps = {
   sourceTree?: SourceTreeSnapshot | null;
   selectedNodeId?: string;
   onNodeSelect?: (nodeId: string, item: SourceTreeItem) => void;
+  loading?: boolean;
+  error?: string;
 };
 
-export function WorkspaceTree({ sourceTree, selectedNodeId, onNodeSelect }: WorkspaceTreeProps) {
+export function WorkspaceTree({ sourceTree, selectedNodeId, onNodeSelect, loading, error }: WorkspaceTreeProps) {
   const data = normalizeSourceTree(sourceTree);
   const revision = sourceTreeRevision(data);
 
@@ -33,6 +35,8 @@ export function WorkspaceTree({ sourceTree, selectedNodeId, onNodeSelect }: Work
       sourceTree={data}
       selectedNodeId={selectedNodeId}
       onNodeSelect={onNodeSelect}
+      loading={loading}
+      error={error}
     />
   );
 }
@@ -41,15 +45,19 @@ function WorkspaceTreeContent({
   sourceTree,
   selectedNodeId,
   onNodeSelect,
+  loading,
+  error,
 }: {
   sourceTree: SourceTreeSnapshot;
   selectedNodeId?: string;
   onNodeSelect?: (nodeId: string, item: SourceTreeItem) => void;
+  loading?: boolean;
+  error?: string;
 }) {
   const data = sourceTree;
   const tree = useTree<SourceTreeItem>({
     initialState: {
-      expandedItems: data.expanded_item_ids ?? ["workspace"],
+      expandedItems: data.expanded_item_ids ?? ["root", "workspace"],
     },
     indent,
     rootItemId: data.root_id,
@@ -62,12 +70,23 @@ function WorkspaceTreeContent({
     features: [syncDataLoaderFeature, hotkeysCoreFeature],
   });
 
+  const rootChildren = data.items[data.root_id]?.children ?? [];
+  const hasDocuments = rootChildren.length > 0;
+
   return (
     <div className="w-full bg-transparent">
       <div className="mb-3">
         <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">Sources</p>
         <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">Indexed document map</p>
       </div>
+      {loading ? (
+        <p className="mb-3 text-xs leading-5 text-[var(--muted-foreground)]">Loading sources…</p>
+      ) : null}
+      {error ? (
+        <p className="mb-3 rounded-lg border border-border bg-muted/30 px-2.5 py-2 text-xs leading-5 text-[var(--muted-foreground)]">
+          {error}
+        </p>
+      ) : null}
       <Tree
         className="relative w-full"
         indent={indent}
@@ -107,9 +126,11 @@ function WorkspaceTreeContent({
           );
         })}
       </Tree>
-      {data.items.workspace?.children?.length ? null : (
-        <p className="mt-3 text-xs leading-5 text-[var(--muted-foreground)]">Retrieved source structure will appear after the first backend chat turn.</p>
-      )}
+      {!loading && !error && !hasDocuments ? (
+        <p className="mt-3 text-xs leading-5 text-[var(--muted-foreground)]">
+          Indexed documents will appear here once processing completes.
+        </p>
+      ) : null}
     </div>
   );
 }

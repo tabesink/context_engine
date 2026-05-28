@@ -5,16 +5,7 @@ import type {
   LightRagDomain,
   RetrievalSettings,
 } from "@/types/chat";
-
-type UserDomainPayload = {
-  id: string;
-  display_name: string;
-  host_port: number;
-  status?: string;
-  is_healthy?: boolean;
-  is_default?: boolean;
-  retrieval_defaults?: LightRagDomain["retrieval_defaults"];
-};
+import type { LightRagDomainSummary } from "@/types/lightrag";
 
 type StreamHandlers = {
   conversationId: string;
@@ -27,15 +18,15 @@ type StreamHandlers = {
 };
 
 export async function fetchLightRagDomains(): Promise<LightRagDomain[]> {
-  const payload = await apiRequest<{ domains: UserDomainPayload[] }>("/lightrag/domains");
+  const payload = await apiRequest<{ domains: LightRagDomainSummary[] }>("/lightrag/domains");
   return payload.domains.map((domain) => ({
     domain_id: domain.id,
     workspace: domain.display_name || domain.id,
-    port: domain.host_port,
+    port: domain.host_port ?? 0,
     service: domain.id,
     base_url: "",
-    status: domain.status,
-    is_healthy: domain.is_healthy,
+    status: domain.status ?? undefined,
+    is_healthy: domain.is_healthy ?? undefined,
     is_default: domain.is_default,
     retrieval_defaults: domain.retrieval_defaults,
   }));

@@ -4,6 +4,14 @@ Context Engine manages authenticated access to document corpora, delegates seman
 
 ## Language
 
+**State**:
+Exclusive lifecycle phase; one value; gates allowed actions and transitions.
+_Avoid_: gateway errors, poll observations, UI loading flags
+
+**Status**:
+Operational detail within a state; many can coexist; for UX, logs, and diagnostics—not flow control.
+_Avoid_: lifecycle enum values like PaymentFailedDueToTimeout
+
 **LightRAG Domain**:
 A named knowledge corpus hosted by a LightRAG runtime and selected by users for semantic retrieval.
 _Avoid_: User instance, tenant database
@@ -40,6 +48,34 @@ _Avoid_: Vector database, retrieval plane
 The LightRAG responsibility for semantic chunks, embeddings, graph data, vector search, and answer evidence.
 _Avoid_: Control metadata, document manager
 
+**Evidence**:
+Normalized retrieval result from any engine; shared contract across semantic and navigation paths.
+_Avoid_: chunk, hit, result row
+
+**Rich Navigation**:
+Deterministic local retrieval over Document Structure (pages, sections, blocks, chunks, assets).
+_Avoid_: semantic fallback, local LightRAG
+
+**Workspace Tree**:
+Control Plane browse tree of domain → document → section → page → chunk → asset.
+_Avoid_: file explorer, semantic graph
+
+**Workspace Source Context**:
+Exact source payload for one selected workspace-tree node (text, metadata, assets).
+_Avoid_: retrieval result, evidence card
+
+**Context Stream**:
+UI panel showing retrieval evidence for the selected assistant message.
+_Avoid_: chat history, source navigator
+
+**Source Navigator**:
+UI panel showing Workspace Source Context after a tree-node click (no retrieval).
+_Avoid_: context stream, semantic search
+
+**Retrieval Mode**:
+Policy selector: `navigation` (local only) vs `auto`/`semantic`/`hybrid` (LightRAG; hybrid may merge navigation evidence).
+_Avoid_: search type, query flavor
+
 ## Relationships
 
 - A **LightRAG Domain** belongs to the **Retrieval Plane**.
@@ -47,6 +83,9 @@ _Avoid_: Control metadata, document manager
 - A **Semantic Engine** owns semantic retrieval data; **Navigation** owns local page/tree browsing data.
 - **Document Structure**, **Source Chunks**, and **Assets** belong to the **Control Plane** for citation, browsing, and enrichment; they do not make Context Engine a **Semantic Engine**.
 - **Navigation** can be ready or failed independently from **Semantic Engine** readiness.
+- **Evidence** is produced by semantic or navigation retrieval; **Context Stream** displays it.
+- **Workspace Tree** clicks fetch **Workspace Source Context** for **Source Navigator**; they do not trigger retrieval.
+- **Hybrid** retrieval mode merges LightRAG **Evidence** with **Rich Navigation** evidence; LightRAG still owns semantic ranking.
 
 ## Example dialogue
 

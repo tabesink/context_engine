@@ -1,5 +1,4 @@
 import logging
-import re
 from datetime import UTC, datetime
 
 from fastapi import HTTPException, UploadFile
@@ -17,6 +16,7 @@ from app.lightrag_deploy.manifest import DomainManifestStore
 from app.lightrag_deploy.settings import LightRAGDeploySettings
 from app.services.ai_model_settings_service import AIModelSettingsService
 from app.services.model_profile_resolver import ModelProfileResolver
+from app.services.lightrag_failure_normalizer import normalize_lightrag_failure_message
 from app.services.secret_crypto import SecretCryptoService
 from app.services.lightrag_domain_registry import (
     LightRAGDomainRegistry,
@@ -35,7 +35,6 @@ from app.storage.repositories.documents import DocumentRepository
 from app.storage.tables import DocumentRow
 
 logger = logging.getLogger(__name__)
-_MISSING_SECRET_KEY_PATTERN = re.compile(r"\b[A-Z][A-Z0-9_]{2,}\b")
 
 
 class DocumentService:
@@ -216,7 +215,7 @@ class DocumentService:
         status = str(status_payload.get("status") or "")
         if status not in {"indexing", "ready", "failed"}:
             raise HTTPException(status_code=502, detail=f"Unknown LightRAG status: {status!r}")
-        normalized_message, missing_provider_secrets = self._normalize_lightrag_failure_message(
+        normalized_message, missing_provider_secrets = normalize_lightrag_failure_message(
             status_payload.get("error")
         )
         updated_lightrag = lightrag | {
@@ -279,7 +278,7 @@ class DocumentService:
 
     def _mark_poll_refresh_failed(self, *, document: DocumentRow, message: str) -> DocumentRow:
         lightrag = dict(document.meta.get("lightrag") or {})
-        normalized_message, missing_provider_secrets = self._normalize_lightrag_failure_message(message)
+        normalized_message, missing_provider_secrets = normalize_lightrag_failure_message(message)
         updated_lightrag = lightrag | {
             "status": "failed",
             "message": normalized_message,
@@ -297,42 +296,6 @@ class DocumentService:
             DocumentStatus.FAILED,
             error_message=normalized_message,
         )
-
-    def _normalize_lightrag_failure_message(
-        self, raw_message: str | None
-    ) -> tuple[str | None, list[str] | None]:
-        message = str(raw_message).strip() if raw_message is not None else None
-        if not message:
-            return message, None
-        missing_provider_secrets = self._extract_missing_provider_secrets(message)
-        if not missing_provider_secrets:
-            return message, None
-        plural = "s" if len(missing_provider_secrets) > 1 else ""
-        friendly = (
-            f"Missing provider secret{plural}: {', '.join(missing_provider_secrets)}. "
-            "Configure it in AI Settings > Provider secrets and retry ingestion."
-        )
-        return friendly, missing_provider_secrets
-
-    def _extract_missing_provider_secrets(self, message: str) -> list[str]:
-        tokens = _MISSING_SECRET_KEY_PATTERN.findall(message)
-        candidates = sorted(
-            {
-                token
-                for token in tokens
-                if "_" in token and any(suffix in token for suffix in ("KEY", "TOKEN", "SECRET"))
-            }
-        )
-        if not candidates:
-            return []
-        normalized = re.sub(r"[\[\]\(\)\{\}'\",:;]", " ", message).strip()
-        words = [part for part in normalized.split() if part]
-        if words and all(part in candidates for part in words):
-            return candidates
-        lowered = message.lower()
-        if "missing" in lowered and ("key" in lowered or "secret" in lowered or "token" in lowered):
-            return candidates
-        return []
 
     def reingest(self, *, actor_id: str, document_id: str) -> str:
         document = self.documents.get(document_id)

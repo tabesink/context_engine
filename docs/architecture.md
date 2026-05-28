@@ -32,6 +32,26 @@ mode in auto|semantic|hybrid
 
 Both paths return local `Evidence` objects. API routes never expose raw LightRAG, PageIndex, or storage rows.
 
+## Processing Status Flow
+
+Processing status is served from Context Engine as a normalized contract; clients do not call LightRAG status endpoints directly.
+
+```text
+client
+  -> /lightrag/domains/{domain_id}/processing-status (user)
+     or /admin/lightrag/domains/{domain_id}/processing-status (admin)
+  -> ProcessingStatusService
+  -> DocumentRepository + JobRepository (local truth)
+  -> LightRAGRemoteAdapter.pipeline_status/status_counts (remote enrichment)
+  -> ProcessingStatusCache TTL coalescing
+  -> normalized state/counts/active response
+```
+
+Document-level status follows the same pattern through:
+
+- `GET /documents/{document_id}/processing-status`
+- `GET /admin/documents/{document_id}/processing-status`
+
 ## Package Ownership
 
 - `app/api/`: HTTP routes and dependency wiring only. LightRAG graph proxies live in `app/api/routes/lightrag.py`; admin domain lifecycle and the user-safe domain list live in `app/api/routes/lightrag_admin.py` alongside other admin routers in `app/api/routes/admin.py`.
@@ -94,9 +114,9 @@ Admin API or TUI
   -> Docker Compose runner
 ```
 
-Deployment routes are disabled by default with `LIGHTRAG_DEPLOY_ENABLED=false`. When enabled, admins can create, list, show, regenerate, start, stop, recreate, archive, or explicitly permanently delete domains. Any authenticated user may call `GET /lightrag/domains` for a safe subset of domain metadata used to pick `lightrag_domain_id` on uploads and queries (admin mutating routes still require deploy mode on).
+Admins can create, list, show, start, stop, repair, archive, preview purge, and purge domains through `/admin/lightrag/domains...`. Advanced compatibility routes (`recreate`, `regenerate`) still exist but are not part of the normal admin lifecycle UX. Any authenticated user may call `GET /lightrag/domains` for a safe subset of domain metadata used to pick `lightrag_domain_id` on uploads and queries.
 
-Each managed domain lives under `.data/lightrag/domains/<domain>/`, gets one generated `domain.env`, and uses a LightRAG-owned PostgreSQL database such as `lightrag_manuals`. Domain removal archives data by default under `.data/lightrag/deleted/`.
+Each managed domain lives under `.data/lightrag/domains/<domain>/`, gets one generated `domain.env`, and uses a LightRAG-owned PostgreSQL database such as `lightrag_manuals`. Domain removal archives data by default under `.data/lightrag/deleted/`. Permanent deletion is handled through explicit `purge-preview` plus `purge`; `DELETE ...?permanent=true` is deprecated and rejected.
 
 The generated `domain.env` now includes provider runtime wiring (when configured) for:
 
@@ -175,4 +195,5 @@ LightRAG owns semantic retrieval and ranking. Context Engine only normalizes Lig
 - LightRAG timeout/connect failures become service-unavailable responses.
 - LightRAG auth/upstream/invalid-response failures become bad-gateway style responses.
 - Retrieve failure returns a structured API error.
+- Processing status degrades to stale/partial responses when LightRAG status calls fail; local document/job truth remains available via normalized counts/state.
 

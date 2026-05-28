@@ -164,6 +164,18 @@ class LightRAGRemoteAdapter:
             "metadata": first.get("metadata") or {},
         }
 
+    def pipeline_status(self) -> dict[str, Any]:
+        data = self.get_json("/documents/pipeline_status")
+        if not isinstance(data, dict):
+            raise LightRAGInvalidResponse("Invalid LightRAG pipeline status response")
+        return data
+
+    def status_counts(self) -> dict[str, Any]:
+        data = self.get_json("/documents/status_counts")
+        if not isinstance(data, dict):
+            raise LightRAGInvalidResponse("Invalid LightRAG status counts response")
+        return data
+
     def get_json(self, path: str, *, params: dict | None = None) -> dict[str, Any] | list[Any]:
         return self._request_json("GET", path, params=params)
 

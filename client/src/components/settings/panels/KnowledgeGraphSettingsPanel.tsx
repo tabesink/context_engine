@@ -1,18 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { ChevronDown, Minus, MoreHorizontal, Plus, RefreshCw } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { adminDocumentsApi, type AdminAuditLog, type AdminDocument } from "@/lib/api/admin-documents";
 import { aiSettingsApi } from "@/lib/api/ai-settings";
 import { APIError } from "@/lib/api/client";
@@ -39,14 +28,22 @@ import {
   type CreateKnowledgeGraphDomainPayload,
   type KnowledgeGraphDomain,
 } from "@/lib/api/knowledge-graph-admin";
+import { CreateDomainForm } from "@/components/settings/lightrag-domains/CreateDomainForm";
+import { DomainLifecycleCard } from "@/components/settings/lightrag-domains/DomainLifecycleCard";
+import { DomainOverviewCards } from "@/components/settings/lightrag-domains/DomainOverviewCards";
+import { useRegisterLightragDomainsActions } from "@/components/settings/settings-panel-actions";
+import { SectionCard } from "@/components/surfaces/SectionCard";
+import { PanelState } from "@/components/surfaces/PanelState";
+import { settingsPanelContentClassName } from "@/components/settings/settings-controls";
+import { useRunningDomainsProcessingStatus } from "@/hooks/use-running-domains-processing-status";
 import { selectIsAdmin, useAuthStore } from "@/stores/auth-store";
 import type { AIModelProfile } from "@/types/ai-settings";
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof APIError) {
     const body = error.body as { detail?: unknown } | null;
-    if (body && typeof body.detail === "string") return body.detail;
-    if (body && typeof body.detail === "object" && body.detail !== null && "message" in body.detail) {
+    if (typeof body?.detail === "string") return body.detail;
+    if (body?.detail && typeof body.detail === "object" && "message" in body.detail) {
       const message = (body.detail as { message?: unknown }).message;
       if (typeof message === "string") return message;
     }
@@ -55,32 +52,8 @@ function getErrorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
-type DomainAction = "up" | "down" | "recreate" | "repair" | "regenerate" | "archive";
-type ConfirmableAction = "recreate" | "regenerate" | "archive";
-type RetrievalProfile = "precise" | "balanced" | "broad" | "custom";
-
-const panelClassName = "rounded-xl border border-[var(--border)] bg-[var(--background)] p-4";
-const inputClassName = "h-9 rounded-full border-[var(--border)] bg-[var(--background)] shadow-none";
-const selectTriggerClassName = "h-9 rounded-full border-[var(--border)] bg-[var(--background)] shadow-none";
-const pillButtonClassName = "rounded-full shadow-none";
-const retrievalDefaultsInputClassName = "h-9 rounded-full border-[var(--border)] bg-[var(--background)] shadow-none";
-
-const RETRIEVAL_PROFILES: Record<Exclude<RetrievalProfile, "custom">, { topK: string; chunkTopK: string; rerankTopK: string; textTokens: string; globalTokens: string; localTokens: string }> = {
-  precise: { topK: "6", chunkTopK: "6", rerankTopK: "6", textTokens: "2500", globalTokens: "2500", localTokens: "2500" },
-  balanced: { topK: "10", chunkTopK: "10", rerankTopK: "10", textTokens: "4000", globalTokens: "4000", localTokens: "4000" },
-  broad: { topK: "20", chunkTopK: "20", rerankTopK: "20", textTokens: "6000", globalTokens: "6000", localTokens: "6000" },
-};
-
-function embeddingProfileLabel(profile: AIModelProfile): string {
-  const dims = profile.dimensions ? ` · ${profile.dimensions} dims` : "";
-  return `${profile.provider} · ${profile.model}${dims}`;
-}
-
-function parsePositiveInt(value: string): number | undefined {
-  const parsed = Number.parseInt(value.trim(), 10);
-  if (!Number.isInteger(parsed) || parsed < 1) return undefined;
-  return parsed;
-}
+type DomainAction = "up" | "down" | "repair" | "archive" | "purge";
+type ConfirmableAction = "archive" | "purge";
 
 export function KnowledgeGraphSettingsPanel() {
   const isAdmin = useAuthStore(selectIsAdmin);
@@ -95,21 +68,13 @@ export function KnowledgeGraphSettingsPanel() {
   const [actionBusyByDomain, setActionBusyByDomain] = React.useState<Record<string, DomainAction | null>>({});
   const [uploadBusyByDomain, setUploadBusyByDomain] = React.useState<Record<string, boolean>>({});
   const [confirmAction, setConfirmAction] = React.useState<{ domainId: string; action: ConfirmableAction } | null>(null);
+  const [purgePreviewByDomain, setPurgePreviewByDomain] = React.useState<
+    Record<string, { document_count: number; active_jobs: number } | null>
+  >({});
   const [documentsDialogDomainId, setDocumentsDialogDomainId] = React.useState<string | null>(null);
   const [logsDialogDomainId, setLogsDialogDomainId] = React.useState<string | null>(null);
   const [createBusy, setCreateBusy] = React.useState(false);
   const [createOpen, setCreateOpen] = React.useState(false);
-  const [newDomainId, setNewDomainId] = React.useState("");
-  const [newDisplayName, setNewDisplayName] = React.useState("");
-  const [useCustomHostPort, setUseCustomHostPort] = React.useState(false);
-  const [retrievalProfile, setRetrievalProfile] = React.useState<RetrievalProfile>("balanced");
-  const [newHostPort, setNewHostPort] = React.useState("");
-  const [newTopK, setNewTopK] = React.useState("10");
-  const [newChunkTopK, setNewChunkTopK] = React.useState("10");
-  const [newChunkRerankTopK, setNewChunkRerankTopK] = React.useState("10");
-  const [newTextUnitTokens, setNewTextUnitTokens] = React.useState("4000");
-  const [newGlobalTokens, setNewGlobalTokens] = React.useState("4000");
-  const [newLocalTokens, setNewLocalTokens] = React.useState("4000");
   const [embeddingProfiles, setEmbeddingProfiles] = React.useState<AIModelProfile[]>([]);
   const [selectedEmbeddingProfileId, setSelectedEmbeddingProfileId] = React.useState("");
   const [uploadTargetDomainId, setUploadTargetDomainId] = React.useState<string | null>(null);
@@ -154,8 +119,8 @@ export function KnowledgeGraphSettingsPanel() {
   const refreshAll = React.useCallback(async () => {
     setError(null);
     setNotice(null);
-    await Promise.all([loadDomains(), loadDocuments()]);
-  }, [loadDomains, loadDocuments]);
+    await Promise.all([loadDomains(), loadDocuments(), loadAuditLogs()]);
+  }, [loadDomains, loadDocuments, loadAuditLogs]);
 
   React.useEffect(() => {
     if (!isAdmin) return;
@@ -176,29 +141,25 @@ export function KnowledgeGraphSettingsPanel() {
         setEmbeddingProfiles(enabledEmbeddings);
         setSelectedEmbeddingProfileId(settings.defaults.embedding_profile_id);
       } catch {
-        // Load/create flow handles surfaced API errors.
+        // Create flow surfaces API errors on submit.
       }
     }, 0);
     return () => window.clearTimeout(task);
   }, [isAdmin]);
 
-  React.useEffect(() => {
-    if (!logsDialogDomainId || auditLogs.length > 0) return;
-    const task = window.setTimeout(() => {
-      void loadAuditLogs();
-    }, 0);
-    return () => window.clearTimeout(task);
-  }, [auditLogs.length, loadAuditLogs, logsDialogDomainId]);
+  const headerActions = React.useMemo(
+    () => ({
+      onRefresh: () => void refreshAll(),
+      onToggleCreate: () => setCreateOpen((open) => !open),
+      createOpen,
+      loading: loading || documentsLoading,
+    }),
+    [createOpen, documentsLoading, loading, refreshAll],
+  );
 
-  const applyProfileDefaults = (profile: Exclude<RetrievalProfile, "custom">) => {
-    const defaults = RETRIEVAL_PROFILES[profile];
-    setNewTopK(defaults.topK);
-    setNewChunkTopK(defaults.chunkTopK);
-    setNewChunkRerankTopK(defaults.rerankTopK);
-    setNewTextUnitTokens(defaults.textTokens);
-    setNewGlobalTokens(defaults.globalTokens);
-    setNewLocalTokens(defaults.localTokens);
-  };
+  useRegisterLightragDomainsActions(isAdmin ? headerActions : null);
+
+  const { statusByDomain } = useRunningDomainsProcessingStatus(domains, isAdmin);
 
   const runAction = async (domainId: string, action: DomainAction) => {
     setActionBusyByDomain((prev) => ({ ...prev, [domainId]: action }));
@@ -207,10 +168,15 @@ export function KnowledgeGraphSettingsPanel() {
     try {
       if (action === "up") await knowledgeGraphAdminApi.up(domainId);
       if (action === "down") await knowledgeGraphAdminApi.down(domainId);
-      if (action === "recreate") await knowledgeGraphAdminApi.recreate(domainId);
       if (action === "repair") await knowledgeGraphAdminApi.repair(domainId);
-      if (action === "regenerate") await knowledgeGraphAdminApi.regenerate(domainId);
       if (action === "archive") await knowledgeGraphAdminApi.remove(domainId);
+      if (action === "purge") {
+        if (!purgePreviewByDomain[domainId]) {
+          throw new Error("Run Preview Purge before purging permanently.");
+        }
+        await knowledgeGraphAdminApi.purge(domainId);
+        setPurgePreviewByDomain((prev) => ({ ...prev, [domainId]: null }));
+      }
       if (action === "repair") setNotice(`Repaired domain ${domainId}`);
       await refreshAll();
     } catch (nextError) {
@@ -220,17 +186,38 @@ export function KnowledgeGraphSettingsPanel() {
     }
   };
 
-  const runRestart = async (domainId: string) => {
-    setActionBusyByDomain((prev) => ({ ...prev, [domainId]: "down" }));
+  const runPreviewPurge = async (domainId: string) => {
+    setActionBusyByDomain((prev) => ({ ...prev, [domainId]: "purge" }));
     setError(null);
     setNotice(null);
     try {
-      await knowledgeGraphAdminApi.down(domainId);
-      await knowledgeGraphAdminApi.up(domainId);
-      setNotice(`Restarted domain ${domainId}`);
+      const preview = await knowledgeGraphAdminApi.purgePreview(domainId);
+      setPurgePreviewByDomain((prev) => ({
+        ...prev,
+        [domainId]: {
+          document_count: preview.document_count,
+          active_jobs: preview.active_jobs,
+        },
+      }));
+      setNotice(`Preview for ${domainId}: ${preview.document_count} docs, ${preview.active_jobs} active jobs.`);
+    } catch (nextError) {
+      setError(getErrorMessage(nextError, `Failed to preview purge for ${domainId}`));
+    } finally {
+      setActionBusyByDomain((prev) => ({ ...prev, [domainId]: null }));
+    }
+  };
+
+  const runAdvancedAction = async (domainId: string, action: "recreate" | "regenerate") => {
+    setActionBusyByDomain((prev) => ({ ...prev, [domainId]: "repair" }));
+    setError(null);
+    setNotice(null);
+    try {
+      if (action === "recreate") await knowledgeGraphAdminApi.recreate(domainId);
+      if (action === "regenerate") await knowledgeGraphAdminApi.regenerate(domainId);
+      setNotice(`${action === "recreate" ? "Recreated container for" : "Regenerated config for"} ${domainId}`);
       await refreshAll();
     } catch (nextError) {
-      setError(getErrorMessage(nextError, `Failed to restart domain ${domainId}`));
+      setError(getErrorMessage(nextError, `Failed to ${action} for ${domainId}`));
     } finally {
       setActionBusyByDomain((prev) => ({ ...prev, [domainId]: null }));
     }
@@ -261,85 +248,56 @@ export function KnowledgeGraphSettingsPanel() {
     }
   };
 
-  const openDocumentsDialog = (domainId: string) => {
-    setDocumentsDialogDomainId(domainId);
-  };
-
-  const openLogsDialog = (domainId: string) => {
-    setLogsDialogDomainId(domainId);
-  };
-
-  const onCreate = async (event: React.FormEvent) => {
-    event.preventDefault();
-    const domainId = newDomainId.trim();
-    const displayName = newDisplayName.trim();
-    const hostPortRaw = useCustomHostPort ? newHostPort.trim() : "";
-    const parsedHostPort = hostPortRaw ? Number.parseInt(hostPortRaw, 10) : undefined;
-    if (!domainId) return;
-    const invalidHostPort =
-      hostPortRaw !== "" && (!Number.isInteger(parsedHostPort) || parsedHostPort === undefined || parsedHostPort < 1 || parsedHostPort > 65535);
-    if (invalidHostPort) {
-      setError("Host port must be an integer between 1 and 65535");
-      return;
-    }
+  const onCreate = async (payload: {
+    domainId: string;
+    displayName: string;
+    hostPort?: number;
+    topK: number;
+    chunkTopK: number;
+    chunkRerankTopK: number;
+    textUnitTokens: number;
+    globalTokens: number;
+    localTokens: number;
+  }) => {
     if (!selectedEmbeddingProfileId) {
       setError("Select an embedding model before creating a domain");
       return;
     }
-    const topK = parsePositiveInt(newTopK);
-    const chunkTopK = parsePositiveInt(newChunkTopK);
-    const chunkRerankTopK = parsePositiveInt(newChunkRerankTopK);
-    const textUnitTokens = parsePositiveInt(newTextUnitTokens);
-    const globalTokens = parsePositiveInt(newGlobalTokens);
-    const localTokens = parsePositiveInt(newLocalTokens);
-    if (
-      !topK ||
-      !chunkTopK ||
-      !chunkRerankTopK ||
-      !textUnitTokens ||
-      !globalTokens ||
-      !localTokens
-    ) {
-      setError("Retrieval defaults must be positive integers");
+    if (payload.hostPort !== undefined && (payload.hostPort < 1 || payload.hostPort > 65535)) {
+      setError("Host port must be an integer between 1 and 65535");
       return;
     }
+
     setCreateBusy(true);
     setError(null);
     setNotice(null);
-    const payload: CreateKnowledgeGraphDomainPayload = {
-      domain_id: domainId,
-      display_name: displayName || undefined,
-      host_port: parsedHostPort,
+    const createPayload: CreateKnowledgeGraphDomainPayload = {
+      domain_id: payload.domainId,
+      display_name: payload.displayName || undefined,
+      host_port: payload.hostPort,
       embedding_profile_id: selectedEmbeddingProfileId,
       start: true,
-      top_k: topK,
-      chunk_top_k: chunkTopK,
-      chunk_rerank_top_k: chunkRerankTopK,
-      max_token_for_text_unit: textUnitTokens,
-      max_token_for_global_context: globalTokens,
-      max_token_for_local_context: localTokens,
+      top_k: payload.topK,
+      chunk_top_k: payload.chunkTopK,
+      chunk_rerank_top_k: payload.chunkRerankTopK,
+      max_token_for_text_unit: payload.textUnitTokens,
+      max_token_for_global_context: payload.globalTokens,
+      max_token_for_local_context: payload.localTokens,
     };
     try {
-      await knowledgeGraphAdminApi.create(payload);
-      setNewDomainId("");
-      setNewDisplayName("");
-      setUseCustomHostPort(false);
-      setNewHostPort("");
-      setRetrievalProfile("balanced");
-      applyProfileDefaults("balanced");
+      await knowledgeGraphAdminApi.create(createPayload);
       setCreateOpen(false);
-      setNotice(`Created and started domain ${domainId}`);
+      setNotice(`Created and started domain ${payload.domainId}`);
       await refreshAll();
     } catch (nextError) {
       setError(getErrorMessage(nextError, "Failed to create domain"));
+      throw nextError;
     } finally {
       setCreateBusy(false);
     }
   };
 
-  const activeDocuments = React.useMemo(() => {
-    return documents.filter((doc) => doc.status !== "deleted");
-  }, [documents]);
+  const activeDocuments = React.useMemo(() => documents.filter((doc) => doc.status !== "deleted"), [documents]);
 
   const documentsByDomainId = React.useMemo(() => {
     const grouped = new Map<string, AdminDocument[]>();
@@ -355,340 +313,101 @@ export function KnowledgeGraphSettingsPanel() {
     return grouped;
   }, [activeDocuments]);
 
-  const domainDocuments = documentsDialogDomainId ? documentsByDomainId.get(documentsDialogDomainId) ?? [] : [];
+  const logsByDomainId = React.useMemo(() => {
+    const grouped = new Map<string, AdminAuditLog[]>();
+    for (const row of auditLogs) {
+      const domainId =
+        row.target_id ??
+        (row.metadata && typeof row.metadata === "object"
+          ? ((row.metadata as Record<string, unknown>).domain_id as string | undefined)
+          : undefined);
+      if (!domainId) continue;
+      const existing = grouped.get(domainId) ?? [];
+      existing.push(row);
+      grouped.set(domainId, existing);
+    }
+    return grouped;
+  }, [auditLogs]);
+
+  const domainDocuments = documentsDialogDomainId ? (documentsByDomainId.get(documentsDialogDomainId) ?? []) : [];
 
   const domainLogs = React.useMemo(() => {
     if (!logsDialogDomainId) return [];
-    return auditLogs.filter((row) => {
-      if (row.target_id === logsDialogDomainId) return true;
-      const metadata = row.metadata;
-      if (!metadata || typeof metadata !== "object") return false;
-      const domainId = (metadata as Record<string, unknown>).domain_id;
-      return domainId === logsDialogDomainId;
-    });
-  }, [auditLogs, logsDialogDomainId]);
+    return logsByDomainId.get(logsDialogDomainId) ?? [];
+  }, [logsByDomainId, logsDialogDomainId]);
 
   const confirmActionLabel = confirmAction?.action ?? null;
 
   const onConfirmAction = async () => {
     if (!confirmAction) return;
     const { domainId, action } = confirmAction;
+    if (action === "purge" && !purgePreviewByDomain[domainId]) {
+      setConfirmAction(null);
+      setError("Run Preview Purge before purging permanently.");
+      return;
+    }
     setConfirmAction(null);
     await runAction(domainId, action);
   };
 
   if (!isAdmin) {
     return (
-      <div className={panelClassName}>
-        <p className="text-sm font-medium text-[var(--foreground)]">Admin access required</p>
-        <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-          Sign in with an admin account to manage knowledge graph domains.
-        </p>
-      </div>
+      <SectionCard title="Admin access required" description="Sign in with an admin account to manage knowledge graph domains.">
+        <div className="h-1" />
+      </SectionCard>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-1">
-        <p className="text-sm font-medium text-[var(--foreground)]">Knowledge Graph</p>
-        <p className="text-xs text-[var(--muted-foreground)]">Manage retrieval domains, document uploads, and lifecycle actions.</p>
-      </div>
-
-      <div className="flex items-center justify-between gap-3">
-        <Button variant="outline" size="sm" onClick={() => setCreateOpen((open) => !open)} className={`${pillButtonClassName} px-4`}>
-          {createOpen ? <Minus className="mr-2 size-3.5" /> : <Plus className="mr-2 size-3.5" />}
-          {createOpen ? "Hide create form" : "Create domain"}
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => void refreshAll()} disabled={loading || documentsLoading} className={`${pillButtonClassName} px-4`}>
-          <RefreshCw className={`mr-2 size-3.5 ${loading ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
-      </div>
-
-      {createOpen ? (
-        <form onSubmit={onCreate} className={panelClassName}>
-          <p className="text-sm font-medium text-[var(--foreground)]">Create knowledge graph domain</p>
-          <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
-            Create an isolated retrieval domain for documents and evidence.
-          </p>
-
-          <div className="mt-4 space-y-4">
-            <div>
-              <p className="mb-2 text-xs font-medium text-[var(--foreground)]">Domain identity</p>
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="kg-domain-id" className="text-xs font-medium text-[var(--foreground)]">
-                    Domain ID
-                  </Label>
-                  <Input
-                    id="kg-domain-id"
-                    placeholder="fatigue"
-                    value={newDomainId}
-                    onChange={(event) => setNewDomainId(event.target.value)}
-                    className={inputClassName}
-                    required
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="kg-display-name" className="text-xs font-medium text-[var(--foreground)]">
-                    Display name
-                  </Label>
-                  <Input
-                    id="kg-display-name"
-                    placeholder="Fatigue Manuals"
-                    value={newDisplayName}
-                    onChange={(event) => setNewDisplayName(event.target.value)}
-                    className={inputClassName}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="kg-embedding-profile" className="text-xs font-medium text-[var(--foreground)]">
-                Embedding model
-              </Label>
-              <Select value={selectedEmbeddingProfileId} onValueChange={setSelectedEmbeddingProfileId}>
-                <SelectTrigger id="kg-embedding-profile" className={selectTriggerClassName}>
-                  <SelectValue placeholder="Select embedding model" />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl border-[var(--border)] shadow-none">
-                  {embeddingProfiles.map((profile) => (
-                    <SelectItem key={profile.id} value={profile.id}>
-                      {embeddingProfileLabel(profile)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs leading-4 text-[var(--muted-foreground)]">
-                Locked after creation. All documents in this domain share the same embedding space.
-              </p>
-            </div>
-
-            <div className="space-y-2.5">
-              <p className="text-xs font-medium text-[var(--foreground)]">Host port</p>
-              <p className="text-xs leading-4 text-[var(--muted-foreground)]">Choose automatic assignment or provide a fixed port.</p>
-              <div className="space-y-2" role="radiogroup" aria-label="Host port mode">
-                <label className="flex items-center gap-2 text-xs text-[var(--foreground)]">
-                  <input
-                    type="radio"
-                    name="host-port-mode"
-                    checked={!useCustomHostPort}
-                    onChange={() => {
-                      setUseCustomHostPort(false);
-                      setNewHostPort("");
-                    }}
-                  />
-                  <span>Auto-assign available port</span>
-                </label>
-                <label className="flex items-center gap-2 text-xs text-[var(--foreground)]">
-                  <input type="radio" name="host-port-mode" checked={useCustomHostPort} onChange={() => setUseCustomHostPort(true)} />
-                  <span>Use custom port</span>
-                </label>
-              </div>
-              {useCustomHostPort ? (
-                <div className="space-y-1.5">
-                  <Label htmlFor="kg-host-port" className="text-xs font-medium text-[var(--foreground)]">
-                    Custom port
-                  </Label>
-                  <Input
-                    id="kg-host-port"
-                    type="number"
-                    min={1}
-                    max={65535}
-                    placeholder="9621"
-                    value={newHostPort}
-                    onChange={(event) => setNewHostPort(event.target.value)}
-                    className={inputClassName}
-                  />
-                </div>
-              ) : null}
-            </div>
-
-            <details className="group space-y-2 pt-1">
-              <summary className="flex cursor-pointer list-none items-center justify-between text-xs font-medium text-[var(--foreground)]">
-                <span>Advanced retrieval defaults</span>
-                <ChevronDown className="size-3.5 text-[var(--muted-foreground)] group-open:rotate-180" />
-              </summary>
-              <p className="text-xs leading-4 text-[var(--muted-foreground)]">Tune recall and token budgets used when this domain is created.</p>
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="kg-retrieval-profile" className="text-xs text-[var(--foreground)]">
-                    Retrieval profile
-                  </Label>
-                  <Select
-                    value={retrievalProfile}
-                    onValueChange={(value) => {
-                      const profile = value as RetrievalProfile;
-                      setRetrievalProfile(profile);
-                      if (profile !== "custom") applyProfileDefaults(profile);
-                    }}
-                  >
-                    <SelectTrigger id="kg-retrieval-profile" className={selectTriggerClassName}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-xl border-[var(--border)] shadow-none">
-                      <SelectItem value="precise">Precise</SelectItem>
-                      <SelectItem value="balanced">Balanced</SelectItem>
-                      <SelectItem value="broad">Broad</SelectItem>
-                      <SelectItem value="custom">Custom</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {retrievalProfile === "precise" ? (
-                    <p className="text-xs text-[var(--muted-foreground)]">Fewer, higher-confidence chunks.</p>
-                  ) : null}
-                  {retrievalProfile === "balanced" ? (
-                    <p className="text-xs text-[var(--muted-foreground)]">Recommended default for most workloads.</p>
-                  ) : null}
-                  {retrievalProfile === "broad" ? (
-                    <p className="text-xs text-[var(--muted-foreground)]">More recall for exploratory questions.</p>
-                  ) : null}
-                </div>
-                {retrievalProfile === "custom" ? (
-                  <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                    <NumberInput id="kg-top-k" label="Top K Results" value={newTopK} onChange={setNewTopK} />
-                    <NumberInput id="kg-chunk-top-k" label="Chunk Top K" value={newChunkTopK} onChange={setNewChunkTopK} />
-                    <NumberInput id="kg-rerank-top-k" label="Rerank Top K" value={newChunkRerankTopK} onChange={setNewChunkRerankTopK} />
-                    <NumberInput id="kg-text-unit-tokens" label="Text Unit Tokens" value={newTextUnitTokens} onChange={setNewTextUnitTokens} />
-                    <NumberInput id="kg-global-tokens" label="Global Tokens" value={newGlobalTokens} onChange={setNewGlobalTokens} />
-                    <NumberInput id="kg-local-tokens" label="Local Tokens" value={newLocalTokens} onChange={setNewLocalTokens} />
-                  </div>
-                ) : null}
-              </div>
-            </details>
-          </div>
-
-          <div className="mt-4 flex items-center justify-end gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              className={pillButtonClassName}
-              onClick={() => {
-                setCreateOpen(false);
-                setError(null);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={createBusy} className={`${pillButtonClassName} px-5`}>
-              {createBusy ? "Creating..." : "Create"}
-            </Button>
-          </div>
-        </form>
-      ) : null}
-
-      <div className="pt-1">
-        <p className="text-sm font-medium text-[var(--foreground)]">Knowledge graph domains</p>
-      </div>
+    <div className={settingsPanelContentClassName}>
+      <CreateDomainForm
+        open={createOpen}
+        createBusy={createBusy}
+        embeddingProfiles={embeddingProfiles}
+        selectedEmbeddingProfileId={selectedEmbeddingProfileId}
+        onSelectedEmbeddingProfileIdChange={setSelectedEmbeddingProfileId}
+        onCancel={() => {
+          setCreateOpen(false);
+          setError(null);
+        }}
+        onSubmit={onCreate}
+      />
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
-      {notice ? <p className="text-sm text-[var(--muted-foreground)]">{notice}</p> : null}
+      {notice ? <p className="text-sm text-muted-foreground">{notice}</p> : null}
 
       <input ref={uploadInputRef} type="file" className="hidden" onChange={onUploadFileSelected} />
 
-      <div className="space-y-2">
-        {loading ? (
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-4 text-sm text-[var(--muted-foreground)]">
-            Loading domains...
+      {loading ? (
+        <PanelState title="Loading domains..." />
+      ) : domains.length === 0 ? (
+        <PanelState title="No domains yet." />
+      ) : (
+        <SectionCard className="space-y-4">
+          <DomainOverviewCards domains={domains} documentsByDomainId={documentsByDomainId} />
+          <div className="space-y-4">
+            {domains.map((domain) => (
+              <DomainLifecycleCard
+                key={domain.id}
+                domain={domain}
+                documents={documentsByDomainId.get(domain.id) ?? []}
+                logs={logsByDomainId.get(domain.id) ?? []}
+                processingStatus={statusByDomain.get(domain.id)}
+                busyAction={actionBusyByDomain[domain.id]}
+                uploadBusy={Boolean(uploadBusyByDomain[domain.id])}
+                onRunAction={(domainId, action) => void runAction(domainId, action)}
+                onRunAdvancedAction={(domainId, action) => void runAdvancedAction(domainId, action)}
+                onUpload={triggerUpload}
+                onOpenDocuments={setDocumentsDialogDomainId}
+                onOpenLogs={setLogsDialogDomainId}
+                onArchive={(domainId) => setConfirmAction({ domainId, action: "archive" })}
+                onPreviewPurge={(domainId) => void runPreviewPurge(domainId)}
+                onPurge={(domainId) => setConfirmAction({ domainId, action: "purge" })}
+              />
+            ))}
           </div>
-        ) : domains.length === 0 ? (
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-4 text-sm text-[var(--muted-foreground)]">
-            No domains yet.
-          </div>
-        ) : (
-          domains.map((domain) => {
-            const busyAction = actionBusyByDomain[domain.id];
-            const statusLabel = domain.status || (domain.is_healthy ? "running" : "unknown");
-            const isRunning = statusLabel.toLowerCase() === "running" || domain.is_healthy === true;
-            const domainDocs = documentsByDomainId.get(domain.id) ?? [];
-            const indexingCount = domainDocs.filter((doc) => doc.status === "indexing").length;
-            const uploadedCount = domainDocs.length;
-            const lastUploadLabel = formatLastUploadLabel(domainDocs);
-            return (
-              <div key={domain.id} className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-4">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-[var(--foreground)]">{domain.display_name || domain.id}</p>
-                    </div>
-                    <p className="text-xs text-[var(--muted-foreground)]">
-                      Domain ID: {domain.id} · Port: {domain.host_port}
-                    </p>
-                  </div>
-                  <Badge variant={isRunning ? "secondary" : "muted"} className="rounded-full">
-                    ● {isRunning ? "Running" : statusLabel}
-                  </Badge>
-                </div>
-                <div className="mt-2 space-y-2">
-                    <p className="text-xs text-[var(--muted-foreground)]">
-                      Embedding:{" "}
-                      {domain.embedding
-                        ? `${domain.embedding.model}${domain.embedding.dimensions ? ` · ${domain.embedding.dimensions} dims` : ""} · locked`
-                        : "Legacy / unknown"}
-                    </p>
-                    <p className="text-xs text-[var(--muted-foreground)]">
-                      Documents: {uploadedCount} uploaded · {indexingCount} indexing
-                      {lastUploadLabel ? ` · last upload ${lastUploadLabel}` : ""}
-                    </p>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={!isRunning || Boolean(uploadBusyByDomain[domain.id])}
-                    onClick={() => triggerUpload(domain.id)}
-                    className={pillButtonClassName}
-                  >
-                    {uploadBusyByDomain[domain.id] ? "Uploading..." : isRunning ? "Upload document" : "Start before upload"}
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => openDocumentsDialog(domain.id)} className={pillButtonClassName}>
-                    View documents
-                  </Button>
-                  {isRunning ? (
-                    <Button size="sm" variant="outline" disabled={Boolean(busyAction)} onClick={() => void runAction(domain.id, "down")} className={pillButtonClassName}>
-                      {busyAction === "down" ? "Stopping..." : "Stop"}
-                    </Button>
-                  ) : (
-                    <Button size="sm" variant="outline" disabled={Boolean(busyAction)} onClick={() => void runAction(domain.id, "up")} className={pillButtonClassName}>
-                      {busyAction === "up" ? "Starting..." : "Start"}
-                    </Button>
-                  )}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button size="sm" variant="outline" className={pillButtonClassName}>
-                        More
-                        <MoreHorizontal className="ml-1 size-3.5" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-52">
-                      <DropdownMenuItem onSelect={() => openLogsDialog(domain.id)}>View logs</DropdownMenuItem>
-                      <DropdownMenuItem disabled={!isRunning || Boolean(busyAction)} onSelect={() => void runAction(domain.id, "down")}>
-                        Stop domain
-                      </DropdownMenuItem>
-                      <DropdownMenuItem disabled={Boolean(busyAction)} onSelect={() => void runRestart(domain.id)}>
-                        Restart domain
-                      </DropdownMenuItem>
-                      <DropdownMenuItem disabled={Boolean(busyAction)} onSelect={() => void runAction(domain.id, "repair")}>
-                        Repair domain
-                      </DropdownMenuItem>
-                      <DropdownMenuItem disabled={Boolean(busyAction)} onSelect={() => setConfirmAction({ domainId: domain.id, action: "recreate" })}>
-                        Recreate container
-                      </DropdownMenuItem>
-                      <DropdownMenuItem disabled={Boolean(busyAction)} onSelect={() => setConfirmAction({ domainId: domain.id, action: "regenerate" })}>
-                        Regenerate indexes
-                      </DropdownMenuItem>
-                      <DropdownMenuItem disabled={Boolean(busyAction)} onSelect={() => setConfirmAction({ domainId: domain.id, action: "archive" })}>
-                        Archive domain
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
+        </SectionCard>
+      )}
 
       <Dialog open={Boolean(documentsDialogDomainId)} onOpenChange={(open) => !open && setDocumentsDialogDomainId(null)}>
         <DialogContent className="max-w-2xl">
@@ -698,17 +417,17 @@ export function KnowledgeGraphSettingsPanel() {
               {documentsDialogDomainId ? `Documents uploaded to ${documentsDialogDomainId}` : "Documents for selected domain"}
             </DialogDescription>
           </DialogHeader>
-          <div className="max-h-[360px] overflow-y-auto rounded-md border border-[var(--border)]">
+          <div className="max-h-[360px] overflow-y-auto rounded-md border border-border">
             {documentsLoading ? (
-              <p className="p-3 text-xs text-[var(--muted-foreground)]">Loading documents...</p>
+              <p className="p-3 text-xs text-muted-foreground">Loading documents...</p>
             ) : domainDocuments.length === 0 ? (
-              <p className="p-3 text-xs text-[var(--muted-foreground)]">No uploaded documents in this domain.</p>
+              <p className="p-3 text-xs text-muted-foreground">No uploaded documents in this domain.</p>
             ) : (
-              <div className="divide-y divide-[var(--border)]">
+              <div className="divide-y divide-border">
                 {domainDocuments.map((doc) => (
                   <div key={doc.id} className="p-3">
-                    <p className="text-sm text-[var(--foreground)]">{doc.filename}</p>
-                    <p className="text-xs text-[var(--muted-foreground)]">
+                    <p className="text-sm text-foreground">{doc.filename}</p>
+                    <p className="text-xs text-muted-foreground">
                       {doc.status} · uploaded {formatDateLabel(doc.created_at)}
                     </p>
                     {doc.status === "failed" && doc.error_message ? (
@@ -735,17 +454,17 @@ export function KnowledgeGraphSettingsPanel() {
               {logsDialogDomainId ? `Audit logs for ${logsDialogDomainId}` : "Domain audit logs"}
             </DialogDescription>
           </DialogHeader>
-          <div className="max-h-[360px] overflow-y-auto rounded-md border border-[var(--border)]">
+          <div className="max-h-[360px] overflow-y-auto rounded-md border border-border">
             {logsLoading ? (
-              <p className="p-3 text-xs text-[var(--muted-foreground)]">Loading logs...</p>
+              <p className="p-3 text-xs text-muted-foreground">Loading logs...</p>
             ) : domainLogs.length === 0 ? (
-              <p className="p-3 text-xs text-[var(--muted-foreground)]">No logs for this domain yet.</p>
+              <p className="p-3 text-xs text-muted-foreground">No logs for this domain yet.</p>
             ) : (
-              <div className="divide-y divide-[var(--border)]">
+              <div className="divide-y divide-border">
                 {domainLogs.map((row) => (
                   <div key={row.id} className="p-3">
-                    <p className="text-sm text-[var(--foreground)]">{row.event}</p>
-                    <p className="text-xs text-[var(--muted-foreground)]">{formatDateLabel(row.created_at)}</p>
+                    <p className="text-sm text-foreground">{row.event}</p>
+                    <p className="text-xs text-muted-foreground">{formatDateLabel(row.created_at)}</p>
                   </div>
                 ))}
               </div>
@@ -765,8 +484,9 @@ export function KnowledgeGraphSettingsPanel() {
             <AlertDialogTitle>Confirm action</AlertDialogTitle>
             <AlertDialogDescription>
               {confirmActionLabel === "archive" ? "Archive this domain?" : null}
-              {confirmActionLabel === "recreate" ? "Recreate this domain container?" : null}
-              {confirmActionLabel === "regenerate" ? "Regenerate indexes for this domain?" : null}
+              {confirmActionLabel === "purge"
+                ? "Purge this domain permanently? This cannot be undone. Run Preview Purge first."
+                : null}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -779,37 +499,8 @@ export function KnowledgeGraphSettingsPanel() {
   );
 }
 
-function NumberInput({ id, label, value, onChange }: { id: string; label: string; value: string; onChange: (value: string) => void }) {
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id} className="text-xs text-[var(--foreground)]">
-        {label}
-      </Label>
-      <Input id={id} type="number" min={1} value={value} onChange={(event) => onChange(event.target.value)} className={retrievalDefaultsInputClassName} />
-    </div>
-  );
-}
-
 function formatDateLabel(value: string): string {
   const timestamp = Date.parse(value);
   if (Number.isNaN(timestamp)) return value;
   return new Date(timestamp).toLocaleString();
-}
-
-function formatLastUploadLabel(documents: AdminDocument[]): string | null {
-  if (!documents.length) return null;
-  let newestTimestamp = 0;
-  for (const doc of documents) {
-    const ts = Date.parse(doc.created_at);
-    if (!Number.isNaN(ts) && ts > newestTimestamp) newestTimestamp = ts;
-  }
-  if (!newestTimestamp) return null;
-  const elapsedMs = Date.now() - newestTimestamp;
-  if (elapsedMs < 60_000) return "just now";
-  const mins = Math.floor(elapsedMs / 60_000);
-  if (mins < 60) return `${mins} min ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours} hr ago`;
-  const days = Math.floor(hours / 24);
-  return `${days} day${days === 1 ? "" : "s"} ago`;
 }

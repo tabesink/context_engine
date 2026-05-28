@@ -4,6 +4,17 @@
 - Treat `docs/brainstorm/` as historical planning material; keep implementation, tests, live docs, and root guidance elsewhere.
 - CLI is no longer supported or tracked. Do not modify CLI-related code, documentation, or tests unless the user explicitly asks for a CLI exception.
 
+## UI Design Guidance
+
+When making meaningful frontend UI surface changes, follow the design-agent workflow before coding:
+
+- Treat `DESIGN.md` as the authoritative product design source.
+- Read `docs/design/ui-design-agent-guidelines.md`, `docs/design/component-selection-rules.md`, and `docs/design/frontend-structure.md` for UI rules and current frontend boundaries.
+- Use `docs/agent-workflows/ui-agent-workflow.md` and `docs/agent-workflows/coding-agent-ui-handoff.md` for the required UI workflow.
+- For meaningful UI surface work, create or update `specs/<surface>/requirements.md`, `specs/<surface>/component-research.md`, `specs/<surface>/implementation-plan.md`, and `specs/<surface>/verification-report.md` using `specs/_template/`.
+- For tiny visual fixes, use the same design principles as a lightweight checklist without creating the full spec folder unless the change expands in scope.
+- Keep shadcn primitives in `client/src/components/ui/`, shared surface primitives in `client/src/components/surfaces/`, and feature-specific UI near the existing surface folders such as `client/src/components/settings/` and `client/src/components/chat/`.
+
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 

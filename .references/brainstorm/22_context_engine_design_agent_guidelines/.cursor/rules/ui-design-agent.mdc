@@ -1,0 +1,19 @@
+---
+description: Context Engine UI design-agent rules
+alwaysApply: false
+---
+
+# Context Engine UI Design Rules
+
+When changing frontend UI:
+
+1. Create or update `specs/<surface>/requirements.md` before coding.
+2. Research shadcn components/blocks and write `specs/<surface>/component-research.md` before implementation.
+3. Preserve existing user capabilities and backend API contracts.
+4. Keep shadcn primitives in `frontend/components/ui/`.
+5. Keep shared app components in `frontend/components/app/`.
+6. Keep feature-specific API/hooks/types/components in `frontend/features/<feature>/`.
+7. Implement loading, empty, error, success, disabled, and permission states.
+8. Run Playwright verification and write `specs/<surface>/verification-report.md`.
+9. Do not use one-off colour systems or bespoke component variants unless added to shared design tokens.
+10. Do not hide primary persistent configuration inside temporary sheets/dialogs unless explicitly requested.

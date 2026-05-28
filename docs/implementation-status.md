@@ -19,7 +19,7 @@ This file records what the current codebase implements. For the intended build s
 - Seed admin, backup, and retrieval evaluation scripts.
 - Legacy terminal UI/CLI code remains in-repo but is deprecated and unsupported for active workflows.
 - Remote LightRAG integration for semantic retrieval/runtime, including HTTP adapter, domain manifest resolution, retrieval strategy, queued ingestion jobs, status refresh, and graph proxy routes.
-- LightRAG domain deployment control behind `LIGHTRAG_DEPLOY_ENABLED`, including managed domain manifest, generated domain env files, generated compose file, fakeable Docker Compose runner, admin APIs in `app/api/routes/lightrag_admin.py`, user-safe `GET /lightrag/domains`, domain-aware upload/query selection, and per-domain PostgreSQL storage metadata.
+- LightRAG domain deployment control is always available, including managed domain manifest, generated domain env files, generated compose file, fakeable Docker Compose runner, admin APIs in `app/api/routes/lightrag_admin.py`, user-safe `GET /lightrag/domains`, domain-aware upload/query selection, and per-domain PostgreSQL storage metadata.
 - LightRAG provider configuration contract for generated `domain.env` files, including `LLM_BINDING*`, `EMBEDDING_BINDING*`, and `OPENAI_LLM_*` tuning fields sourced from root `LIGHTRAG_*` settings.
 - Admin AI settings are exposed through `/admin/ai-settings` (defaults, profile CRUD, profile test, and encrypted provider secret upsert/clear), and frontend Settings now uses the `provider` route key/label for this surface.
 - Bedrock OpenAI-compatible support path by keeping LightRAG bindings as `openai` and setting `LIGHTRAG_LLM_BINDING_HOST` to `https://bedrock-runtime.<region>.amazonaws.com/openai/v1`.
@@ -51,9 +51,17 @@ Runtime behavior:
 - Uploads require a LightRAG domain manifest so requested domains are explicit and validated.
 - Upload responses include the LightRAG ingestion job id; LightRAG status is tracked under `documents.metadata.lightrag`.
 - Upload metadata now records domain embedding identity (`embedding_profile_id`, `embedding_fingerprint`) when snapshot data is available.
+- Normalized processing-status API is implemented for domain and document views:
+  - `GET /lightrag/domains/{domain_id}/processing-status` (user-safe projection)
+  - `GET /admin/lightrag/domains/{domain_id}/processing-status` (admin projection)
+  - `GET /documents/{document_id}/processing-status` (user-safe projection)
+  - `GET /admin/documents/{document_id}/processing-status` (admin projection)
+  - `GET /admin/lightrag/domains/{domain_id}/documents/processing-status` (admin paginated list projection)
+- Backend processing-status aggregation now combines local document/job state with LightRAG `pipeline_status` and `status_counts`, protected by short TTL cache coalescing in `ProcessingStatusCache`.
 - Domain-scoped graph routes under `GET /lightrag/domains/{domain_id}/graphs` and `GET /lightrag/domains/{domain_id}/graph/labels...` proxy to the remote LightRAG service.
 - LightRAG timeouts/connect failures become `503`; auth/upstream/invalid-response failures become `502`.
 - Frontend chat now submits retrieval through `POST /retrieve`, maps `RetrieveResponse` into context-panel items via adapter code, and loads workspace tree content from `GET /lightrag/domains/{domain_id}/workspace-tree`.
+- Frontend now polls processing status through Context Engine APIs only (no direct LightRAG browser calls): admin domain cards show processing summaries and chat shows a user-safe domain processing indicator.
 
 ## Intentional Simplifications
 
@@ -71,7 +79,7 @@ Runtime behavior:
 
 - Add rate limiting middleware and stronger request-size controls.
 - Expand evaluation datasets and retrieval metrics.
-- Add richer LightRAG status polling and database provisioning operations.
+- Extend processing-status API coverage with additional admin actions (for example force refresh/retry affordances) and richer database provisioning operations.
 - Harden real-PDF Docling fixtures (table/figure/caption variation coverage) and tune parser normalization against real outputs.
 - Tune `StructureAwareChunkBuilder` sizing and text-shaping against real Docling outputs.
 

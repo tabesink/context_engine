@@ -11,14 +11,14 @@ This matrix verifies key recommendations against the current codebase and record
 | Keep canonical `/retrieve` and stable response contract | `/retrieve` exists; contract tests exist but coverage of failure modes and evidence-field stability is limited | Add/adjust integration tests for failure semantics and evidence contract fields |
 | LightRAG failure semantics should be explicit | LightRAG remote usage is mandatory; not all timeout/unavailable branches are locked by focused tests | Add test coverage for timeout/unavailable behavior through public interfaces |
 | Resolve TUI/CLI policy contradictions | `AGENTS.md` says CLI unsupported; `README.md` and some docs still present terminal UI as supported | Align docs only (no CLI code/test deletion in this pass) |
-| Update deployment env examples to match active contract | `.env.lightrag-deploy.example` still includes `LIGHTRAG_IMAGE` and empty build knobs | Update examples to build-first defaults and remove image-driven defaults |
+| Update deployment env examples to match active contract | Deploy settings belong in `.env.example`; provider keys stay in `.env.lightrag-provider.example` | Keep examples aligned with build-first defaults |
 
 ## Verified Code Locations
 
 - `app/core/config.py`
 - `app/lightrag_deploy/settings.py`
 - `app/lightrag_deploy/compose.py`
-- `.env.lightrag-deploy.example`
+- `.env.example`
 - `README.md`
 - `AGENTS.md`
 - `tests/test_lightrag_deploy_settings.py`

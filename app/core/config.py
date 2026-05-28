@@ -30,7 +30,6 @@ class Settings(BaseSettings):
     lightrag_timeout_seconds: float = 10.0
     query_log_store_text: bool = False
     query_log_retention_days: int = 30
-    lightrag_deploy_enabled: bool = False
     lightrag_deploy_root: Path = Path(".data/lightrag")
     lightrag_domains_root: Path = Path(".data/lightrag/domains")
     lightrag_compose_file: Path = Path(".data/lightrag/docker-compose.lightrag-domains.yml")
@@ -39,8 +38,8 @@ class Settings(BaseSettings):
     lightrag_default_container_port: int = 9621
     lightrag_docker_network: str = "context_engine_lightrag"
     lightrag_domain_env_filename: str = "domain.env"
-    lightrag_dockerfile: Path = Path("docker/lightrag.Dockerfile")
-    lightrag_build_context: Path = Path(".")
+    lightrag_dockerfile: Path | None = Field(default=Path("docker/lightrag.Dockerfile"))
+    lightrag_build_context: Path | None = Field(default=Path("."))
     lightrag_storage_backend: str = "postgres"
     lightrag_postgres_url: str | None = None
     lightrag_postgres_host: str = "postgres"
@@ -145,11 +144,10 @@ class Settings(BaseSettings):
 
         if not self.lightrag_domain_registry:
             raise ValueError("LIGHTRAG_DOMAIN_REGISTRY must be configured.")
-        if self.lightrag_deploy_enabled:
-            if not self.lightrag_dockerfile:
-                raise ValueError("LIGHTRAG_DOCKERFILE must be configured when deploy is enabled.")
-            if not self.lightrag_build_context:
-                raise ValueError("LIGHTRAG_BUILD_CONTEXT must be configured when deploy is enabled.")
+        if not self.lightrag_dockerfile:
+            raise ValueError("LIGHTRAG_DOCKERFILE must be configured.")
+        if not self.lightrag_build_context:
+            raise ValueError("LIGHTRAG_BUILD_CONTEXT must be configured.")
         if self.lightrag_storage_backend != "postgres":
             raise ValueError("LIGHTRAG_STORAGE_BACKEND must be 'postgres'.")
         if self.lightrag_postgres_provisioning_mode != "per_domain":
