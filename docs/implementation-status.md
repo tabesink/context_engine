@@ -8,6 +8,7 @@ This file records what the current codebase implements. For the intended build s
 - SQLAlchemy storage models and repositories for users, documents, jobs, rich document-processing data (pages, sections, blocks, source chunks, assets), audit logs, and query logs.
 - JWT auth, password hashing, `/auth/login`, `/auth/me`, `get_current_user`, and `require_admin`.
 - Admin document upload, delete, list, canonical reingest, and status refresh endpoints.
+- Admin uploads enforce the configured `MAX_UPLOAD_BYTES` limit before creating document/job records.
 - Authenticated document list, detail, rich structure, rich page, section, chunk, and asset endpoints.
 - Text, Markdown, and PDF parsing into canonical `DocumentStructure`.
 - LightRAG-only semantic retrieval; local semantic chunks and deterministic embedding fallback have been removed from runtime code.
@@ -77,7 +78,7 @@ Runtime behavior:
 
 ## Next Hardening Items
 
-- Add rate limiting middleware and stronger request-size controls.
+- Add rate limiting middleware and broader request/body-size controls beyond the admin upload limit.
 - Expand evaluation datasets and retrieval metrics.
 - Extend processing-status API coverage with additional admin actions (for example force refresh/retry affordances) and richer database provisioning operations.
 - Harden real-PDF Docling fixtures (table/figure/caption variation coverage) and tune parser normalization against real outputs.

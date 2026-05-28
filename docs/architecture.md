@@ -149,6 +149,8 @@ Local development uses explicit service-backed storage:
 
 Docker Compose uses PostgreSQL, Redis, API, worker, and generated LightRAG domain services on a shared named network. Option 3 requires a validated PostgreSQL image/build with both `vector` and Apache `AGE` extensions.
 
+When `LIGHTRAG_DOCKER_EXECUTION_MODE=socket`, the API container mounts the host Docker socket so admin domain lifecycle operations can start, stop, and repair generated LightRAG services. Treat this mode as a privileged local/operator boundary; production deployments should isolate or replace that control path rather than exposing it as an ordinary web runtime permission.
+
 ## Security
 
 All routes require authentication except health and login. Admin-only operations use a single `require_admin` dependency.

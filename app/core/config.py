@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     lightrag_timeout_seconds: float = 10.0
     query_log_store_text: bool = False
     query_log_retention_days: int = 30
+    max_upload_bytes: int = 50 * 1024 * 1024
     lightrag_deploy_root: Path = Path(".data/lightrag")
     lightrag_domains_root: Path = Path(".data/lightrag/domains")
     lightrag_compose_file: Path = Path(".data/lightrag/docker-compose.lightrag-domains.yml")

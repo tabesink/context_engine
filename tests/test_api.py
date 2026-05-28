@@ -1424,8 +1424,8 @@ def test_admin_upload_queues_lightrag_ingestion_when_enabled(
     get_settings.cache_clear()
 
     class FakeQueue:
-        def enqueue(self, function: object, job_id: str):
-            del function
+        def enqueue(self, function: object, job_id: str, *, retry: object | None = None):
+            del function, retry
 
             class FakeQueuedJob:
                 id = f"rq-{job_id}"
@@ -1512,8 +1512,8 @@ def test_admin_upload_to_selected_lightrag_domain_records_domain_metadata(
         return httpx.Response(200)
 
     class FakeQueue:
-        def enqueue(self, function: object, job_id: str):
-            del function
+        def enqueue(self, function: object, job_id: str, *, retry: object | None = None):
+            del function, retry
 
             class FakeQueuedJob:
                 id = f"rq-{job_id}"
@@ -1563,8 +1563,8 @@ def test_admin_upload_rejects_unreachable_lightrag_domain_before_queueing(
     get_settings.cache_clear()
 
     class FailingQueue:
-        def enqueue(self, function: object, job_id: str):
-            del function, job_id
+        def enqueue(self, function: object, job_id: str, *, retry: object | None = None):
+            del function, job_id, retry
             raise AssertionError("unreachable domain should not enqueue ingestion")
 
     def fake_health_get(url, **kwargs):
@@ -1590,6 +1590,35 @@ def test_admin_upload_rejects_unreachable_lightrag_domain_before_queueing(
     assert detail["reason_code"] == "dns_failed"
     assert detail["domain_id"] == "fatigue"
     assert "not reachable from the current runtime network" in detail["message"]
+
+
+def test_admin_upload_rejects_files_over_configured_size(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    create_db_and_tables()
+    _configure_lightrag_manifest(monkeypatch, tmp_path, {"default": "Default"})
+    monkeypatch.setenv("MAX_UPLOAD_BYTES", "4")
+    get_settings.cache_clear()
+    monkeypatch.setattr(RedisIngestLock, "acquire", lambda self: True)
+    monkeypatch.setattr(RedisIngestLock, "release", lambda self: None)
+    with SessionLocal() as session:
+        before_count = len(DocumentRepository(session).list_all(limit=500))
+
+    with TestClient(app) as client:
+        _seed_users()
+        admin_headers = _login(client, "admin@example.com")
+        response = client.post(
+            "/admin/documents/upload",
+            headers=admin_headers,
+            data={"lightrag_domain_id": "default"},
+            files={"file": ("manual.txt", b"hello", "text/plain")},
+        )
+
+    assert response.status_code == 413
+    assert response.json()["detail"] == "Uploaded file exceeds MAX_UPLOAD_BYTES"
+    with SessionLocal() as session:
+        assert len(DocumentRepository(session).list_all(limit=500)) == before_count
 
 
 def test_lightrag_ingestion_job_uploads_polls_and_marks_document_ready(tmp_path: Path) -> None:
@@ -3218,6 +3247,7 @@ def test_workspace_tree_filters_domain_and_returns_structure_references(
             metadata={"lightrag": {"domain_id": "manualtree"}},
             status=DocumentStatus.INDEXING,
         )
+        asset_id = f"{manual.id}-asset-1"
         DocumentProcessingRepository(session).save_structure(
             DocumentStructure(
                 document_id=manual.id,
@@ -3250,13 +3280,13 @@ def test_workspace_tree_filters_domain_and_returns_structure_references(
                 ],
                 assets=[
                     DocumentAsset(
-                        asset_id="asset-1",
+                        asset_id=asset_id,
                         document_id=manual.id,
                         asset_type="figure",
-                        storage_path=".data/assets/asset-1.png",
-                        thumbnail_path=".data/assets/asset-1-thumb.png",
+                        storage_path=f".data/assets/{asset_id}.png",
+                        thumbnail_path=f".data/assets/{asset_id}-thumb.png",
                         mime_type="image/png",
-                        content_hash="hash-asset-1",
+                        content_hash=f"hash-{asset_id}",
                         page_number=1,
                         section_id="intro",
                         caption="Pump diagram",
@@ -3298,8 +3328,8 @@ def test_workspace_tree_filters_domain_and_returns_structure_references(
     assert "SECRET_CHUNK_TAIL_SHOULD_NOT_APPEAR_IN_TREE_RESPONSE" not in response.text
     assert "Full page text must not leak" not in response.text
     assert asset_node["kind"] == "asset"
-    assert asset_node["asset_id"] == "asset-1"
-    assert asset_node["thumbnail_url"] == f"/documents/{manual_id}/assets/asset-1/thumbnail"
+    assert asset_node["asset_id"] == f"{manual_id}-asset-1"
+    assert asset_node["thumbnail_url"] == f"/documents/{manual_id}/assets/{manual_id}-asset-1/thumbnail"
 
 
 def test_workspace_context_returns_exact_chunk_context(
@@ -3543,10 +3573,10 @@ def test_document_ingest_job_can_be_enqueued_without_running_inline() -> None:
 
     class FakeQueue:
         def __init__(self) -> None:
-            self.enqueued: list[tuple[object, str]] = []
+            self.enqueued: list[tuple[object, str, object | None]] = []
 
-        def enqueue(self, function: object, job_id: str):
-            self.enqueued.append((function, job_id))
+        def enqueue(self, function: object, job_id: str, *, retry: object | None = None):
+            self.enqueued.append((function, job_id, retry))
             return type("QueuedJob", (), {"id": "rq-job-1"})()
 
     with SessionLocal() as session:
@@ -3566,6 +3596,9 @@ def test_document_ingest_job_can_be_enqueued_without_running_inline() -> None:
 
     assert len(queue.enqueued) == 1
     assert queue.enqueued[0][1] == job_id
+    assert queue.enqueued[0][2] is not None
+    assert queue.enqueued[0][2].max == 3
+    assert queue.enqueued[0][2].intervals == [30, 120, 300]
     assert job.status == "queued"
     assert job.meta["rq_job_id"] == "rq-job-1"
 
@@ -3655,4 +3688,3 @@ def test_admin_retry_rejects_non_document_ingest_job() -> None:
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Only document_ingest jobs can be retried"
-

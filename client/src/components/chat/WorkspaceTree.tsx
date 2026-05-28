@@ -1,9 +1,8 @@
 "use client";
 
-import { FileIcon, FolderIcon, FolderOpenIcon } from "lucide-react";
-import { hotkeysCoreFeature, syncDataLoaderFeature } from "@headless-tree/core";
-import { useTree } from "@headless-tree/react";
-import { Tree, TreeItem, TreeItemLabel } from "@/components/reui/tree";
+import { useMemo, useState } from "react";
+import { ChevronRight, FileIcon, FolderIcon, FolderOpenIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { SourceTreeItem, SourceTreeSnapshot } from "@/types/chat";
 
 const emptyTree: SourceTreeSnapshot = {
@@ -14,8 +13,6 @@ const emptyTree: SourceTreeSnapshot = {
   },
   expanded_item_ids: ["root", "workspace"],
 };
-
-const indent = 20;
 
 type WorkspaceTreeProps = {
   sourceTree?: SourceTreeSnapshot | null;
@@ -32,7 +29,7 @@ export function WorkspaceTree({ sourceTree, selectedNodeId, onNodeSelect, loadin
   return (
     <WorkspaceTreeContent
       key={revision}
-      sourceTree={data}
+      data={data}
       selectedNodeId={selectedNodeId}
       onNodeSelect={onNodeSelect}
       loading={loading}
@@ -42,36 +39,36 @@ export function WorkspaceTree({ sourceTree, selectedNodeId, onNodeSelect, loadin
 }
 
 function WorkspaceTreeContent({
-  sourceTree,
+  data,
   selectedNodeId,
   onNodeSelect,
   loading,
   error,
 }: {
-  sourceTree: SourceTreeSnapshot;
+  data: SourceTreeSnapshot;
   selectedNodeId?: string;
   onNodeSelect?: (nodeId: string, item: SourceTreeItem) => void;
   loading?: boolean;
   error?: string;
 }) {
-  const data = sourceTree;
-  const tree = useTree<SourceTreeItem>({
-    initialState: {
-      expandedItems: data.expanded_item_ids ?? ["root", "workspace"],
-    },
-    indent,
-    rootItemId: data.root_id,
-    getItemName: (item) => item.getItemData().name,
-    isItemFolder: (item) => (item.getItemData().children?.length ?? 0) > 0,
-    dataLoader: {
-      getItem: (itemId) => data.items[itemId] ?? { name: itemId },
-      getChildren: (itemId) => data.items[itemId]?.children ?? [],
-    },
-    features: [syncDataLoaderFeature, hotkeysCoreFeature],
-  });
+  const [expandedIds, setExpandedIds] = useState(
+    () => new Set(data.expanded_item_ids ?? [data.root_id]),
+  );
 
-  const rootChildren = data.items[data.root_id]?.children ?? [];
-  const hasDocuments = rootChildren.length > 0;
+  const hasDocuments = useMemo(() => hasTreeDocuments(data), [data]);
+  const rootItem = data.items[data.root_id];
+
+  const toggleExpanded = (nodeId: string) => {
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      if (next.has(nodeId)) {
+        next.delete(nodeId);
+      } else {
+        next.add(nodeId);
+      }
+      return next;
+    });
+  };
 
   return (
     <div className="w-full bg-transparent">
@@ -87,52 +84,127 @@ function WorkspaceTreeContent({
           {error}
         </p>
       ) : null}
-      <Tree
-        className="relative w-full"
-        indent={indent}
-        label="Workspace source tree"
-        tree={tree}
-      >
-        {tree.getItems().map((item) => {
-          const itemId = item.getId();
-          const selected = itemId === selectedNodeId;
-          return (
-            <TreeItem
-              key={itemId}
-              className="bg-[repeating-linear-gradient(to_right,transparent_0,transparent_calc(var(--tree-indent)-1px),var(--border)_calc(var(--tree-indent)-1px),var(--border)_var(--tree-indent))] bg-[length:var(--tree-item-indent)_100%] bg-no-repeat"
-              item={item}
-            >
-              <TreeItemLabel
-                onClick={() => onNodeSelect?.(itemId, item.getItemData())}
-                className={[
-                  "relative py-1 before:absolute before:inset-x-0 before:-inset-y-0.5 before:-z-10 before:bg-[var(--background)] text-xs leading-5 text-[var(--foreground)] hover:bg-[var(--muted)]",
-                  selected ? "bg-[var(--muted)]" : "",
-                ].join(" ")}
-              >
-                <span className="flex min-w-0 items-center gap-1.5">
-                  {item.isFolder() ? (
-                    item.isExpanded() ? (
-                      <FolderOpenIcon className="pointer-events-none size-3.5 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
-                    ) : (
-                      <FolderIcon className="pointer-events-none size-3.5 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
-                    )
-                  ) : (
-                    <FileIcon className="pointer-events-none size-3.5 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
-                  )}
-                  <span className="truncate">{item.getItemName()}</span>
-                </span>
-              </TreeItemLabel>
-            </TreeItem>
-          );
-        })}
-      </Tree>
+      {rootItem ? (
+        <div role="tree" aria-label="Workspace source tree" className="relative w-full">
+          <SourceTreeNodes
+            sourceTree={data}
+            nodeIds={[data.root_id]}
+            depth={0}
+            expandedIds={expandedIds}
+            selectedNodeId={selectedNodeId}
+            onToggleExpanded={toggleExpanded}
+            onNodeSelect={onNodeSelect}
+          />
+        </div>
+      ) : null}
       {!loading && !error && !hasDocuments ? (
         <p className="mt-3 text-xs leading-5 text-[var(--muted-foreground)]">
-          Indexed documents will appear here once processing completes.
+          No documents in this knowledge graph yet. Upload files to this domain in Settings to populate the tree.
         </p>
       ) : null}
     </div>
   );
+}
+
+function SourceTreeNodes({
+  sourceTree,
+  nodeIds,
+  depth,
+  expandedIds,
+  selectedNodeId,
+  onToggleExpanded,
+  onNodeSelect,
+}: {
+  sourceTree: SourceTreeSnapshot;
+  nodeIds: string[];
+  depth: number;
+  expandedIds: Set<string>;
+  selectedNodeId?: string;
+  onToggleExpanded: (nodeId: string) => void;
+  onNodeSelect?: (nodeId: string, item: SourceTreeItem) => void;
+}) {
+  return nodeIds.map((nodeId) => {
+    const item = sourceTree.items[nodeId];
+    if (!item) return null;
+
+    const childIds = item.children ?? [];
+    const isFolder = childIds.length > 0;
+    const isExpanded = expandedIds.has(nodeId);
+    const selected = nodeId === selectedNodeId;
+    const statusLabel = formatTreeStatus(item.handles?.status);
+    const indentPx = depth * 20;
+
+    return (
+      <div
+        key={nodeId}
+        role="treeitem"
+        aria-selected={selected}
+        aria-expanded={isFolder ? isExpanded : undefined}
+      >
+        <div
+          className={cn(
+            "flex min-w-0 items-center gap-0.5 rounded-md py-1 text-xs leading-5 text-[var(--foreground)] hover:bg-[var(--muted)]",
+            selected ? "bg-[var(--muted)]" : "",
+          )}
+          style={{ paddingInlineStart: `${indentPx}px` }}
+        >
+          {isFolder ? (
+            <button
+              type="button"
+              aria-label={isExpanded ? "Collapse folder" : "Expand folder"}
+              onClick={() => onToggleExpanded(nodeId)}
+              className="inline-flex size-5 shrink-0 items-center justify-center rounded text-[var(--muted-foreground)] hover:bg-[var(--secondary)]"
+            >
+              <ChevronRight className={cn("size-3.5 transition-transform", isExpanded ? "rotate-90" : "")} aria-hidden />
+            </button>
+          ) : (
+            <span className="inline-block size-5 shrink-0" aria-hidden />
+          )}
+          <button
+            type="button"
+            onClick={() => onNodeSelect?.(nodeId, item)}
+            className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+          >
+            {isFolder ? (
+              isExpanded ? (
+                <FolderOpenIcon className="pointer-events-none size-3.5 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
+              ) : (
+                <FolderIcon className="pointer-events-none size-3.5 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
+              )
+            ) : (
+              <FileIcon className="pointer-events-none size-3.5 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
+            )}
+            <span className="truncate">{item.name}</span>
+            {statusLabel ? (
+              <span className="shrink-0 text-[10px] uppercase tracking-wide text-[var(--muted-foreground)]">
+                {statusLabel}
+              </span>
+            ) : null}
+          </button>
+        </div>
+        {isFolder && isExpanded && childIds.length > 0 ? (
+          <SourceTreeNodes
+            sourceTree={sourceTree}
+            nodeIds={childIds}
+            depth={depth + 1}
+            expandedIds={expandedIds}
+            selectedNodeId={selectedNodeId}
+            onToggleExpanded={onToggleExpanded}
+            onNodeSelect={onNodeSelect}
+          />
+        ) : null}
+      </div>
+    );
+  });
+}
+
+function hasTreeDocuments(sourceTree: SourceTreeSnapshot) {
+  return Object.values(sourceTree.items).some((item) => item.kind === "document");
+}
+
+function formatTreeStatus(status: unknown) {
+  if (typeof status !== "string" || !status || status === "ready") return null;
+  return status.replace(/_/g, " ");
 }
 
 function normalizeSourceTree(sourceTree?: SourceTreeSnapshot | null): SourceTreeSnapshot {

@@ -29,9 +29,9 @@ class WorkspaceTreeService:
         include_assets: bool = True,
     ) -> WorkspaceTreeResponse:
         domain = self.domain_registry.validate_available(domain_id)
-        documents = DocumentAccessPolicy(self.documents).filter_readable_documents(
+        documents = DocumentAccessPolicy(self.documents).filter_tree_documents(
             user,
-            self.documents.list_ready_by_lightrag_domain(domain_id),
+            self.documents.list_all_by_lightrag_domain(domain_id),
         )
 
         root = WorkspaceTreeNode(

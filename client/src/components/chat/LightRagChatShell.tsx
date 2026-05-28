@@ -9,6 +9,7 @@ import { ChatComposer } from "@/components/chat/ChatComposer";
 import { ConversationView } from "@/components/chat/ConversationView";
 import { SidePanel } from "@/components/chat/SidePanel";
 import { WorkspaceTree } from "@/components/chat/WorkspaceTree";
+import { APIError } from "@/lib/api/client";
 import { retrieveApi, toRetrievalMode } from "@/lib/api/retrieve";
 import { adaptRetrieveResponse } from "@/lib/retrieve-response-adapter";
 import { errorMessage } from "@/lib/utils";
@@ -95,27 +96,48 @@ export function LightRagChatShell() {
     void loadDomains();
   }, [loadDomains]);
 
-  const loadWorkspaceForDomain = useCallback(async (domainId: string) => {
-    setTreeLoading(true);
-    setTreeError(undefined);
+  const loadWorkspaceForDomain = useCallback(async (domainId: string, options?: { silent?: boolean }) => {
+    if (!options?.silent) {
+      setTreeLoading(true);
+      setTreeError(undefined);
+    }
     try {
       const tree = await fetchWorkspaceTree(domainId);
       setChatSessionState({ sourceTree: tree });
+      if (!options?.silent) {
+        setTreeError(undefined);
+      }
     } catch (error) {
-      setTreeError(errorMessage(error, "Could not load workspace sources."));
+      if (!options?.silent) {
+        setTreeError(errorMessage(error, "Could not load workspace sources."));
+      }
     } finally {
-      setTreeLoading(false);
+      if (!options?.silent) {
+        setTreeLoading(false);
+      }
     }
   }, []);
 
+  const resolvedDomainId =
+    selectedDomain?.domain_id ??
+    lightragDomains.find((domain) => domain.is_default)?.domain_id ??
+    lightragDomains[0]?.domain_id;
+
   useEffect(() => {
-    const domainId = selectedDomain?.domain_id;
-    if (!domainId) return;
+    if (domainStatus !== "ready" || !resolvedDomainId) return;
     const task = window.setTimeout(() => {
-      void loadWorkspaceForDomain(domainId);
+      void loadWorkspaceForDomain(resolvedDomainId);
     }, 0);
     return () => window.clearTimeout(task);
-  }, [loadWorkspaceForDomain, selectedDomain?.domain_id]);
+  }, [domainStatus, loadWorkspaceForDomain, resolvedDomainId]);
+
+  useEffect(() => {
+    if (domainStatus !== "ready" || !resolvedDomainId) return;
+    const timer = window.setInterval(() => {
+      void loadWorkspaceForDomain(resolvedDomainId, { silent: true });
+    }, 30000);
+    return () => window.clearInterval(timer);
+  }, [domainStatus, loadWorkspaceForDomain, resolvedDomainId]);
 
   useEffect(() => {
     const defaults = selectedDomain?.retrieval_defaults;
@@ -296,7 +318,13 @@ export function LightRagChatShell() {
         };
       });
     } catch (error) {
-      const message = errorMessage(error, "Could not load source context.");
+      if (error instanceof APIError && error.status === 404) {
+        void loadWorkspaceForDomain(domainId, { silent: true });
+      }
+      const message =
+        error instanceof APIError && error.status === 404
+          ? "Selected source is no longer available. The source tree has been refreshed."
+          : errorMessage(error, "Could not load source context.");
       setChatSessionState((current) => {
         if (current.sourceNavigator.selectedNodeId !== nodeId) return {};
         return {

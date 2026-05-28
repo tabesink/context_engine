@@ -48,6 +48,19 @@ class DocumentAccessPolicy:
             and self._is_domain_active(document)
         ]
 
+    def filter_tree_documents(
+        self,
+        user: UserRow,
+        documents: list[DocumentRow],
+    ) -> list[DocumentRow]:
+        del user
+        return [
+            document
+            for document in documents
+            if document.status == DocumentStatus.READY.value
+            and self._is_domain_active(document)
+        ]
+
     def get_readable_document_or_404(self, *, user: UserRow, document_id: str) -> DocumentRow:
         del user
         document = self.documents.get(document_id)

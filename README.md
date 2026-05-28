@@ -27,6 +27,8 @@ Port and host settings are centralized in root `.env` for local runs:
 - `LIGHTRAG_HOST`
 - `NEXT_PUBLIC_API_URL` (canonical frontend API base URL; `NEXT_PUBLIC_BACKEND_BASE_URL` remains a compatibility alias)
 
+Admin uploads are bounded by `MAX_UPLOAD_BYTES` (default 50 MiB in `.env.example`).
+
 ---
 
 ## Option A: Docker Compose

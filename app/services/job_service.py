@@ -1,7 +1,7 @@
 from typing import Protocol
 
 from redis import Redis
-from rq import Queue
+from rq import Queue, Retry
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -9,6 +9,7 @@ from app.domain.models import JobStatus
 from app.storage.repositories.jobs import JobRepository
 
 DOCUMENT_INGEST_JOB_KIND = "document_ingest"
+DOCUMENT_INGEST_RETRY = Retry(max=3, interval=[30, 120, 300])
 
 
 def is_document_ingest_job_kind(kind: str) -> bool:
@@ -16,7 +17,7 @@ def is_document_ingest_job_kind(kind: str) -> bool:
 
 
 class IndexQueue(Protocol):
-    def enqueue(self, function: object, job_id: str):
+    def enqueue(self, function: object, job_id: str, *, retry: Retry | None = None):
         ...
 
 
@@ -41,7 +42,11 @@ class JobService:
 
         from app.workers.tasks import run_document_ingest_job
 
-        queued_job = self._queue().enqueue(run_document_ingest_job, job.id)
+        queued_job = self._queue().enqueue(
+            run_document_ingest_job,
+            job.id,
+            retry=DOCUMENT_INGEST_RETRY,
+        )
         metadata = job.meta | {"rq_job_id": queued_job.id}
         self.jobs.set_status(job, JobStatus.QUEUED, metadata=metadata)
         return job.id

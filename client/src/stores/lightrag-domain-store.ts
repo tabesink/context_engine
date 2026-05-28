@@ -33,9 +33,14 @@ function setState(patch: Partial<LightRagDomainState>) {
 }
 
 function deriveState(next: LightRagDomainState): LightRagDomainState {
+  const selectedDomain =
+    next.domains.find((domain) => domain.port === next.selectedPort) ??
+    next.domains.find((domain) => domain.is_default) ??
+    next.domains[0];
   return {
     ...next,
-    selectedDomain: next.domains.find((domain) => domain.port === next.selectedPort),
+    selectedDomain,
+    selectedPort: selectedDomain?.port ?? next.selectedPort,
   };
 }
 
@@ -82,7 +87,12 @@ export function getSelectedLightRagPort() {
 }
 
 export function getSelectedLightRagDomainId() {
-  return state.selectedDomain?.domain_id ?? "default";
+  return (
+    state.selectedDomain?.domain_id ??
+    state.domains.find((domain) => domain.is_default)?.domain_id ??
+    state.domains[0]?.domain_id ??
+    "default"
+  );
 }
 
 export { DEFAULT_LIGHTRAG_PORT };

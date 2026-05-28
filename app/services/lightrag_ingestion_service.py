@@ -218,7 +218,10 @@ class LightRAGIngestionService:
     def _lock_domain_embedding(self, *, domain_id: str, document_id: str) -> None:
         if not domain_id:
             return
-        domain = self.domain_manifest.get_domain(domain_id)
+        try:
+            domain = self.domain_manifest.get_domain(domain_id)
+        except Exception:
+            return
         if domain is None or domain.embedding is None or domain.embedding_locked_at is not None:
             return
         now = self.now()
