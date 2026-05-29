@@ -13,7 +13,6 @@ type UserDomainPayload = {
   status?: string;
   is_healthy?: boolean;
   is_default?: boolean;
-  retrieval_defaults?: LightRagDomain["retrieval_defaults"];
 };
 
 type StreamHandlers = {
@@ -37,7 +36,6 @@ export async function fetchLightRagDomains(): Promise<LightRagDomain[]> {
     status: domain.status,
     is_healthy: domain.is_healthy,
     is_default: domain.is_default,
-    retrieval_defaults: domain.retrieval_defaults,
   }));
 }
 

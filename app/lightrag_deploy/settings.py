@@ -61,6 +61,12 @@ class LightRAGDeploySettings:
     openai_llm_max_completion_tokens: int | None = None
     openai_llm_temperature: float | None = None
     openai_llm_extra_body: str | None = None
+    default_top_k: int = 10
+    default_chunk_top_k: int = 10
+    default_chunk_rerank_top_k: int = 10
+    default_max_token_for_text_unit: int = 4000
+    default_max_token_for_global_context: int = 4000
+    default_max_token_for_local_context: int = 4000
     archive_deleted_domains: bool = True
     allow_permanent_delete: bool = False
     docker_execution_mode: str = "host"
@@ -127,6 +133,12 @@ class LightRAGDeploySettings:
             openai_llm_max_completion_tokens=settings.lightrag_openai_llm_max_completion_tokens,
             openai_llm_temperature=settings.lightrag_openai_llm_temperature,
             openai_llm_extra_body=settings.lightrag_openai_llm_extra_body,
+            default_top_k=settings.lightrag_default_top_k,
+            default_chunk_top_k=settings.lightrag_default_chunk_top_k,
+            default_chunk_rerank_top_k=settings.lightrag_default_chunk_rerank_top_k,
+            default_max_token_for_text_unit=settings.lightrag_default_max_token_for_text_unit,
+            default_max_token_for_global_context=settings.lightrag_default_max_token_for_global_context,
+            default_max_token_for_local_context=settings.lightrag_default_max_token_for_local_context,
             archive_deleted_domains=settings.lightrag_archive_deleted_domains,
             allow_permanent_delete=settings.lightrag_allow_permanent_delete,
             docker_execution_mode=settings.lightrag_docker_execution_mode,

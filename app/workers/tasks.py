@@ -12,15 +12,15 @@ def run_document_ingest_job(job_id: str) -> None:
         if not job or not job.document_id:
             return
 
-        jobs.set_status(job, JobStatus.RUNNING)
+        jobs.mark_operation_running(job)
         try:
             LightRAGIngestionService(session).ingest_document(job.document_id)
-            jobs.set_status(job, JobStatus.SUCCEEDED)
+            jobs.mark_operation_succeeded(job)
         except DomainIngestBusy as exc:
             jobs.set_status(job, JobStatus.QUEUED, error_message=str(exc))
             raise
         except Exception as exc:
-            jobs.set_status(job, JobStatus.FAILED, error_message=str(exc))
+            jobs.mark_operation_failed(job, error_message=str(exc))
             raise
 
 

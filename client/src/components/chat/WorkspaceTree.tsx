@@ -4,7 +4,14 @@ import { FileIcon, FolderIcon, FolderOpenIcon } from "lucide-react";
 import { hotkeysCoreFeature, syncDataLoaderFeature } from "@headless-tree/core";
 import { useTree } from "@headless-tree/react";
 import { Tree, TreeItem, TreeItemLabel } from "@/components/reui/tree";
-import type { SourceTreeItem, SourceTreeSnapshot } from "@/types/chat";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { LightRagDomain, SourceTreeItem, SourceTreeSnapshot } from "@/types/chat";
 
 const emptyTree: SourceTreeSnapshot = {
   root_id: "root",
@@ -21,11 +28,25 @@ type WorkspaceTreeProps = {
   sourceTree?: SourceTreeSnapshot | null;
   selectedNodeId?: string;
   onNodeSelect?: (nodeId: string, item: SourceTreeItem) => void;
+  domains?: LightRagDomain[];
+  selectedDomainPort?: number;
+  domainsLoading?: boolean;
+  onDomainChange?: (port: number) => void;
 };
 
-export function WorkspaceTree({ sourceTree, selectedNodeId, onNodeSelect }: WorkspaceTreeProps) {
+export function WorkspaceTree({
+  sourceTree,
+  selectedNodeId,
+  onNodeSelect,
+  domains = [],
+  selectedDomainPort,
+  domainsLoading = false,
+  onDomainChange,
+}: WorkspaceTreeProps) {
   const data = normalizeSourceTree(sourceTree);
   const revision = sourceTreeRevision(data);
+  const healthyDomains = domains.filter((domain) => domain.is_healthy === true);
+  const selectedValue = selectedDomainPort ? String(selectedDomainPort) : undefined;
 
   return (
     <WorkspaceTreeContent
@@ -33,6 +54,10 @@ export function WorkspaceTree({ sourceTree, selectedNodeId, onNodeSelect }: Work
       sourceTree={data}
       selectedNodeId={selectedNodeId}
       onNodeSelect={onNodeSelect}
+      domains={healthyDomains}
+      selectedDomainPortValue={selectedValue}
+      domainsLoading={domainsLoading}
+      onDomainChange={onDomainChange}
     />
   );
 }
@@ -41,10 +66,18 @@ function WorkspaceTreeContent({
   sourceTree,
   selectedNodeId,
   onNodeSelect,
+  domains,
+  selectedDomainPortValue,
+  domainsLoading,
+  onDomainChange,
 }: {
   sourceTree: SourceTreeSnapshot;
   selectedNodeId?: string;
   onNodeSelect?: (nodeId: string, item: SourceTreeItem) => void;
+  domains: LightRagDomain[];
+  selectedDomainPortValue?: string;
+  domainsLoading: boolean;
+  onDomainChange?: (port: number) => void;
 }) {
   const data = sourceTree;
   const tree = useTree<SourceTreeItem>({
@@ -65,8 +98,35 @@ function WorkspaceTreeContent({
   return (
     <div className="w-full bg-transparent">
       <div className="mb-3">
-        <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">Sources</p>
-        <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">Indexed document map</p>
+        <div className="flex items-center gap-1">
+          <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">Knowledge Base</p>
+          <Select
+            value={selectedDomainPortValue}
+            disabled={domainsLoading || domains.length === 0 || !onDomainChange}
+            onValueChange={(value) => onDomainChange?.(Number(value))}
+          >
+            <SelectTrigger
+              size="sm"
+              className="size-6 rounded-md border border-transparent bg-transparent p-0 text-[var(--muted-foreground)] shadow-none hover:text-[var(--foreground)] data-[state=open]:border-transparent data-[state=open]:shadow-none [&_svg]:size-3.5 [&_svg]:-rotate-90 [&_svg]:opacity-100"
+              aria-label="Select knowledge base domain"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent
+              position="popper"
+              side="right"
+              align="start"
+              sideOffset={0}
+              className="rounded-md border-[var(--border)] shadow-none data-[side=right]:translate-x-0"
+            >
+              {domains.map((domain) => (
+                <SelectItem key={domain.domain_id} value={String(domain.port)}>
+                  {domain.workspace}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
       <Tree
         className="relative w-full"
@@ -107,9 +167,6 @@ function WorkspaceTreeContent({
           );
         })}
       </Tree>
-      {data.items.workspace?.children?.length ? null : (
-        <p className="mt-3 text-xs leading-5 text-[var(--muted-foreground)]">Retrieved source structure will appear after the first backend chat turn.</p>
-      )}
     </div>
   );
 }

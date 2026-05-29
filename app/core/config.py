@@ -78,6 +78,12 @@ class Settings(BaseSettings):
     lightrag_openai_llm_max_completion_tokens: int | None = None
     lightrag_openai_llm_temperature: float | None = None
     lightrag_openai_llm_extra_body: str | None = None
+    lightrag_default_top_k: int = 10
+    lightrag_default_chunk_top_k: int = 10
+    lightrag_default_chunk_rerank_top_k: int = 10
+    lightrag_default_max_token_for_text_unit: int = 4000
+    lightrag_default_max_token_for_global_context: int = 4000
+    lightrag_default_max_token_for_local_context: int = 4000
     openai_api_key: str | None = None
     aws_bearer_token_bedrock: str | None = None
     ollama_base_url: str = "http://host.docker.internal:11434/v1"

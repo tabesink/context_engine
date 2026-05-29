@@ -41,7 +41,6 @@ class LightRAGDomainSummary:
     is_default: bool
     is_healthy: bool | None
     status: str | None
-    retrieval_defaults: dict[str, int]
 
 
 @dataclass(frozen=True)
@@ -84,7 +83,6 @@ class LightRAGDomainRegistry:
                     is_default=bool(domain.get("is_default", False)),
                     is_healthy=domain.get("is_healthy"),
                     status=_optional_string(domain.get("status")),
-                    retrieval_defaults=_coerce_retrieval_defaults(domain.get("retrieval_defaults")),
                 )
             )
         return domains
@@ -208,21 +206,3 @@ def _optional_url(value: Any) -> str | None:
         return None
     return text.rstrip("/")
 
-
-def _coerce_retrieval_defaults(value: Any) -> dict[str, int]:
-    defaults = {
-        "top_k": 10,
-        "chunk_top_k": 10,
-        "chunk_rerank_top_k": 10,
-        "max_token_for_text_unit": 4000,
-        "max_token_for_global_context": 4000,
-        "max_token_for_local_context": 4000,
-    }
-    if not isinstance(value, dict):
-        return defaults
-    parsed = defaults.copy()
-    for key in defaults:
-        next_value = value.get(key)
-        if isinstance(next_value, int) and next_value > 0:
-            parsed[key] = next_value
-    return parsed

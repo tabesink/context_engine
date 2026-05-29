@@ -5,7 +5,7 @@ from rq import Queue
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.domain.models import JobStatus
+from app.domain.models import JobStatus, OperationResourceType
 from app.storage.repositories.jobs import JobRepository
 
 DOCUMENT_INGEST_JOB_KIND = "document_ingest"
@@ -34,7 +34,12 @@ class JobService:
         self.queue = queue
 
     def enqueue_document_ingest(self, *, document_id: str) -> str:
-        job = self.jobs.create(kind=DOCUMENT_INGEST_JOB_KIND, document_id=document_id)
+        job = self.jobs.create(
+            kind=DOCUMENT_INGEST_JOB_KIND,
+            document_id=document_id,
+            resource_type=OperationResourceType.DOCUMENT,
+            resource_id=document_id,
+        )
         if self.run_inline:
             self.run_document_ingest_job(job.id)
             return job.id

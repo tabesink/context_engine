@@ -1,271 +1,285 @@
-# Design System Inspired by Ollama
+# Context Engine UI Design System
 
-## 1. Visual Theme & Atmosphere
+This document is the source of truth for Context Engine application UI. It replaces the older Ollama-style reference with a direction built specifically for coding-agent workflows: quiet, compact, white-canvas interfaces that make plans, queues, execution state, API calls, and agent progress easy to scan.
 
-Ollama's interface is radical minimalism taken to its logical conclusion — a pure-white void where content floats without decoration, shadow, or color. The design philosophy mirrors the product itself: strip away everything unnecessary until only the essential tool remains. This is the digital equivalent of a Dieter Rams object — every pixel earns its place, and the absence of design IS the design.
+When implementing UI, also consult `design/context_engine_agent_ui_guidelines.md` for the concise agent-facing checklist.
 
-The entire page exists in pure grayscale. There is zero chromatic color in the interface — no brand blue, no accent green, no semantic red. The only colors that exist are shades between pure black (`#000000`) and pure white (`#ffffff`), creating a monochrome environment that lets the user's mental model of "open models" remain uncolored by brand opinion. The Ollama llama mascot, rendered in simple black line art, is the only illustration — and even it's monochrome.
+## 1. Visual Direction
 
-What makes Ollama distinctive is the combination of SF Pro Rounded (Apple's rounded system font) with an exclusively pill-shaped geometry (9999px radius on everything interactive). The rounded letterforms + rounded buttons + rounded containers create a cohesive "softness language" that makes a developer CLI tool feel approachable and friendly rather than intimidating. This is minimalism with warmth — not cold Swiss-style grid minimalism, but the kind where the edges are literally softened.
+Context Engine should feel like a precise developer workbench, not a marketing page and not a heavy admin dashboard. The baseline is a white canvas with restrained borders, compact typography, and state expressed through small, semantic cues.
 
-**Key Characteristics:**
-- Pure white canvas with zero chromatic color — completely grayscale
-- SF Pro Rounded headlines creating a distinctively Apple-like softness
-- Binary border-radius system: 12px (containers) or 9999px (everything interactive)
-- Zero shadows — depth comes exclusively from background color shifts and borders
-- Pill-shaped geometry on all interactive elements (buttons, tabs, inputs, tags)
-- The Ollama llama as the sole illustration — black line art, no color
-- Extreme content restraint — the homepage is short, focused, and uncluttered
+Core characteristics:
 
-### App-Specific Interpretation
+- White canvas first. Avoid heavy cards, saturated panels, decorative frames, and visual noise.
+- Use faint dotted workbench backgrounds only when a queue, plan, canvas, or workflow screen benefits from spatial orientation.
+- Prefer `rounded-md` controls. Do not use full-pill controls as the default visual language.
+- Use compact, developer-native typography with monospace for paths, metadata, IDs, timing, code, and API details.
+- Represent state with tiny dots, checkmarks, muted badges, narrow progress bars, and concise labels.
+- Keep color minimal and semantic: green for done/success, blue for running/current, orange for paused or high-priority attention, and red only for risk or failure.
 
-For production application surfaces, preserve the same restraint while working with the existing tokenized client theme. Prefer pure grayscale tokens, flat depth, 12px non-interactive containers, and pill-shaped controls. Dark mode may use token-equivalent inverted surfaces, but should keep the same relationships: quiet backgrounds, subtle single-pixel borders, restrained text weights, and no decorative color. Settings panels should follow a calm left-nav + row-content layout: compact enough for real configuration work, but visually light, with section dividers and inline controls doing the structural work instead of shadows or ornament.
+The interface should stay calm even when the system is busy. Let information density come from layout and typography, not from color, shadows, or large components.
 
-## 2. Color Palette & Roles
+## 2. Color System
 
-### Primary
-- **Pure Black** (`#000000`): Primary headlines, primary links, and the darkest text. The only "color" that demands attention.
-- **Near Black** (`#262626`): Button text on light surfaces, secondary headline weight.
-- **Darkest Surface** (`#090909`): The darkest possible surface — barely distinguishable from pure black, used for footer or dark containers.
+### Foundation
 
-### Surface & Background
-- **Pure White** (`#ffffff`): The primary page background — not off-white, not cream, pure white. Button surfaces for secondary actions.
-- **Snow** (`#fafafa`): The subtlest possible surface distinction from white — used for section backgrounds and barely-elevated containers.
-- **Light Gray** (`#e5e5e5`): Button backgrounds, borders, and the primary containment color. The workhorse neutral.
+- **Page background**: `bg-white`
+- **Subtle surface**: `bg-neutral-50`
+- **Raised surface**: `bg-white`
+- **Primary text**: `text-neutral-950`
+- **Secondary text**: `text-neutral-600`
+- **Muted text**: `text-neutral-500`
+- **Disabled text**: `text-neutral-400`
+- **Primary border**: `border-neutral-200`
+- **Subtle divider**: `border-neutral-100`
+- **Focus ring**: Tailwind blue focus ring or the existing app token equivalent
 
-### Neutrals & Text
-- **Stone** (`#737373`): Secondary body text, footer links, and de-emphasized content. The primary "muted" tone.
-- **Mid Gray** (`#525252`): Emphasized secondary text, slightly darker than Stone.
-- **Silver** (`#a3a3a3`): Tertiary text, placeholders, and deeply de-emphasized metadata.
-- **Button Text Dark** (`#404040`): Specific to white-surface button text.
+### Semantic State
 
-### Semantic & Accent
-- **Ring Blue** (`#3b82f6` at 50%): The ONLY non-gray color in the entire system — Tailwind's default focus ring, used exclusively for keyboard accessibility. Never visible in normal interaction flow.
-- **Border Light** (`#d4d4d4`): A slightly darker gray for white-surface button borders.
+Use semantic color sparingly and locally:
 
-### Gradient System
-- **None.** Ollama uses absolutely no gradients. Visual separation comes from flat color blocks and single-pixel borders. This is a deliberate, almost philosophical design choice.
+- **Running / current**: blue dot, blue text accent, or narrow blue progress fill
+- **Done / success**: green dot, checkmark, or muted green badge
+- **Paused / queued / priority**: orange dot or badge
+- **Risk / error**: red dot, error text, or compact destructive badge
+- **Idle / inactive**: neutral dot, neutral badge, or muted text
 
-## 3. Typography Rules
+Avoid saturated color blocks. Semantic color should usually appear as a dot, icon, border accent, badge text, or progress fill rather than as a full panel background.
 
-### Font Family
-- **Display**: `SF Pro Rounded`, with fallbacks: `system-ui, -apple-system, system-ui`
-- **Body / UI**: `ui-sans-serif`, with fallbacks: `system-ui, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji`
-- **Monospace**: `ui-monospace`, with fallbacks: `SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New`
+## 3. Radius System
 
-*Note: SF Pro Rounded is Apple's system font — it renders with rounded terminals on macOS/iOS and falls back to the system sans-serif on other platforms.*
+Use a small, predictable radius scale:
 
-### Hierarchy
+| Element | Radius |
+| --- | ---: |
+| Buttons | 8px |
+| Inputs / selects | 8px |
+| Chips / badges | 8px |
+| Active rows | 8px |
+| Floating toolbar segments | 8px |
+| Panels / preview frames | 12px |
 
-| Role | Font | Size | Weight | Line Height | Letter Spacing | Notes |
-|------|------|------|--------|-------------|----------------|-------|
-| Display / Hero | SF Pro Rounded | 48px (3rem) | 500 | 1.00 (tight) | normal | Maximum impact, rounded letterforms |
-| Section Heading | SF Pro Rounded | 36px (2.25rem) | 500 | 1.11 (tight) | normal | Feature section titles |
-| Sub-heading | SF Pro Rounded / ui-sans-serif | 30px (1.88rem) | 400–500 | 1.20 (tight) | normal | Card headings, feature names |
-| Card Title | ui-sans-serif | 24px (1.5rem) | 400 | 1.33 | normal | Medium emphasis headings |
-| Body Large | ui-sans-serif | 18px (1.13rem) | 400–500 | 1.56 | normal | Hero descriptions, button text |
-| Body / Link | ui-sans-serif | 16px (1rem) | 400–500 | 1.50 | normal | Standard body text, navigation |
-| Caption | ui-sans-serif | 14px (0.88rem) | 400 | 1.43 | normal | Metadata, descriptions |
-| Small | ui-sans-serif | 12px (0.75rem) | 400 | 1.33 | normal | Smallest sans-serif text |
-| Code Body | ui-monospace | 16px (1rem) | 400 | 1.50 | normal | Inline code, commands |
-| Code Caption | ui-monospace | 14px (0.88rem) | 400 | 1.43 | normal | Code snippets, secondary |
-| Code Small | ui-monospace | 12px (0.75rem) | 400–700 | 1.63 | normal | Tags, labels |
+Implementation guidance:
 
-### Principles
-- **Rounded display, standard body**: SF Pro Rounded carries display headlines with its distinctive rounded terminals, while the standard system sans handles all body text. The rounded font IS the brand expression.
-- **Weight restraint**: Only two weights matter — 400 (regular) for body and 500 (medium) for headings. No bold, no light, no black weight. This extreme restraint reinforces the minimal philosophy.
-- **Tight display, comfortable body**: Headlines compress to 1.0 line-height, while body text relaxes to 1.43–1.56. The contrast creates clear hierarchy without needing weight contrast.
-- **Monospace for developer identity**: Code blocks and terminal commands appear throughout as primary content, using the system monospace stack.
+- Map most controls to Tailwind `rounded-md`.
+- Use `rounded-lg` for panels, preview frames, and larger grouped containers.
+- Do not use `rounded-full` / `9999px` controls unless there is a specific existing component requirement.
+- Avoid mixing many radius values in one view.
 
-## 4. Component Stylings
+## 4. Button Sizing
 
-### Buttons
+Buttons should be compact and consistent within each surface.
 
-**Gray Pill (Primary)**
-- Background: Light Gray (`#e5e5e5`)
-- Text: Near Black (`#262626`)
-- Padding: 10px 24px
-- Border: thin solid Light Gray (`1px solid #e5e5e5`)
-- Radius: pill-shaped (9999px)
-- The primary action button — understated, grayscale, always pill-shaped
+| Button Type | Size |
+| --- | ---: |
+| Standard text action | 32px height, 12px horizontal padding |
+| Primary text action | 32px height, 12px horizontal padding |
+| Icon-only action | 32px square |
 
-**White Pill (Secondary)**
-- Background: Pure White (`#ffffff`)
-- Text: Button Text Dark (`#404040`)
-- Padding: 10px 24px
-- Border: thin solid Border Light (`1px solid #d4d4d4`)
-- Radius: pill-shaped (9999px)
-- Secondary action — visually lighter than Gray Pill
+Implementation guidance:
 
-**Black Pill (CTA)**
-- Background: Pure Black (`#000000`)
-- Text: Pure White (`#ffffff`)
-- Radius: pill-shaped (9999px)
-- Inferred from "Create account" and "Explore" buttons
-- Maximum emphasis — black on white
+- Prefer shadcn `Button` with `size="sm"` for text actions inside app panels.
+- Prefer shadcn `Button` with `size="icon-sm"` for icon-only actions.
+- Keep primary, secondary, and destructive buttons the same height when they appear in one action group.
+- Use longer labels only when necessary; do not compensate with taller buttons.
 
-### Cards & Containers
-- Background: Pure White or Snow (`#fafafa`)
-- Border: thin solid Light Gray (`1px solid #e5e5e5`) when needed
-- Radius: comfortably rounded (12px) — the ONLY non-pill radius in the system
-- Shadow: **none** — zero shadows on any element
-- Hover: likely subtle background shift or border darkening
+## 5. Typography
 
-### Inputs & Forms
-- Background: Pure White
-- Border: `1px solid #e5e5e5`
-- Radius: pill-shaped (9999px) — search inputs and form fields are pill-shaped
-- Focus: Ring Blue (`#3b82f6` at 50%) ring
-- Placeholder: Silver (`#a3a3a3`)
+The type system should feel compact and native to developer tools.
 
-### Navigation
-- Clean horizontal nav with minimal elements
-- Logo: Ollama llama icon + wordmark in black
-- Links: "Models", "Docs", "Pricing" in black at 16px, weight 400
-- Search bar: pill-shaped with placeholder text
-- Right side: "Sign in" link + "Download" black pill CTA
-- No borders, no background — transparent nav on white page
+| Role | Size | Weight | Font | Notes |
+| --- | ---: | ---: | --- | --- |
+| Page title | 20-22px | 500-600 | Sans | Short, direct labels |
+| Section title | 15-18px | 500 | Sans | Avoid bold-heavy hierarchy |
+| UI label | 13-14px | 400-500 | Sans | Buttons, tabs, form labels |
+| Body text | 13-15px | 400 | Sans | Explanations and row content |
+| Metadata | 10-12px | 400-500 | Monospace | IDs, paths, durations, tokens |
+| Code / API | 12-14px | 400 | Monospace | Requests, snippets, traces |
 
-### Image Treatment
-- The Ollama llama mascot is the only illustration — black line art on white
-- Code screenshots/terminal outputs shown in bordered containers (12px radius)
-- Integration logos displayed as simple icons in a grid
-- No photographs, no gradients, no decorative imagery
+Principles:
 
-### Distinctive Components
+- Use spacing and position for hierarchy before increasing size or weight.
+- Keep headings restrained. Avoid oversized marketing-style display type inside app surfaces.
+- Use monospace deliberately for developer meaning: file paths, run IDs, API routes, model names, symbols, timestamps, and code.
+- Avoid all-caps labels except for very small metadata when the existing component style already uses it.
 
-**Tab Pills**
-- Pill-shaped tab selectors (e.g., "Coding" | "OpenClaw")
-- Active: Light Gray bg; Inactive: transparent
-- All pill-shaped (9999px)
+## 6. Component Grammar
 
-**Model Tags**
-- Small pill-shaped tags (e.g., "ollama", "launch", "claude")
-- Light Gray background, dark text
-- The primary way to browse models
+These components should appear repeatedly across the app so agent workflows feel consistent.
 
-**Terminal Command Block**
-- Monospace code showing `ollama run` commands
-- Minimal styling — just a bordered 12px-radius container
-- Copy button integrated
+### Execution Plan Step Rail
 
-**Integration Grid**
-- Grid of integration logos (Codex, Claude Code, OpenCode, LangChain, etc.)
-- Each in a bordered pill or card with icon + name
-- Tabbed by category (Coding, Documents & RAG, Automation, Chat)
+Use for plans, multi-step runs, evaluations, and agent tasks.
 
-## 5. Layout Principles
+- Left rail with tiny status dots or checkmarks.
+- Current step uses blue state; completed steps use green checks; blocked steps use red risk markers.
+- Step content stays compact: title, one-line summary, optional metadata row.
+- Avoid large timeline cards unless the content truly needs expanded detail.
 
-### Spacing System
-- Base unit: 8px
-- Scale: 4px, 6px, 8px, 9px, 10px, 12px, 14px, 16px, 20px, 24px, 32px, 40px, 48px, 88px, 112px
-- Button padding: 10px 24px (consistent across all buttons)
-- Card internal padding: approximately 24–32px
-- Section vertical spacing: very generous (88px–112px)
+### Task Queue Table
 
-### Grid & Container
-- Max container width: approximately 1024–1280px, centered
-- Hero: centered single-column with llama illustration
-- Feature sections: 2-column layout (text left, code right)
-- Integration grid: responsive multi-column
-- Footer: clean single-row
+Use for pending work, background jobs, batch ingestion, syncs, and evaluation runs.
 
-### Whitespace Philosophy
-- **Emptiness as luxury**: The page is remarkably short and sparse — no feature section overstays its welcome. Each concept gets minimal but sufficient space.
-- **Content density is low by design**: Where other AI companies pack feature after feature, Ollama presents three ideas (run models, use with apps, integrations) and stops.
-- **The white space IS the brand**: Pure white space with zero decoration communicates "this tool gets out of your way."
+- Table rows on white with subtle dividers.
+- Active or selected row may use `bg-neutral-50` and `rounded-md`.
+- State appears as a tiny dot plus short text badge.
+- Primary row text should be readable at a glance; metadata should be small and muted.
 
-### Border Radius Scale
-- Comfortably rounded (12px): The sole container radius — code blocks, cards, panels
-- Pill-shaped (9999px): Everything interactive — buttons, tabs, inputs, tags, badges
+### API Playground Split Pane
 
-*This binary system is extreme and distinctive. There is no 4px, no 8px, no gradient of roundness. Elements are either containers (12px) or interactive (pill).*
+Use for request/response, context inspection, prompt testing, and integration flows.
 
-## 6. Depth & Elevation
+- Two-pane layout: controls/request on one side, output/preview on the other.
+- Code and payload areas use monospace and subtle bordered containers.
+- Keep panels white or neutral-50 with `border-neutral-200`.
+- Prefer compact controls and inline configuration over tall forms.
 
-| Level | Treatment | Use |
-|-------|-----------|-----|
-| Flat (Level 0) | No shadow, no border | Page background, most content |
-| Bordered (Level 1) | `1px solid #e5e5e5` | Cards, code blocks, buttons |
+### Agent Workflow Pipeline Columns
 
-**Shadow Philosophy**: Ollama uses **zero shadows**. This is not an oversight — it's a deliberate design decision. Every other major AI product site uses at least subtle shadows. Ollama's flat, shadowless approach creates a paper-like experience where elements are distinguished purely by background color and single-pixel borders. Depth is communicated through **content hierarchy and typography weight**, not visual layering.
+Use for multi-agent or staged work: planned, queued, running, reviewing, done.
 
-## 7. Do's and Don'ts
+- Columns should be light and quiet, not kanban-heavy.
+- Cards remain compact with minimal borders and state dots.
+- Use dotted workbench backgrounds only if it helps the pipeline read as a workspace.
+- Keep per-card actions secondary until hover/focus when possible.
+
+### Small Status Badges
+
+Use badges for machine-readable state, model/provider labels, risk levels, and environment names.
+
+- Badge radius: `rounded-md`.
+- Prefer neutral badges with semantic dot or text color.
+- Keep labels short: `running`, `done`, `blocked`, `high`, `local`, `prod`.
+- Avoid large colorful pills.
+
+### Tiny Semantic Dots
+
+Use dots where a full badge would be too loud.
+
+- 6-8px is usually enough.
+- Pair with text for accessibility unless the surrounding label is unambiguous.
+- Use dots consistently across tables, rails, and headers.
+
+### Faint Progress Tracks
+
+Use progress tracks for execution, indexing, ingestion, test runs, and batch jobs.
+
+- Height should be slim, usually 3-6px.
+- Track uses neutral-100 or neutral-200.
+- Fill uses semantic color only for current state.
+- Prefer exact labels nearby for longer operations.
+
+### Quiet Underline Inputs
+
+Use for compact credential fields, inline settings values, and low-chrome configuration rows where a full bordered input would add too much visual weight.
+
+- Field uses a subtle gray fill, usually `bg-neutral-50`, with no full box border.
+- Structure comes from a clean bottom border only, usually `border-b border-neutral-300`.
+- On focus, keep the underline calm and visible, such as `focus-visible:border-neutral-500`, without adding a heavy ring.
+- Keep the control compact: 32px height, `rounded-none` or only inherited container rounding, and quiet placeholder text.
+- Use a normal bordered `rounded-md` input instead when the field appears alone, needs strong affordance, or sits on a gray panel where the underline would lose contrast.
+
+### Floating Bottom Configuration Toolbar
+
+Use for persistent run configuration, selected context, model/provider controls, or staged actions.
+
+- It may use the only soft shadow in the system.
+- Keep segments `rounded-md` with subtle borders.
+- Avoid making it look like a marketing CTA bar.
+- It should feel like a compact tool tray.
+
+## 7. Layout Principles
+
+### Density
+
+Context Engine is a work app. It can be information-dense, but each view needs a clear scan path.
+
+- Put the primary workflow in the center, not inside nested decorative panels.
+- Use side panels for context, settings, previews, or traces.
+- Keep rows compact, but preserve enough vertical rhythm to avoid spreadsheet fatigue.
+- Favor progressive disclosure for logs, traces, and advanced controls.
+- Place row or container action groups on the right-hand side of the container. In left-to-right layouts, keep primary content and metadata on the left, while lifecycle/destructive actions align right.
+
+### Spacing
+
+- Base unit: 4px or 8px depending on the existing component scale.
+- Common gaps: 4px, 8px, 12px, 16px, 24px, 32px.
+- Controls should feel compact, not cramped.
+- Dense tables and rails should rely on dividers and whitespace instead of card shadows.
+- Keep repeated settings sections on a predictable rhythm:
+  - 16px between top-level sections.
+  - 12px between a section heading and its panel, table, or row group.
+  - 16px panel padding for standard settings panels.
+  - 16px between form field groups.
+  - 6px between a field label/help line and its control.
+  - 8px between related action buttons.
+- Do not use one-off padding nudges like `pt-1` to align section headings; group the heading and content with spacing utilities instead.
+
+### Containers
+
+- Use borders and subtle background shifts for separation.
+- Default panels: `bg-white border border-neutral-200 rounded-lg`.
+- Secondary areas: `bg-neutral-50 border border-neutral-200 rounded-lg`.
+- Avoid nested card stacks. If a panel contains rows, use dividers instead of placing each row in a card.
+
+## 8. Depth And Motion
+
+Depth should be nearly flat.
+
+- Most surfaces use no shadow.
+- The floating bottom toolbar may use a very soft shadow.
+- Use one-pixel borders and neutral background changes for structure.
+- Motion should be brief and functional: loading progress, row insertion, disclosure open/close.
+- Avoid decorative animation, bouncy easing, and dramatic hover effects.
+
+## 9. Implementation Notes
+
+When coding UI:
+
+- Prefer existing Tailwind and shadcn primitives.
+- Override default large rounding when needed: `rounded-md` for controls, `rounded-lg` for panels.
+- Use `border border-neutral-200`, `bg-white`, `bg-neutral-50`, and `text-neutral-*` as defaults.
+- For quiet credential or inline settings fields, use gray-fill underline inputs: `bg-neutral-50`, no full border, `border-b border-neutral-300`, and a restrained focus underline.
+- Keep shadows off except for the floating bottom toolbar.
+- Do not introduce saturated brand panels, colorful cards, gradients, or default pill-heavy styling.
+- Make state legible with text, not color alone.
+- Preserve keyboard focus styling and accessible labels.
+- Keep empty, loading, and error states visually consistent with the same compact grammar.
+
+## 10. Do And Do Not
 
 ### Do
-- Use pure white (`#ffffff`) as the page background — never off-white or cream
-- Use pill-shaped (9999px) radius on all interactive elements — buttons, tabs, inputs, tags
-- Use 12px radius on all non-interactive containers — code blocks, cards, panels
-- Keep the palette strictly grayscale — no chromatic colors except the blue focus ring
-- Use SF Pro Rounded at weight 500 for display headings — the rounded terminals are the brand expression
-- Maintain zero shadows — depth comes from borders and background shifts only
-- Keep content density low — each section should present one clear idea
-- Use monospace for terminal commands and code — it's primary content, not decoration
-- Keep all buttons at 10px 24px padding with pill shape — consistency is absolute
 
-### Don't
-- Don't introduce any chromatic color — no brand blue, no accent green, no warm tones
-- Don't use border-radius between 12px and 9999px — the system is binary
-- Don't add shadows to any element — the flat aesthetic is intentional
-- Don't use font weights above 500 — no bold, no black weight
-- Don't add decorative illustrations beyond the llama mascot
-- Don't use gradients anywhere — flat blocks and borders only
-- Don't overcomplicate the layout — two columns maximum, no complex grids
-- Don't use borders heavier than 1px — containment is always the lightest possible touch
-- Don't add hover animations or transitions — interactions should feel instant and direct
+- Use a white canvas and subtle neutral surfaces.
+- Use `rounded-md` controls and `rounded-lg` panels.
+- Use small semantic dots, checkmarks, muted badges, and slim progress bars.
+- Use monospace for paths, symbols, code, IDs, and timing.
+- Build views around execution plans, task queues, API panes, and workflow columns.
+- Keep shadows, color, and ornament restrained.
 
-## 8. Responsive Behavior
+### Do Not
 
-### Breakpoints
-| Name | Width | Key Changes |
-|------|-------|-------------|
-| Mobile | <640px | Single column, stacked everything, hamburger nav |
-| Small Tablet | 640–768px | Minor adjustments to spacing |
-| Tablet | 768–850px | 2-column layouts begin |
-| Desktop | 850–1024px | Standard layout, expanded features |
-| Large Desktop | 1024–1280px | Maximum content width |
+- Do not default to full-pill buttons, badges, tabs, or inputs.
+- Do not use saturated cards, brand-color panels, or decorative gradients.
+- Do not create heavy dashboard chrome around every screen.
+- Do not use red for normal urgency; reserve red for risk, destructive actions, and failure.
+- Do not rely on color alone to communicate state.
+- Do not add decorative illustrations unless the product surface specifically calls for an empty-state visual.
 
-### Touch Targets
-- All buttons are pill-shaped with generous padding (10px 24px)
-- Navigation links at comfortable 16px size
-- Minimum touch area easily exceeds 44x44px
+## 11. Agent Prompt Guide
 
-### Collapsing Strategy
-- **Navigation**: Collapses to hamburger menu on mobile
-- **Feature sections**: 2-column → stacked single column
-- **Hero text**: 48px → 36px → 30px progressive scaling
-- **Integration grid**: Multi-column → 2-column → single column
-- **Code blocks**: Horizontal scroll maintained
+Use these prompts when asking an agent to implement or revise UI:
 
-### Image Behavior
-- Llama mascot scales proportionally
-- Code blocks maintain monospace formatting
-- Integration icons reflow to fewer columns
-- No art direction changes
+- "Build this as a compact Context Engine workbench screen on a white canvas. Use `rounded-md` controls, `rounded-lg` panels, neutral borders, and semantic micro-status dots."
+- "Create an execution plan rail with compact steps, tiny state markers, muted metadata, and a blue current step. Completed steps should use green checkmarks."
+- "Design a task queue table with subtle row dividers, neutral badges, tiny semantic dots, and compact monospace metadata for IDs and durations."
+- "Create an API playground split pane with a request/config panel and a response/code preview panel. Use white and neutral-50 surfaces, 1px neutral borders, and monospace code areas."
+- "Add a floating bottom configuration toolbar with segmented `rounded-md` controls, a soft shadow, neutral borders, and compact run settings."
 
-## 9. Agent Prompt Guide
+Before accepting UI work, verify:
 
-### Quick Color Reference
-- Primary Text: "Pure Black (#000000)"
-- Page Background: "Pure White (#ffffff)"
-- Secondary Text: "Stone (#737373)"
-- Button Background: "Light Gray (#e5e5e5)"
-- Borders: "Light Gray (#e5e5e5)"
-- Muted Text: "Silver (#a3a3a3)"
-- Dark Text: "Near Black (#262626)"
-- Subtle Surface: "Snow (#fafafa)"
-
-### Example Component Prompts
-- "Create a hero section on pure white (#ffffff) with an illustration centered above a headline at 48px SF Pro Rounded weight 500, line-height 1.0. Use Pure Black (#000000) text. Below, add a black pill-shaped CTA button (9999px radius, 10px 24px padding) and a gray pill button."
-- "Design a code block with a 12px border-radius, 1px solid Light Gray (#e5e5e5) border on white background. Use ui-monospace at 16px for the terminal command. No shadow."
-- "Build a tab bar with pill-shaped tabs (9999px radius). Active tab: Light Gray (#e5e5e5) background, Near Black (#262626) text. Inactive: transparent background, Stone (#737373) text."
-- "Create an integration card grid. Each card is a bordered pill (9999px radius) or a 12px-radius card with 1px solid #e5e5e5 border. Icon + name inside. Grid of 4 columns on desktop."
-- "Design a navigation bar: transparent background, no border. Ollama logo on the left, 3 text links (Pure Black, 16px, weight 400), pill search input in the center, 'Sign in' text link and black pill 'Download' button on the right."
-
-### Iteration Guide
-1. Focus on ONE component at a time
-2. Keep all values grayscale — "Stone (#737373)" not "use a light color"
-3. Always specify pill (9999px) or container (12px) radius — nothing in between
-4. Shadows are always zero — never add them
-5. Weight is always 400 or 500 — never bold
-6. If something feels too decorated, remove it — less is always more for Ollama
+1. Controls are `rounded-md`, not full-pill by default.
+2. Panels are quiet, white or neutral-50, and lightly bordered.
+3. State is visible through small semantic markers plus text.
+4. Typography is compact and developer-native.
+5. Shadows, gradients, saturated colors, and decorative cards have been removed unless explicitly justified.

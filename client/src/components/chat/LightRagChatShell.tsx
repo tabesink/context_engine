@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PanelRightOpen } from "lucide-react";
 import { fetchWorkspaceSourceContext } from "@/api/workspace-context";
 import { fetchWorkspaceTree } from "@/api/workspace-tree";
@@ -88,14 +88,18 @@ export function LightRagChatShell() {
   const setSidePanelTab = useCallback((sidePanelTab: SidePanelTab) => {
     setChatSessionState({ sidePanelTab });
   }, []);
+  const latestWorkspaceDomainRef = useRef<string | null>(null);
 
   useEffect(() => {
     void loadDomains();
   }, [loadDomains]);
 
   const loadWorkspaceForDomain = useCallback(async (domainId: string) => {
+    latestWorkspaceDomainRef.current = domainId;
+    setChatSessionState({ sourceTree: null });
     try {
       const tree = await fetchWorkspaceTree(domainId);
+      if (latestWorkspaceDomainRef.current !== domainId) return;
       setChatSessionState({ sourceTree: tree });
     } catch {
       // Keep chat interactive even if workspace-tree fetch fails.
@@ -103,21 +107,8 @@ export function LightRagChatShell() {
   }, []);
 
   useEffect(() => {
-    const defaults = selectedDomain?.retrieval_defaults;
-    if (!defaults) return;
-    const task = window.setTimeout(() => {
-      setRetrievalSettings((current) => ({
-        ...current,
-        top_k: defaults.top_k,
-        chunk_top_k: defaults.chunk_top_k,
-        chunk_rerank_top_k: defaults.chunk_rerank_top_k,
-        max_token_for_text_unit: defaults.max_token_for_text_unit,
-        max_token_for_global_context: defaults.max_token_for_global_context,
-        max_token_for_local_context: defaults.max_token_for_local_context,
-      }));
-    }, 0);
+    if (!selectedDomain) return;
     void loadWorkspaceForDomain(selectedDomain.domain_id);
-    return () => window.clearTimeout(task);
   }, [loadWorkspaceForDomain, selectedDomain]);
 
   const effectiveRetrievalSettings: RetrievalSettings = useMemo(
@@ -335,6 +326,10 @@ export function LightRagChatShell() {
           sourceTree={displayedSourceTree}
           selectedNodeId={sourceNavigator.selectedNodeId}
           onNodeSelect={handleWorkspaceNodeSelect}
+          domains={lightragDomains}
+          selectedDomainPort={selectedPort}
+          domainsLoading={domainStatus === "loading"}
+          onDomainChange={setSelectedPort}
         />
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">

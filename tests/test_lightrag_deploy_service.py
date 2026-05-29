@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from app.lightrag_deploy.docker_runner import CommandResult
 from app.lightrag_deploy.errors import DomainNotFoundError, PermanentDeleteDisabledError
@@ -317,34 +318,23 @@ def test_create_domain_auto_selects_next_available_port(tmp_path: Path) -> None:
     assert second.host_port == 9623
 
 
-def test_create_domain_persists_custom_retrieval_defaults(tmp_path: Path) -> None:
-    service = _service(tmp_path)
-
-    domain = service.create_domain(
-        LightRAGDomainCreateRequest(
-            domain_id="fatigue",
-            top_k=24,
-            chunk_top_k=12,
-            chunk_rerank_top_k=8,
-            max_token_for_text_unit=2048,
-            max_token_for_global_context=1536,
-            max_token_for_local_context=1024,
+@pytest.mark.parametrize(
+    "removed_field",
+    [
+        "start",
+        "top_k",
+        "chunk_top_k",
+        "chunk_rerank_top_k",
+        "max_token_for_text_unit",
+        "max_token_for_global_context",
+        "max_token_for_local_context",
+    ],
+)
+def test_create_domain_request_rejects_removed_fields(removed_field: str) -> None:
+    with pytest.raises(ValidationError):
+        LightRAGDomainCreateRequest.model_validate(
+            {"domain_id": "fatigue", removed_field: 10 if removed_field != "start" else True}
         )
-    )
-    env_text = (tmp_path / "lightrag/domains/fatigue/domain.env").read_text(encoding="utf-8")
-
-    assert domain.retrieval_defaults.top_k == 24
-    assert domain.retrieval_defaults.chunk_top_k == 12
-    assert domain.retrieval_defaults.chunk_rerank_top_k == 8
-    assert domain.retrieval_defaults.max_token_for_text_unit == 2048
-    assert domain.retrieval_defaults.max_token_for_global_context == 1536
-    assert domain.retrieval_defaults.max_token_for_local_context == 1024
-    assert "TOP_K=24" in env_text
-    assert "CHUNK_TOP_K=12" in env_text
-    assert "CHUNK_RERANK_TOP_K=8" in env_text
-    assert "MAX_TOKEN_TEXT_CHUNK=2048" in env_text
-    assert "MAX_TOKEN_RELATION_DESC=1536" in env_text
-    assert "MAX_TOKEN_ENTITY_DESC=1024" in env_text
 
 
 def test_show_missing_domain_raises_typed_error(tmp_path: Path) -> None:
@@ -399,17 +389,11 @@ def test_docker_operations_call_runner_with_domain_service_name(tmp_path: Path) 
         == "succeeded"
     )
     assert service.down("fatigue").status == "succeeded"
-    assert (
-        service.recreate("fatigue", reachability=FakeReachability(), attempts=1, sleep_seconds=0).status
-        == "succeeded"
-    )
 
     assert runner.calls == [
         ("build", "lightrag_fatigue"),
         ("up", "lightrag_fatigue"),
         ("stop", "lightrag_fatigue"),
-        ("build", "lightrag_fatigue"),
-        ("recreate", "lightrag_fatigue"),
     ]
 
 
@@ -460,55 +444,7 @@ def test_docker_error_returns_failed_operation_result(tmp_path: Path) -> None:
     assert result.message == "docker failed"
 
 
-def test_repair_regenerates_recreates_probes_and_marks_healthy(tmp_path: Path) -> None:
-    runner = FakeRunner()
-    reachability = FakeReachability(healthy=True)
-    service = _service(tmp_path, runner)
-    service.create_domain(LightRAGDomainCreateRequest(domain_id="fatigue"))
-
-    result = service.repair(
-        "fatigue",
-        reachability=reachability,
-        attempts=1,
-        sleep_seconds=0,
-    )
-    domain = service.get_domain("fatigue")
-
-    assert runner.calls == [("build", "lightrag_fatigue"), ("recreate", "lightrag_fatigue")]
-    assert reachability.calls == ["fatigue"]
-    assert result.docker_operation == "succeeded"
-    assert result.postgres_database == "lightrag_fatigue"
-    assert result.postgres_user == "lightrag_fatigue"
-    assert result.postgres_role_exists is None
-    assert result.health == {
-        "ok": True,
-        "code": None,
-        "reason_code": None,
-        "reason": None,
-        "status_code": 200,
-    }
-    assert domain.status == "running"
-    assert domain.is_healthy is True
-
-
-def test_repair_marks_domain_unhealthy_when_probe_fails(tmp_path: Path) -> None:
-    service = _service(tmp_path, FakeRunner())
-    service.create_domain(LightRAGDomainCreateRequest(domain_id="fatigue"))
-
-    result = service.repair(
-        "fatigue",
-        reachability=FakeReachability(healthy=False),
-        attempts=1,
-        sleep_seconds=0,
-    )
-    domain = service.get_domain("fatigue")
-
-    assert result.health["reason_code"] == "connection_refused"
-    assert domain.status == "unhealthy"
-    assert domain.is_healthy is False
-
-
-def test_repair_provisions_missing_postgres_identity_and_rewrites_env(
+def test_start_provisions_missing_postgres_identity_and_rewrites_env(
     tmp_path: Path,
 ) -> None:
     runner = FakeRunner()
@@ -525,7 +461,7 @@ def test_repair_provisions_missing_postgres_identity_and_rewrites_env(
         created.model_copy(update={"postgres_database": None, "postgres_user": None})
     )
 
-    result = service.repair(
+    result = service.up(
         "legacy-domain",
         reachability=reachability,
         attempts=1,
@@ -541,10 +477,9 @@ def test_repair_provisions_missing_postgres_identity_and_rewrites_env(
     assert repaired.postgres_user == "lightrag_legacy_domain"
     assert "POSTGRES_DATABASE=lightrag_legacy_domain" in env_text
     assert "POSTGRES_USER=lightrag_legacy_domain" in env_text
-    assert runner.calls == [("build", "lightrag_legacy-domain"), ("recreate", "lightrag_legacy-domain")]
-    assert result.postgres_role_exists is True
-    assert result.postgres_database_exists is True
-    assert result.extensions["vector"]["status"] == "ok"
+    assert runner.calls == [("build", "lightrag_legacy-domain"), ("up", "lightrag_legacy-domain")]
+    assert result.status == "succeeded"
+    assert repaired.status == "running"
 
 
 def test_create_domain_persists_embedding_snapshot(tmp_path: Path) -> None:
@@ -582,7 +517,7 @@ def test_changing_default_embedding_does_not_mutate_existing_snapshot(tmp_path: 
     assert created.embedding.profile_id == "openai-text-embedding-3-small"
 
     resolver.default = resolver.alt
-    service.regenerate("fatigue")
+    service.up("fatigue", reachability=FakeReachability(), attempts=1, sleep_seconds=0)
     domain = service.get_domain("fatigue")
 
     assert domain.embedding is not None

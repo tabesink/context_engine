@@ -1,5 +1,6 @@
 from dataclasses import replace
 from datetime import UTC, datetime
+import json
 from pathlib import Path
 
 import pytest
@@ -106,14 +107,6 @@ def test_manifest_writes_deterministic_domain_list(tmp_path: Path) -> None:
         "      },\n"
         '      "postgres_database": "lightrag_fatigue",\n'
         '      "postgres_user": "lightrag_fatigue",\n'
-        '      "retrieval_defaults": {\n'
-        '        "chunk_rerank_top_k": 10,\n'
-        '        "chunk_top_k": 10,\n'
-        '        "max_token_for_global_context": 4000,\n'
-        '        "max_token_for_local_context": 4000,\n'
-        '        "max_token_for_text_unit": 4000,\n'
-        '        "top_k": 10\n'
-        "      },\n"
         '      "service_name": "lightrag_fatigue",\n'
         '      "status": "configured",\n'
         '      "updated_at": "2026-05-18T14:30:00Z"\n'
@@ -122,6 +115,31 @@ def test_manifest_writes_deterministic_domain_list(tmp_path: Path) -> None:
         '  "version": 1\n'
         "}\n"
     )
+
+
+def test_manifest_loads_legacy_retrieval_defaults_without_rewriting_them(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    store = DomainManifestStore(settings.manifest_path)
+    legacy = _domain(tmp_path).to_manifest_dict()
+    legacy["retrieval_defaults"] = {
+        "top_k": 24,
+        "chunk_top_k": 12,
+        "chunk_rerank_top_k": 8,
+        "max_token_for_text_unit": 2048,
+        "max_token_for_global_context": 1536,
+        "max_token_for_local_context": 1024,
+    }
+    settings.manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    settings.manifest_path.write_text(
+        json.dumps({"domains": [legacy], "version": 1}, indent=2),
+        encoding="utf-8",
+    )
+
+    domain = store.get_domain("fatigue")
+    assert domain is not None
+
+    store.write_domains([domain])
+    assert "retrieval_defaults" not in settings.manifest_path.read_text(encoding="utf-8")
 
 
 def test_manifest_rejects_duplicate_domain_id_and_port(tmp_path: Path) -> None:
@@ -178,6 +196,30 @@ def test_domain_env_uses_per_domain_postgres_credentials_by_default(tmp_path: Pa
         "\n"
         "# OpenAI-compatible provider tuning\n"
     )
+
+
+def test_domain_env_uses_deploy_retrieval_defaults(tmp_path: Path) -> None:
+    settings = replace(
+        _settings(tmp_path),
+        default_top_k=24,
+        default_chunk_top_k=12,
+        default_chunk_rerank_top_k=8,
+        default_max_token_for_text_unit=2048,
+        default_max_token_for_global_context=1536,
+        default_max_token_for_local_context=1024,
+    )
+    paths = DomainPathResolver(settings).ensure_domain_paths("fatigue")
+    domain = _domain(tmp_path)
+
+    write_domain_env(domain, settings, paths)
+    env_text = paths.env_file.read_text(encoding="utf-8")
+
+    assert "TOP_K=24" in env_text
+    assert "CHUNK_TOP_K=12" in env_text
+    assert "CHUNK_RERANK_TOP_K=8" in env_text
+    assert "MAX_TOKEN_TEXT_CHUNK=2048" in env_text
+    assert "MAX_TOKEN_RELATION_DESC=1536" in env_text
+    assert "MAX_TOKEN_ENTITY_DESC=1024" in env_text
 
 
 def test_domain_env_does_not_use_app_runtime_postgres_credentials(tmp_path: Path) -> None:

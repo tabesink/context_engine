@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
 
-from app.domain.models import DocumentStatus, JobStatus, UserRole, utc_now
+from app.domain.models import DocumentStatus, JobStatus, OperationResourceType, UserRole, utc_now
 from app.storage.db import Base
 
 
@@ -47,6 +47,19 @@ class LightRAGDomainLifecycleRow(Base):
 
     domain_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     state: Mapped[str] = mapped_column(String(32), default="active", index=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    meta: Mapped[dict] = mapped_column("metadata", json_type(), default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class LightRAGDomainRow(Base):
+    __tablename__ = "lightrag_domains"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    display_name: Mapped[str] = mapped_column(String(255), default="")
+    state: Mapped[str] = mapped_column(String(32), default="active", index=True)
+    health_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     meta: Mapped[dict] = mapped_column("metadata", json_type(), default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
@@ -138,6 +151,17 @@ class JobRow(Base):
     kind: Mapped[str] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(32), default=JobStatus.QUEUED.value)
     document_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("documents.id"), nullable=True)
+    resource_type: Mapped[str | None] = mapped_column(
+        String(32), nullable=True, default=OperationResourceType.SYSTEM.value
+    )
+    resource_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    requested_by_user_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("users.id"), nullable=True
+    )
+    progress_current: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    progress_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     meta: Mapped[dict] = mapped_column("metadata", json_type(), default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)

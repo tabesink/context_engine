@@ -1,7 +1,8 @@
+from app.document_processing.models import DocumentAsset, DocumentStructure, SourceChunk
 from app.domain.models import Evidence
 from app.schemas.retrieval import AssetResponse
+from app.services.asset_urls import document_asset_thumbnail_url, document_asset_url
 from app.storage.repositories.document_processing import DocumentProcessingRepository
-from app.document_processing.models import DocumentAsset, DocumentStructure, SourceChunk
 
 
 class RetrievalAssetResolver:
@@ -46,9 +47,11 @@ class RetrievalAssetResolver:
             if asset.asset_id in seen:
                 continue
             seen.add(asset.asset_id)
-            thumbnail_url = None
-            if include_thumbnails and asset.thumbnail_path:
-                thumbnail_url = f"/documents/{asset.document_id}/assets/{asset.asset_id}/thumbnail"
+            thumbnail_url = (
+                document_asset_thumbnail_url(asset.document_id, asset.asset_id)
+                if include_thumbnails and asset.thumbnail_path
+                else None
+            )
             responses.append(
                 AssetResponse(
                     asset_id=asset.asset_id,
@@ -56,7 +59,7 @@ class RetrievalAssetResolver:
                     asset_type=asset.asset_type,
                     caption=asset.caption,
                     page_number=asset.page_number,
-                    url=f"/documents/{asset.document_id}/assets/{asset.asset_id}",
+                    url=document_asset_url(asset.document_id, asset.asset_id),
                     thumbnail_url=thumbnail_url,
                 )
             )

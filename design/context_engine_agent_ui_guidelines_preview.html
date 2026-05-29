@@ -1,0 +1,1403 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Context Engine Agent UI — Design Guidelines + HTML Preview</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --canvas: #ffffff;
+      --surface: #fafafa;
+      --surface-2: #f5f5f5;
+      --surface-3: #eeeeee;
+      --text: #070707;
+      --text-soft: #3f4655;
+      --muted: #6b7280;
+      --subtle: #9ca3af;
+      --faint: #d1d5db;
+      --line: #e5e7eb;
+      --line-strong: #d7d7d7;
+      --black: #101114;
+      --green: #10b981;
+      --blue: #3b82f6;
+      --orange: #f59e0b;
+      --red: #ef4444;
+      --radius-control: 8px;
+      --radius-panel: 12px;
+      --radius-soft: 10px;
+      --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+      background: var(--bg);
+    }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 1px 1px, #eeeeee 1px, transparent 0) 0 0 / 20px 20px,
+        var(--bg);
+      font-family: var(--font-sans);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .page {
+      width: min(1180px, calc(100vw - 48px));
+      margin: 0 auto;
+      padding: 44px 0 72px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr);
+      gap: 32px;
+      align-items: end;
+      padding: 28px 0 42px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-family: var(--font-mono);
+      letter-spacing: .02em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--green);
+      display: inline-block;
+    }
+
+    h1 {
+      margin: 12px 0 12px;
+      font-size: clamp(38px, 5vw, 64px);
+      line-height: .96;
+      font-weight: 520;
+      letter-spacing: -.045em;
+    }
+
+    h2 {
+      margin: 0 0 8px;
+      font-size: 22px;
+      line-height: 1.15;
+      font-weight: 560;
+      letter-spacing: -.02em;
+    }
+
+    h3 {
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.2;
+      font-weight: 560;
+      letter-spacing: -.015em;
+    }
+
+    p {
+      margin: 0;
+      color: var(--text-soft);
+    }
+
+    .hero p {
+      max-width: 690px;
+      font-size: 17px;
+      line-height: 1.65;
+      color: #4b5563;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 22px;
+    }
+
+    .btn {
+      appearance: none;
+      border: 1px solid transparent;
+      border-radius: var(--radius-control);
+      padding: 9px 14px;
+      background: var(--surface-2);
+      color: var(--text);
+      font: 520 13px/1 var(--font-sans);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: default;
+      white-space: nowrap;
+    }
+
+    .btn.dark {
+      background: var(--black);
+      color: #ffffff;
+      border-color: var(--black);
+    }
+
+    .btn.ghost {
+      background: #ffffff;
+      border-color: var(--line);
+      color: var(--text-soft);
+    }
+
+    .btn.small {
+      padding: 7px 11px;
+      font-size: 12px;
+    }
+
+    .mini-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-panel);
+      background: rgba(255,255,255,.92);
+      padding: 18px;
+    }
+
+    .mini-card .rule {
+      display: grid;
+      grid-template-columns: 118px 1fr;
+      gap: 14px;
+      padding: 9px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .mini-card .rule:last-child {
+      border-bottom: 0;
+    }
+
+    .rule-key {
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+
+    .rule-value {
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    .section {
+      margin-top: 18px;
+      padding-top: 18px;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 16px;
+      margin: 30px 0 14px;
+    }
+
+    .section-head p {
+      max-width: 700px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .guideline-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .guideline {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-panel);
+      background: rgba(255,255,255,.94);
+      padding: 16px;
+      min-height: 154px;
+    }
+
+    .guideline .num {
+      width: 24px;
+      height: 24px;
+      border-radius: 7px;
+      display: grid;
+      place-items: center;
+      margin-bottom: 16px;
+      color: #ffffff;
+      background: var(--black);
+      font-size: 12px;
+      font-family: var(--font-mono);
+    }
+
+    .guideline p {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    .swatches {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 14px;
+    }
+
+    .swatch {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: var(--radius-control);
+      padding: 6px 8px;
+      font-size: 11px;
+      color: var(--muted);
+      font-family: var(--font-mono);
+    }
+
+    .swatch i {
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      display: inline-block;
+      border: 1px solid #d6d6d6;
+    }
+
+    .preview-frame {
+      background: var(--canvas);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-panel);
+      overflow: hidden;
+      margin: 14px 0 22px;
+    }
+
+    .preview-toolbar {
+      height: 42px;
+      border-bottom: 1px solid var(--line);
+      background: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 14px;
+      color: var(--muted);
+      font-size: 12px;
+      font-family: var(--font-mono);
+    }
+
+    .preview-toolbar .chips {
+      display: flex;
+      gap: 6px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: var(--radius-control);
+      padding: 5px 8px;
+      background: var(--surface-2);
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .chip strong {
+      color: var(--text);
+      font-weight: 560;
+    }
+
+    .agent-screen {
+      position: relative;
+      min-height: 650px;
+      background: #ffffff;
+      padding: 58px 72px;
+    }
+
+    .agent-screen.compact {
+      min-height: 610px;
+      padding: 46px 52px;
+    }
+
+    .screen-title {
+      display: flex;
+      align-items: flex-start;
+      gap: 13px;
+      margin-bottom: 34px;
+    }
+
+    .icon {
+      width: 18px;
+      height: 18px;
+      display: inline-grid;
+      place-items: center;
+      color: var(--muted);
+      font-size: 15px;
+      flex: 0 0 auto;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .mono {
+      font-family: var(--font-mono);
+    }
+
+    .tiny {
+      font-size: 11px;
+    }
+
+    .step-layout {
+      display: grid;
+      grid-template-columns: 210px minmax(0, 1fr);
+      gap: 42px;
+      min-height: 430px;
+    }
+
+    .step-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      color: var(--subtle);
+    }
+
+    .step-item {
+      display: grid;
+      grid-template-columns: 22px minmax(0, 1fr) 12px;
+      gap: 10px;
+      align-items: center;
+      min-height: 48px;
+      padding: 8px 10px;
+      border-radius: var(--radius-control);
+      border: 1px solid transparent;
+    }
+
+    .step-item.active {
+      background: var(--surface-2);
+      color: var(--text);
+    }
+
+    .step-marker {
+      width: 20px;
+      height: 20px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      font-size: 11px;
+      color: var(--subtle);
+      border: 1px solid var(--faint);
+      font-weight: 560;
+    }
+
+    .step-item.done .step-marker {
+      border-color: var(--green);
+      background: var(--green);
+      color: #fff;
+    }
+
+    .step-item.active .step-marker {
+      border-color: var(--black);
+      background: var(--black);
+      color: #fff;
+    }
+
+    .step-item.done .step-label {
+      text-decoration: line-through;
+      color: var(--muted);
+    }
+
+    .step-label {
+      font-size: 13px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .step-time {
+      display: block;
+      margin-top: 1px;
+      font-size: 10px;
+      color: var(--subtle);
+      font-family: var(--font-mono);
+    }
+
+    .detail-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-start;
+      margin-bottom: 26px;
+    }
+
+    .badges {
+      display: flex;
+      gap: 7px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-top: 7px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      border-radius: var(--radius-control);
+      padding: 4px 8px;
+      background: var(--surface-2);
+      color: var(--text-soft);
+      font-size: 11px;
+      font-family: var(--font-sans);
+    }
+
+    .badge.dot::before,
+    .legend-dot {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      display: inline-block;
+      background: var(--faint);
+    }
+
+    .badge.red::before { background: var(--red); }
+    .badge.green::before { background: var(--green); }
+    .badge.blue::before { background: var(--blue); }
+    .badge.orange::before { background: var(--orange); }
+
+    .copy-block {
+      border-radius: var(--radius-control);
+      background: var(--surface-2);
+      padding: 12px 14px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.7;
+      color: #111827;
+      margin: 8px 0 16px;
+      overflow-x: auto;
+    }
+
+    .label {
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      font-family: var(--font-mono);
+      margin: 18px 0 8px;
+    }
+
+    ul.clean {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    ul.clean li {
+      position: relative;
+      padding-left: 14px;
+      margin: 4px 0;
+    }
+
+    ul.clean li::before {
+      content: "";
+      width: 4px;
+      height: 4px;
+      border-radius: 999px;
+      background: var(--faint);
+      position: absolute;
+      left: 0;
+      top: 10px;
+    }
+
+    .screen-footer {
+      position: absolute;
+      left: 72px;
+      right: 72px;
+      bottom: 22px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--text-soft);
+      font-size: 13px;
+    }
+
+    .queue-screen {
+      position: relative;
+      padding: 58px 82px 72px;
+      min-height: 760px;
+      background:
+        radial-gradient(circle at 1px 1px, #eeeeee 1px, transparent 0) 0 0 / 18px 18px,
+        #ffffff;
+    }
+
+    .queue-card {
+      background: rgba(255,255,255,.92);
+      border-radius: var(--radius-panel);
+      padding: 0 24px 18px;
+    }
+
+    .queue-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 18px;
+    }
+
+    .queue-rule {
+      height: 4px;
+      width: 100%;
+      background: var(--surface-3);
+      border-radius: 999px;
+      overflow: hidden;
+      margin: 14px 0 20px;
+    }
+
+    .queue-rule span {
+      display: block;
+      height: 100%;
+      width: 30%;
+      background: var(--black);
+      border-radius: 999px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th {
+      text-align: left;
+      font-size: 12px;
+      font-weight: 560;
+      padding: 12px 8px;
+      color: var(--text);
+    }
+
+    td {
+      padding: 12px 8px;
+      vertical-align: middle;
+      color: var(--text-soft);
+      font-size: 13px;
+    }
+
+    .task-cell {
+      display: grid;
+      grid-template-columns: 20px 1fr;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .task-title {
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.25;
+    }
+
+    .task-title.done {
+      color: var(--muted);
+      text-decoration: line-through;
+    }
+
+    .task-path {
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      margin-top: 2px;
+    }
+
+    .status-mark {
+      width: 13px;
+      height: 13px;
+      border: 1px solid var(--faint);
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      color: var(--green);
+      font-size: 12px;
+    }
+
+    .status-mark.running {
+      border-color: #93c5fd;
+      border-left-color: var(--blue);
+    }
+
+    .status-mark.paused {
+      border-color: var(--orange);
+      color: var(--orange);
+    }
+
+    .legend {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .legend span {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .floating-toolbar {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 1px;
+      padding: 8px;
+      background: rgba(255,255,255,.96);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-panel);
+      box-shadow: 0 12px 28px rgba(17, 24, 39, .08);
+    }
+
+    .tool-segment {
+      padding: 5px 9px;
+      border-right: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12px;
+      color: var(--text);
+    }
+
+    .tool-segment:last-child { border-right: 0; }
+
+    .playground {
+      display: grid;
+      grid-template-columns: minmax(0, .9fr) minmax(380px, 1.05fr);
+      gap: 64px;
+      padding: 52px;
+      min-height: 600px;
+      background: #ffffff;
+    }
+
+    .field-row {
+      display: grid;
+      grid-template-columns: 80px 1fr 44px;
+      gap: 10px;
+      align-items: center;
+      margin: 28px 0 18px;
+    }
+
+    .field-label {
+      font-size: 10px;
+      letter-spacing: .08em;
+      font-family: var(--font-mono);
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    .select-line {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      min-height: 36px;
+      padding: 0 10px;
+      border-bottom: 1px solid var(--line);
+      color: var(--text);
+    }
+
+    .range-row {
+      display: grid;
+      grid-template-columns: 80px 1fr 34px;
+      gap: 10px;
+      align-items: center;
+      margin: 16px 0;
+      color: var(--text-soft);
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--black);
+    }
+
+    .text-area-plain {
+      min-height: 82px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 14px;
+      line-height: 1.45;
+      margin: 10px 0 34px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 24px;
+      margin-bottom: 20px;
+      align-items: center;
+    }
+
+    .tab {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .tab.active {
+      color: var(--text);
+      font-weight: 560;
+    }
+
+    .code-pane {
+      position: relative;
+      font-family: var(--font-mono);
+      color: #344054;
+      font-size: 12px;
+      line-height: 1.75;
+      white-space: pre;
+      overflow-x: auto;
+      padding-bottom: 20px;
+    }
+
+    .copy-action {
+      position: absolute;
+      right: 18px;
+      top: 52px;
+      font-size: 12px;
+      color: var(--text);
+      font-weight: 560;
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .fake-scroll {
+      width: 76%;
+      height: 10px;
+      margin-top: 12px;
+      background: linear-gradient(90deg, #d1d5db 0 3%, #858585 3% 55%, #f3f4f6 55% 100%);
+      border-radius: 999px;
+    }
+
+    .pipeline-screen {
+      position: relative;
+      padding: 48px 32px 78px;
+      min-height: 690px;
+      background: #ffffff;
+    }
+
+    .pipeline-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 34px;
+    }
+
+    .metrics {
+      display: flex;
+      gap: 12px;
+      color: var(--text-soft);
+      align-items: center;
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+
+    .pipeline-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 28px;
+    }
+
+    .stage {
+      min-height: 320px;
+    }
+
+    .stage-head {
+      display: grid;
+      grid-template-columns: 18px 1fr 18px;
+      gap: 10px;
+      align-items: start;
+      margin-bottom: 26px;
+    }
+
+    .stage-icon {
+      color: var(--green);
+      font-size: 15px;
+    }
+
+    .stage h3 {
+      font-size: 13px;
+    }
+
+    .stage small {
+      display: block;
+      color: var(--muted);
+      margin-top: 2px;
+      font-size: 11px;
+    }
+
+    .work-item {
+      position: relative;
+      padding: 10px 12px 10px 18px;
+      border-radius: var(--radius-control);
+      margin-bottom: 16px;
+      color: var(--muted);
+      min-height: 58px;
+    }
+
+    .work-item::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      position: absolute;
+      left: 2px;
+      top: 16px;
+      background: var(--faint);
+    }
+
+    .work-item.done::before,
+    .work-item.current::before {
+      background: var(--green);
+    }
+
+    .work-item.running::before {
+      background: var(--blue);
+    }
+
+    .work-item.current {
+      border: 1px solid var(--line-strong);
+      background: var(--surface);
+      color: var(--text);
+    }
+
+    .work-item h4 {
+      margin: 0 0 4px;
+      font-size: 13px;
+      line-height: 1.2;
+      color: inherit;
+      font-weight: 560;
+    }
+
+    .work-item p {
+      font-size: 10px;
+      line-height: 1.4;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tool-pill {
+      display: inline-flex;
+      gap: 5px;
+      align-items: center;
+      padding: 4px 8px;
+      margin-top: 9px;
+      border-radius: var(--radius-control);
+      background: var(--surface-2);
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 10px;
+    }
+
+    .pipeline-detail {
+      margin-top: 30px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .output-block {
+      margin-top: 26px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text);
+      line-height: 1.8;
+    }
+
+    .footer-status {
+      position: absolute;
+      left: 32px;
+      right: 32px;
+      bottom: 22px;
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .agent-notes {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .note {
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: var(--radius-panel);
+      padding: 14px 16px;
+    }
+
+    .note code {
+      display: inline-block;
+      background: var(--surface-2);
+      border-radius: 6px;
+      padding: 2px 5px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+
+    @media (max-width: 960px) {
+      .page { width: min(100vw - 28px, 780px); }
+      .hero, .playground, .step-layout, .agent-notes { grid-template-columns: 1fr; }
+      .guideline-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .agent-screen, .agent-screen.compact, .queue-screen, .playground, .pipeline-screen { padding: 28px; }
+      .screen-footer, .footer-status { position: static; margin-top: 24px; }
+      .pipeline-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .floating-toolbar { position: static; transform: none; margin: 24px auto 0; width: max-content; }
+    }
+
+    @media (max-width: 640px) {
+      .guideline-grid, .pipeline-grid { grid-template-columns: 1fr; }
+      .preview-toolbar { height: auto; padding: 10px; align-items: flex-start; gap: 10px; flex-direction: column; }
+      .queue-screen { padding: 20px 8px; }
+      th:nth-child(4), td:nth-child(4), th:nth-child(5), td:nth-child(5) { display: none; }
+      .agent-screen, .agent-screen.compact, .playground, .pipeline-screen { padding: 22px; }
+      h1 { font-size: 38px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div>
+        <span class="eyebrow"><span class="dot"></span> Context Engine · Agent UI direction</span>
+        <h1>Minimal agent console with md-rounded controls.</h1>
+        <p>
+          This preview translates the attached screenshots into a reusable UI vocabulary for the coding agent:
+          sparse white canvas, compact task typography, subtle monochrome surfaces, small semantic dots,
+          and medium-rounded controls instead of full pills.
+        </p>
+        <div class="hero-actions">
+          <a class="btn dark" href="#screens">View HTML mockups</a>
+          <a class="btn ghost" href="#guidelines">Read guidelines</a>
+          <span class="btn">Radius: md · 8px</span>
+        </div>
+      </div>
+      <aside class="mini-card">
+        <div class="rule">
+          <div class="rule-key">Mood</div>
+          <div class="rule-value">Developer-native, quiet, task-oriented, low decoration.</div>
+        </div>
+        <div class="rule">
+          <div class="rule-key">Canvas</div>
+          <div class="rule-value">White workspace with optional faint dotted grid only on queue/workbench screens.</div>
+        </div>
+        <div class="rule">
+          <div class="rule-key">Controls</div>
+          <div class="rule-value">No pill buttons. Use md rounded 8px buttons, chips, fields, tabs, and menu segments.</div>
+        </div>
+        <div class="rule">
+          <div class="rule-key">Feedback</div>
+          <div class="rule-value">Use tiny status dots and understated badges, not colorful banners.</div>
+        </div>
+      </aside>
+    </section>
+
+    <section id="guidelines" class="section">
+      <div class="section-head">
+        <div>
+          <h2>Design guidelines recreated from the reference images</h2>
+          <p>Use these as direct instructions for the coding agent when building Context Engine surfaces.</p>
+        </div>
+        <span class="chip"><strong>control radius</strong> 8px</span>
+      </div>
+
+      <div class="guideline-grid">
+        <article class="guideline">
+          <div class="num">01</div>
+          <h3>Canvas-first layout</h3>
+          <p>Use large white work areas with no heavy containers. Let task lists, code panes, and workflow columns float in whitespace.</p>
+          <div class="swatches">
+            <span class="swatch"><i style="background:#fff"></i>#fff</span>
+            <span class="swatch"><i style="background:#fafafa"></i>#fafafa</span>
+          </div>
+        </article>
+        <article class="guideline">
+          <div class="num">02</div>
+          <h3>Medium radius, not pill</h3>
+          <p>Buttons, fields, chips, rows, tabs, and toolbar segments should use 8px radius. Cards can use 12px.</p>
+          <div class="swatches">
+            <span class="swatch">controls 8px</span>
+            <span class="swatch">panels 12px</span>
+          </div>
+        </article>
+        <article class="guideline">
+          <div class="num">03</div>
+          <h3>Compact task typography</h3>
+          <p>Use 13–14px task labels, 10–12px mono metadata, and tight vertical rhythm. Avoid large form chrome.</p>
+          <div class="swatches">
+            <span class="swatch">13px UI</span>
+            <span class="swatch">mono metadata</span>
+          </div>
+        </article>
+        <article class="guideline">
+          <div class="num">04</div>
+          <h3>Status as small signals</h3>
+          <p>Use tiny green, blue, orange, red dots for done, running, paused, and risk. Never use full-width alert color blocks.</p>
+          <div class="swatches">
+            <span class="swatch"><i style="background:#10b981"></i>done</span>
+            <span class="swatch"><i style="background:#3b82f6"></i>run</span>
+            <span class="swatch"><i style="background:#f59e0b"></i>pause</span>
+          </div>
+        </article>
+      </div>
+
+      <div class="agent-notes">
+        <div class="note">
+          <h3>Component grammar</h3>
+          <p>
+            Prefer <code>plain panels</code>, <code>task tables</code>, <code>step rails</code>, <code>workflow columns</code>,
+            <code>code panes</code>, and <code>floating toolbars</code>. Keep borders to 1px and shadows off except for
+            the bottom tool palette.
+          </p>
+        </div>
+        <div class="note">
+          <h3>What changed from the earlier preview</h3>
+          <p>
+            This version moves away from the Ollama-style full pill language. The new look follows the attached
+            agent-workbench references: square enough to feel technical, still soft enough to feel modern.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section id="screens" class="section">
+      <div class="section-head">
+        <div>
+          <h2>HTML mockups using the recreated style</h2>
+          <p>These are standalone UI references the coding agent can inspect and translate into shadcn/Tailwind components.</p>
+        </div>
+        <span class="chip"><strong>mode</strong> preview</span>
+      </div>
+
+      <div class="preview-frame">
+        <div class="preview-toolbar">
+          <span>01 · Execution plan detail</span>
+          <span class="chips"><span class="chip">2/5 steps</span><span class="chip">~18 min left</span></span>
+        </div>
+        <div class="agent-screen">
+          <div class="screen-title">
+            <span class="icon">▧</span>
+            <div>
+              <h3>Execution Plan</h3>
+              <p class="tiny">Migrate authentication to JWT</p>
+            </div>
+          </div>
+
+          <div class="step-layout">
+            <aside class="step-list">
+              <div class="step-item done">
+                <span class="step-marker">✓</span>
+                <div><span class="step-label">Audit current auth flow</span><span class="step-time">2 min</span></div>
+                <span></span>
+              </div>
+              <div class="step-item done">
+                <span class="step-marker">✓</span>
+                <div><span class="step-label">Create JWT utility module</span><span class="step-time">5 min</span></div>
+                <span></span>
+              </div>
+              <div class="step-item active">
+                <span class="step-marker">3</span>
+                <div><span class="step-label">Migrate user sessions t...</span><span class="step-time">8 min</span></div>
+                <span class="muted">›</span>
+              </div>
+              <div class="step-item">
+                <span class="step-marker">4</span>
+                <div><span class="step-label">Refactor route middleware</span><span class="step-time">4 min</span></div>
+                <span></span>
+              </div>
+              <div class="step-item">
+                <span class="step-marker">5</span>
+                <div><span class="step-label">Write tests and validate</span><span class="step-time">6 min</span></div>
+                <span></span>
+              </div>
+              <div style="margin-top:20px; display:flex; gap:8px; align-items:center; color:var(--muted); font-size:12px;">
+                <span>◷</span><span>Total: ~25 min</span>
+              </div>
+            </aside>
+
+            <section>
+              <div class="detail-head">
+                <div>
+                  <h2 style="font-size:16px;">Migrate user sessions to JWT</h2>
+                  <div class="badges">
+                    <span class="badge">◷ 8 min</span>
+                    <span class="badge dot red">High Risk</span>
+                  </div>
+                </div>
+                <button class="btn ghost small">Mark complete</button>
+              </div>
+              <p style="font-size:14px; line-height:1.75; max-width:680px;">
+                Replace express-session with stateless JWT authentication. Update the login endpoint to return
+                access and refresh tokens instead of setting session cookies. Modify the logout endpoint to add
+                tokens to a Redis denylist. Handle concurrent session invalidation.
+              </p>
+
+              <div class="label">Dependencies</div>
+              <div class="badges">
+                <span class="badge dot green">Audit current auth flow</span>
+                <span class="badge dot green">Create JWT utility module</span>
+              </div>
+
+              <div class="label">Commands</div>
+              <div class="copy-block">$ npm remove express-session connect-redis<br>$ npm install jsonwebtoken @types/jsonwebtoken</div>
+
+              <div class="label">Expected outputs</div>
+              <ul class="clean">
+                <li>Updated POST /api/auth/login returning JWT pair</li>
+                <li>Updated POST /api/auth/logout with token denylist</li>
+                <li>Redis denylist integration for revoked tokens</li>
+              </ul>
+            </section>
+          </div>
+
+          <div class="screen-footer">
+            <span>2 of 5 steps complete</span>
+            <div style="display:flex; gap:18px;"><span>↻ Reset</span><strong style="color:var(--text)">▷ Execute Plan</strong></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="preview-frame">
+        <div class="preview-toolbar">
+          <span>02 · Task queue table</span>
+          <span class="chips"><span class="chip"><span class="legend-dot" style="background:var(--blue)"></span>2 running</span><span class="chip">30%</span></span>
+        </div>
+        <div class="queue-screen">
+          <div class="queue-card">
+            <div class="queue-top">
+              <div class="screen-title" style="margin:0;">
+                <span class="icon">⊙</span>
+                <div>
+                  <h3>Task Queue</h3>
+                  <p class="tiny">10 tasks across 2 agents</p>
+                </div>
+              </div>
+              <div class="legend">
+                <span><i class="legend-dot" style="background:var(--blue)"></i>2 running</span>
+                <span><i class="legend-dot"></i>4 queued</span>
+                <span><i class="legend-dot" style="background:var(--orange)"></i>1 paused</span>
+                <span class="chip"><strong>30%</strong></span>
+              </div>
+            </div>
+            <div class="queue-rule"><span></span></div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:56%">Task</th>
+                  <th>Priority ↓</th>
+                  <th>Status ↕</th>
+                  <th>Agent ↕</th>
+                  <th>Est. ↕</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><div class="task-cell"><span class="status-mark">✓</span><div><div class="task-title done">Update OpenAPI specification</div><div class="task-path">docs/openapi.yaml</div></div></div></td>
+                  <td><span class="badge dot">Low</span></td><td><span class="badge dot green">Done</span></td><td>Beta</td><td>~1 min</td>
+                </tr>
+                <tr>
+                  <td><div class="task-cell"><span class="status-mark">✓</span><div><div class="task-title done">Remove deprecated v1 API routes</div><div class="task-path">src/routes/v1/*</div></div></div></td>
+                  <td><span class="badge dot">Low</span></td><td><span class="badge dot green">Done</span></td><td>Beta</td><td>~2 min</td>
+                </tr>
+                <tr>
+                  <td><div class="task-cell"><span class="status-mark"></span><div><div class="task-title">Add input validation to user endpoints</div><div class="task-path">POST /api/users/*</div></div></div></td>
+                  <td><span class="badge dot blue">Medium</span></td><td><span class="badge dot">Queued</span></td><td>Beta</td><td>~2 min</td>
+                </tr>
+                <tr>
+                  <td><div class="task-cell"><span class="status-mark paused">Ⅱ</span><div><div class="task-title">Write integration tests for auth flow</div><div class="task-path">tests/auth.test.ts</div></div></div></td>
+                  <td><span class="badge dot blue">Medium</span></td><td><span class="badge dot orange">Paused</span></td><td>Alpha</td><td>~4 min</td>
+                </tr>
+                <tr>
+                  <td><div class="task-cell"><span class="status-mark"></span><div><div class="task-title">Add structured logging with pino</div><div class="task-path">src/lib/logger.ts</div></div></div></td>
+                  <td><span class="badge dot blue">Medium</span></td><td><span class="badge dot">Queued</span></td><td>Alpha</td><td>~3 min</td>
+                </tr>
+                <tr>
+                  <td><div class="task-cell"><span class="status-mark running"></span><div><div class="task-title">Update API rate limiting middleware</div><div class="task-path">ALL /api/*</div></div></div></td>
+                  <td><span class="badge dot orange">High</span></td><td><span class="badge dot blue">Running</span></td><td>Beta</td><td>~2 min</td>
+                </tr>
+                <tr>
+                  <td><div class="task-cell"><span class="status-mark"></span><div><div class="task-title">Refactor database connection pooling</div><div class="task-path">src/lib/db.ts</div></div></div></td>
+                  <td><span class="badge dot orange">High</span></td><td><span class="badge dot">Queued</span></td><td>Alpha</td><td>~5 min</td>
+                </tr>
+                <tr>
+                  <td><div class="task-cell"><span class="status-mark">✓</span><div><div class="task-title done">Fix CORS configuration for staging</div><div class="task-path">src/middleware/cors.ts</div></div></div></td>
+                  <td><span class="badge dot orange">High</span></td><td><span class="badge dot green">Done</span></td><td>Alpha</td><td>~1 min</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="floating-toolbar">
+            <span class="tool-segment">◒ Default⌄</span>
+            <span class="tool-segment">☼ Light</span>
+            <span class="tool-segment">⌜ Radius⌄</span>
+            <span class="tool-segment">T Style⌄</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="preview-frame">
+        <div class="preview-toolbar">
+          <span>03 · API playground</span>
+          <span class="chips"><span class="chip">request</span><span class="chip">response</span><span class="chip">headers</span></span>
+        </div>
+        <div class="playground">
+          <section>
+            <h3>API Playground</h3>
+            <p class="tiny">Configure, test, and inspect AI API requests</p>
+
+            <div class="field-row">
+              <div class="field-label">Model</div>
+              <div class="select-line"><span>GPT-4o <span class="tiny muted">OpenAI</span></span><span class="muted">⌄</span></div>
+              <span></span>
+            </div>
+            <div class="tiny mono muted" style="margin-left:80px;">128k context&nbsp;&nbsp; OpenAI</div>
+
+            <div class="range-row">
+              <span class="field-label">Temp</span>
+              <input type="range" min="0" max="1" value="70" />
+              <span class="mono">0.7</span>
+            </div>
+            <div class="range-row">
+              <span class="field-label">Max tokens</span>
+              <input type="range" min="1" max="4096" value="1024" />
+              <span class="mono">1024</span>
+            </div>
+            <div class="range-row">
+              <span class="field-label">Top P</span>
+              <input type="range" min="0" max="1" value="100" />
+              <span class="mono">1.00</span>
+            </div>
+
+            <div class="label">System prompt</div>
+            <div class="text-area-plain">You are a senior software engineer. Give precise,
+technical answers with code examples when relevant.</div>
+
+            <div class="label">User message</div>
+            <div class="text-area-plain">Explain React Server Components and how they differ from
+Client Components. Include performance implications.</div>
+
+            <div style="display:flex; gap:12px; align-items:center;">
+              <button class="btn dark">▷ Send Request</button>
+              <span class="btn ghost">↻ Reset</span>
+            </div>
+          </section>
+
+          <section style="position:relative;">
+            <div class="tabs">
+              <span class="tab active">Request</span>
+              <span class="tab">Response</span>
+              <span class="tab">Headers</span>
+            </div>
+            <span class="copy-action">⧉ Copy</span>
+            <div class="code-pane">{
+  "model": "gpt-4o",
+  "temperature": 0.7,
+  "max_tokens": 1024,
+  "top_p": 1,
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a senior software engineer. Give precise answers."
+    },
+    {
+      "role": "user",
+      "content": "Explain React Server Components and how they differ..."
+    }
+  ]
+}</div>
+            <div class="fake-scroll"></div>
+          </section>
+        </div>
+      </div>
+
+      <div class="preview-frame">
+        <div class="preview-toolbar">
+          <span>04 · Agent workflow pipeline</span>
+          <span class="chips"><span class="chip">4 stages</span><span class="chip">11 steps</span><span class="chip">36%</span></span>
+        </div>
+        <div class="pipeline-screen">
+          <div class="pipeline-head">
+            <div>
+              <h3>Agent Workflow Pipeline</h3>
+              <p class="tiny">Refactoring authentication module · JWT to session tokens</p>
+            </div>
+            <div class="metrics">
+              <span style="color:var(--green)">⊙ 4</span>
+              <span style="color:var(--blue)">◌ 1</span>
+              <span>4/11</span>
+            </div>
+          </div>
+
+          <div class="pipeline-grid">
+            <section class="stage">
+              <div class="stage-head"><span class="stage-icon">⌕</span><div><h3 style="color:var(--green)">Plan</h3><small>Analyze requirements</small></div><span style="color:var(--green)">⊙</span></div>
+              <div class="work-item done"><h4>Parse user intent</h4><p>Extract key requirements from the prompt</p><span class="tool-pill">›_ intent_parser</span></div>
+              <div class="work-item done"><h4>Search codebase</h4><p>Find relevant files and dependencies</p><span class="tool-pill">⌕ code_search</span></div>
+              <div class="work-item done"><h4>Build dependency graph</h4><p>Map file relationships and import chains</p><span class="tool-pill">◷ 1.3s</span></div>
+            </section>
+
+            <section class="stage">
+              <div class="stage-head"><span class="stage-icon" style="color:var(--blue)">‹›</span><div><h3 style="color:var(--blue)">Execute</h3><small>Apply code changes</small></div><span style="color:var(--blue)">◌</span></div>
+              <div class="work-item current"><h4>Generate migration</h4><p>Create schema and token migration scripts</p><span class="tool-pill">‹› code_generator</span> <span class="tool-pill">◷ 3.2s</span></div>
+              <div class="work-item running"><h4>Update auth middleware</h4><p>Replace JWT verification with session lookup</p><span class="tool-pill">✐ file_editor</span></div>
+              <div class="work-item"><h4>Patch API consumers</h4><p>Update 8 downstream services with new contract</p></div>
+            </section>
+
+            <section class="stage">
+              <div class="stage-head"><span class="stage-icon" style="color:var(--muted)">▱</span><div><h3>Validate</h3><small>Run tests and checks</small></div><span></span></div>
+              <div class="work-item"><h4>Unit tests</h4><p>Run auth module test suite</p><span class="tool-pill">▱ test_runner</span></div>
+              <div class="work-item"><h4>Integration tests</h4><p>Verify cross-service auth flow</p></div>
+              <div class="work-item"><h4>Security audit</h4><p>Check for token exposure and OWASP concerns</p><span class="tool-pill">♢ security_scanner</span></div>
+            </section>
+
+            <section class="stage">
+              <div class="stage-head"><span class="stage-icon" style="color:var(--muted)">♢</span><div><h3>Deploy</h3><small>Ship to production</small></div><span></span></div>
+              <div class="work-item"><h4>Create pull request</h4><p>Open PR with migration notes and changelog</p></div>
+              <div class="work-item"><h4>Run CI pipeline</h4><p>Build, lint, and test in CI environment</p></div>
+            </section>
+          </div>
+
+          <div class="pipeline-detail">
+            <div>
+              <h3><span class="legend-dot" style="background:var(--green); margin-right:8px;"></span>Generate migration <span class="badge dot green" style="margin-left:8px;">Done</span></h3>
+              <p style="margin-top:10px;">Create schema and token migration scripts</p>
+              <div class="label">Output</div>
+              <div class="output-block">Generated 4 migration files, 2 new endpoints<br><br>‹› code_generator · <span style="color:var(--green)">Succeeded</span> · 2.8s</div>
+            </div>
+            <strong style="font-size:13px; margin-top:166px;">Dismiss</strong>
+          </div>
+
+          <div class="footer-status">
+            <span>4 stages · 11 steps · 36% complete</span>
+            <span><i class="legend-dot" style="background:var(--blue); margin-right:6px;"></i>In progress</span>
+          </div>
+
+          <div class="floating-toolbar">
+            <span class="tool-segment">◒ Default⌄</span>
+            <span class="tool-segment">☼ Light</span>
+            <span class="tool-segment">⌜ Radius⌄</span>
+            <span class="tool-segment">T Style⌄</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

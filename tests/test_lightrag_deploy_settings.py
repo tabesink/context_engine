@@ -64,6 +64,12 @@ def test_env_example_declares_lightrag_deployment_settings() -> None:
         "LIGHTRAG_OPENAI_LLM_MAX_COMPLETION_TOKENS",
         "LIGHTRAG_OPENAI_LLM_TEMPERATURE",
         "LIGHTRAG_OPENAI_LLM_EXTRA_BODY",
+        "LIGHTRAG_DEFAULT_TOP_K",
+        "LIGHTRAG_DEFAULT_CHUNK_TOP_K",
+        "LIGHTRAG_DEFAULT_CHUNK_RERANK_TOP_K",
+        "LIGHTRAG_DEFAULT_MAX_TOKEN_FOR_TEXT_UNIT",
+        "LIGHTRAG_DEFAULT_MAX_TOKEN_FOR_GLOBAL_CONTEXT",
+        "LIGHTRAG_DEFAULT_MAX_TOKEN_FOR_LOCAL_CONTEXT",
     ]:
         assert f"{key}=" in env_examples
 
@@ -119,6 +125,12 @@ def test_settings_parse_lightrag_deployment_fields(tmp_path: Path) -> None:
         lightrag_openai_llm_max_completion_tokens=1200,
         lightrag_openai_llm_temperature=0.2,
         lightrag_openai_llm_extra_body='{"top_p":0.95}',
+        lightrag_default_top_k=24,
+        lightrag_default_chunk_top_k=12,
+        lightrag_default_chunk_rerank_top_k=8,
+        lightrag_default_max_token_for_text_unit=2048,
+        lightrag_default_max_token_for_global_context=1536,
+        lightrag_default_max_token_for_local_context=1024,
     )
 
     deploy = LightRAGDeploySettings.from_app_settings(settings)
@@ -164,6 +176,12 @@ def test_settings_parse_lightrag_deployment_fields(tmp_path: Path) -> None:
     assert deploy.openai_llm_max_completion_tokens == 1200
     assert deploy.openai_llm_temperature == 0.2
     assert deploy.openai_llm_extra_body == '{"top_p":0.95}'
+    assert deploy.default_top_k == 24
+    assert deploy.default_chunk_top_k == 12
+    assert deploy.default_chunk_rerank_top_k == 8
+    assert deploy.default_max_token_for_text_unit == 2048
+    assert deploy.default_max_token_for_global_context == 1536
+    assert deploy.default_max_token_for_local_context == 1024
 
 
 def test_settings_default_to_internal_lightrag_build_paths() -> None:

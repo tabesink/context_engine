@@ -358,7 +358,7 @@ function SourceNavigatorTab({ sourceNavigator }: { sourceNavigator: SourceNaviga
 
   const context = sourceNavigator.context;
   const assetCards = (context.assets ?? []).map(assetCardFromWorkspaceAsset);
-  const { primaryFigure, tables, others } = splitAssetCards(assetCards);
+  const { primaryFigure, secondaryFigures, tables, others } = splitAssetCards(assetCards);
   const badges = [
     context.kind,
     context.page_number ? `Page ${context.page_number}` : null,
@@ -423,9 +423,12 @@ function SourceNavigatorTab({ sourceNavigator }: { sourceNavigator: SourceNaviga
       {primaryFigure ? (
         <section className="space-y-2">
           <h4 className="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
-            Figure
+            Figures
           </h4>
           <FigureCard asset={primaryFigure} density="spacious" />
+          {secondaryFigures.map((asset) => (
+            <FigureCard key={asset.id} asset={asset} density="compact" />
+          ))}
         </section>
       ) : null}
 

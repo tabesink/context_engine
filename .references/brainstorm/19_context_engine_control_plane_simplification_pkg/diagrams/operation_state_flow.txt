@@ -1,0 +1,51 @@
+OPERATION STATE FLOW
+====================
+
+Document ingestion:
+
+Upload document
+  │
+  ▼
+documents.status = uploaded
+  │
+  ▼
+create operation
+  resource_type = document
+  resource_id = document.id
+  status = queued
+  │
+  ▼
+worker starts
+  operation.status = running
+  documents.status = indexing
+  │
+  ├──────── success ────────► operation.status = succeeded
+  │                            documents.status = ready
+  │
+  └──────── failure ────────► operation.status = failed
+                               documents.status = failed
+                               documents.error_message = operation.error_message
+
+
+Domain start:
+
+Admin clicks Start
+  │
+  ▼
+create operation
+  resource_type = domain
+  resource_id = domain.id
+  operation_type = domain_start
+  status = queued
+  │
+  ▼
+service starts container
+  operation.status = running
+  lightrag_domains.state = starting
+  │
+  ├──────── health ok ──────► operation.status = succeeded
+  │                            lightrag_domains.state = running
+  │
+  └──────── failure ────────► operation.status = failed
+                               lightrag_domains.state = failed
+                               lightrag_domains.error_message = operation.error_message

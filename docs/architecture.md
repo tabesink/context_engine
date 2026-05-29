@@ -94,15 +94,16 @@ Admin API or TUI
   -> Docker Compose runner
 ```
 
-Deployment routes are disabled by default with `LIGHTRAG_DEPLOY_ENABLED=false`. When enabled, admins can create, list, show, regenerate, start, stop, recreate, archive, or explicitly permanently delete domains. Any authenticated user may call `GET /lightrag/domains` for a safe subset of domain metadata used to pick `lightrag_domain_id` on uploads and queries (admin mutating routes still require deploy mode on).
+Deployment routes are disabled by default with `LIGHTRAG_DEPLOY_ENABLED=false`. When enabled, admins can create, list, show, start, stop, and delete managed domains. Create writes configuration only; Start refreshes runtime artifacts, provisions storage, starts Docker, and probes health. Delete archives the generated domain files and preserves uploaded documents and parsed structure. Any authenticated user may call `GET /lightrag/domains` for a safe subset of domain metadata used to pick `lightrag_domain_id` on uploads and queries (admin mutating routes still require deploy mode on).
 
-Each managed domain lives under `.data/lightrag/domains/<domain>/`, gets one generated `domain.env`, and uses a LightRAG-owned PostgreSQL database such as `lightrag_manuals`. Domain removal archives data by default under `.data/lightrag/deleted/`.
+Each managed domain lives under `.data/lightrag/domains/<domain>/`, gets one generated `domain.env`, and uses a LightRAG-owned PostgreSQL database such as `lightrag_manuals`. Retrieval defaults are deployment settings written into `domain.env`, not domain manifest fields or create-form inputs.
 
 The generated `domain.env` now includes provider runtime wiring (when configured) for:
 
 - `LLM_BINDING`, `LLM_BINDING_HOST`, `LLM_BINDING_API_KEY`, `LLM_MODEL`
 - Optional `KEYWORD_LLM_MODEL`, `QUERY_LLM_MODEL`, `VLM_LLM_MODEL`
 - `EMBEDDING_BINDING`, `EMBEDDING_BINDING_HOST`, `EMBEDDING_BINDING_API_KEY`, `EMBEDDING_MODEL`, `EMBEDDING_DIM`, `EMBEDDING_TOKEN_LIMIT`, `EMBEDDING_SEND_DIM`, `EMBEDDING_USE_BASE64`
+- `TOP_K`, `CHUNK_TOP_K`, `CHUNK_RERANK_TOP_K`, `MAX_TOKEN_TEXT_CHUNK`, `MAX_TOKEN_RELATION_DESC`, `MAX_TOKEN_ENTITY_DESC`
 - Optional `OPENAI_LLM_MAX_TOKENS`, `OPENAI_LLM_MAX_COMPLETION_TOKENS`, `OPENAI_LLM_TEMPERATURE`, `OPENAI_LLM_EXTRA_BODY`
 
 For Bedrock OpenAI-compatible routing, the supported pattern is LightRAG `openai` binding + Bedrock OpenAI-compatible host URL (`https://bedrock-runtime.<region>.amazonaws.com/openai/v1`). This preserves LightRAG's OpenAI binding surface while targeting Bedrock.

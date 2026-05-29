@@ -1,0 +1,50 @@
+CURRENT
+=======
+
+users
+  └─ documents
+       ├─ status
+       ├─ lightrag_domain_id string
+       └─ document structure tables
+
+lightrag_domain_lifecycle
+  └─ state
+
+jobs
+  ├─ kind
+  ├─ status
+  └─ document_id only
+
+Problem:
+  Domain work must squeeze into document-centric jobs or metadata.
+  Domain identity is lifecycle-shaped instead of product-shaped.
+  Document structure has duplicate scalar and JSON relationships.
+
+
+TARGET
+======
+
+users
+  ├─ documents
+  ├─ operations requested_by_user_id
+  └─ provider settings attribution
+
+lightrag_domains
+  ├─ domain identity
+  ├─ lifecycle state
+  ├─ runtime health/config
+  └─ embedding/runtime constraints
+
+operations
+  ├─ operation_type
+  ├─ resource_type: document | domain | provider | system
+  ├─ resource_id
+  ├─ status
+  └─ progress/error/timestamps
+
+document read model
+  ├─ pages
+  ├─ sections parent_section_id
+  ├─ blocks section_id
+  ├─ chunks section_id + block_ids if many-to-many needed
+  └─ assets block_id/chunk_id

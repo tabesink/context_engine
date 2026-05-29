@@ -33,6 +33,21 @@ class JobStatus(StrEnum):
     CANCELED = "canceled"
 
 
+class OperationStatus(StrEnum):
+    QUEUED = JobStatus.QUEUED
+    RUNNING = JobStatus.RUNNING
+    SUCCEEDED = JobStatus.SUCCEEDED
+    FAILED = JobStatus.FAILED
+    CANCELED = JobStatus.CANCELED
+
+
+class OperationResourceType(StrEnum):
+    DOCUMENT = "document"
+    DOMAIN = "domain"
+    PROVIDER = "provider"
+    SYSTEM = "system"
+
+
 @dataclass(frozen=True)
 class User:
     id: UUID

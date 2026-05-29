@@ -32,7 +32,6 @@ from app.lightrag_deploy.models import (  # noqa: E402
     LightRAGDomain,
     LightRAGDomainCreateRequest,
     LightRAGDomainOperationResult,
-    LightRAGDomainRepairResult,
     LightRAGDomainRemoveResponse,
 )
 from app.lightrag_deploy.service import LightRAGDomainService  # noqa: E402
@@ -46,6 +45,7 @@ from app.storage.repositories.jobs import JobRepository  # noqa: E402
 from app.storage.repositories.lightrag_domain_lifecycle import (  # noqa: E402
     LightRAGDomainLifecycleRepository,
 )
+from app.storage.repositories.lightrag_domains import LightRAGDomainRepository  # noqa: E402
 from app.storage.repositories.documents import DocumentRepository  # noqa: E402
 from app.storage.repositories.logs import LogRepository  # noqa: E402
 from app.storage.repositories.users import UserRepository  # noqa: E402
@@ -522,6 +522,85 @@ def test_admin_list_endpoints_are_paginated() -> None:
         assert len(client.get("/jobs?limit=2", headers=admin_headers).json()) == 2
         assert len(client.get("/admin/audit-logs?limit=1", headers=admin_headers).json()) == 1
         assert len(client.get("/admin/query-logs?limit=1", headers=admin_headers).json()) == 1
+
+
+def test_admin_can_list_operations_compatible_with_jobs_table() -> None:
+    create_db_and_tables()
+    with SessionLocal() as session:
+        users = UserRepository(session)
+        admin = users.get_by_email("admin@example.com") or users.create(
+            email="admin@example.com", password="secret", role=UserRole.ADMIN
+        )
+        document = DocumentRepository(session).create(
+            owner_id=admin.id,
+            filename="operations-doc.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/operations-doc.txt",
+            metadata={},
+        )
+        JobRepository(session).create(
+            kind="document_ingest",
+            document_id=document.id,
+            resource_type="document",
+            resource_id=document.id,
+            requested_by_user_id=admin.id,
+            progress_current=1,
+            progress_total=4,
+        )
+
+    with TestClient(app) as client:
+        _seed_users()
+        admin_headers = _login(client, "admin@example.com")
+        response = client.get("/operations?resource_type=document&status=queued", headers=admin_headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["operation_type"] == "document_ingest"
+    assert payload[0]["resource_type"] == "document"
+    assert payload[0]["status"] == "queued"
+
+
+def test_admin_can_fetch_operation_by_id_without_breaking_jobs_response() -> None:
+    create_db_and_tables()
+    with SessionLocal() as session:
+        users = UserRepository(session)
+        admin = users.get_by_email("admin@example.com") or users.create(
+            email="admin@example.com", password="secret", role=UserRole.ADMIN
+        )
+        document = DocumentRepository(session).create(
+            owner_id=admin.id,
+            filename="operations-detail.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/operations-detail.txt",
+            metadata={},
+        )
+        job = JobRepository(session).create(
+            kind="document_ingest",
+            document_id=document.id,
+            resource_type="document",
+            resource_id=document.id,
+            requested_by_user_id=admin.id,
+        )
+        operation_id = job.id
+
+    with TestClient(app) as client:
+        _seed_users()
+        admin_headers = _login(client, "admin@example.com")
+        operation_response = client.get(f"/operations/{operation_id}", headers=admin_headers)
+        jobs_response = client.get(f"/jobs/{operation_id}", headers=admin_headers)
+
+    assert operation_response.status_code == 200
+    operation_body = operation_response.json()
+    assert operation_body["id"] == operation_id
+    assert operation_body["operation_type"] == "document_ingest"
+    assert operation_body["resource_id"] is not None
+
+    assert jobs_response.status_code == 200
+    jobs_body = jobs_response.json()
+    assert jobs_body["id"] == operation_id
+    assert jobs_body["kind"] == "document_ingest"
+    assert jobs_body["document_id"] == operation_body["resource_id"]
 
 
 def test_retrieve_requires_authentication() -> None:
@@ -2395,12 +2474,12 @@ def test_lightrag_domain_admin_api_requires_admin_and_enabled(
         user_headers = _login(client, "user@example.com")
 
         blocked = client.post(
-            "/admin/lightrag/domains",
+            "/admin/lightrag-domains",
             headers=user_headers,
             json={"domain_id": "fatigue"},
         )
         disabled = client.post(
-            "/admin/lightrag/domains",
+            "/admin/lightrag-domains",
             headers=admin_headers,
             json={"domain_id": "fatigue"},
         )
@@ -2427,14 +2506,14 @@ def test_lightrag_domain_admin_api_create_list_and_operate(
         admin_headers = _login(client, "admin@example.com")
 
         create = client.post(
-            "/admin/lightrag/domains",
+            "/admin/lightrag-domains",
             headers=admin_headers,
             json={"domain_id": "fatigue", "display_name": "Fatigue Manuals"},
         )
-        listing = client.get("/admin/lightrag/domains", headers=admin_headers)
-        detail = client.get("/admin/lightrag/domains/fatigue", headers=admin_headers)
+        listing = client.get("/admin/lightrag-domains", headers=admin_headers)
+        detail = client.get("/admin/lightrag-domains/fatigue", headers=admin_headers)
         regenerate = client.post(
-            "/admin/lightrag/domains/fatigue/regenerate",
+            "/admin/lightrag-domains/fatigue/regenerate",
             headers=admin_headers,
         )
 
@@ -2443,9 +2522,46 @@ def test_lightrag_domain_admin_api_create_list_and_operate(
     assert listing.status_code == 200
     assert listing.json()["domains"][0]["display_name"] == "Fatigue Manuals"
     assert detail.status_code == 200
-    assert detail.json()["service_name"] == "lightrag_fatigue"
-    assert regenerate.status_code == 200
-    assert regenerate.json() == {"status": "ok"}
+    assert detail.json()["metadata"]["service_name"] == "lightrag_fatigue"
+    assert regenerate.status_code == 404
+
+
+def test_first_class_lightrag_domains_admin_read_api() -> None:
+    create_db_and_tables()
+    with SessionLocal() as session:
+        repo = LightRAGDomainRepository(session)
+        repo.upsert(
+            domain_id="fatigue",
+            display_name="Fatigue Manuals",
+            state="running",
+            health_status="healthy",
+            metadata={"host_port": 9622},
+        )
+        repo.upsert(
+            domain_id="default",
+            display_name="Default Manuals",
+            state="stopped",
+            health_status="unhealthy",
+            metadata={"host_port": 9621},
+        )
+
+    with TestClient(app) as client:
+        _seed_users()
+        admin_headers = _login(client, "admin@example.com")
+        user_headers = _login(client, "user@example.com")
+        listing = client.get("/admin/lightrag-domains?limit=10&offset=0", headers=admin_headers)
+        detail = client.get("/admin/lightrag-domains/fatigue", headers=admin_headers)
+        forbidden = client.get("/admin/lightrag-domains", headers=user_headers)
+        missing = client.get("/admin/lightrag-domains/missing", headers=admin_headers)
+
+    assert listing.status_code == 200
+    assert len(listing.json()["domains"]) == 2
+    assert detail.status_code == 200
+    assert detail.json()["id"] == "fatigue"
+    assert detail.json()["state"] == "running"
+    assert detail.json()["metadata"]["host_port"] == 9622
+    assert forbidden.status_code == 403
+    assert missing.status_code == 404
 
 
 def test_lightrag_domain_admin_api_lifecycle_routes_remain_available() -> None:
@@ -2505,40 +2621,6 @@ def test_lightrag_domain_admin_api_lifecycle_routes_remain_available() -> None:
                 service_name=f"lightrag_{domain_id}",
             )
 
-        def recreate(self, domain_id: str) -> LightRAGDomainOperationResult:
-            domains[domain_id] = domain_payload(domain_id, status="running")
-            return LightRAGDomainOperationResult(
-                id=domain_id,
-                operation="recreate",
-                status="succeeded",
-                service_name=f"lightrag_{domain_id}",
-            )
-
-        def repair(self, domain_id: str) -> dict:
-            domains[domain_id] = domain_payload(domain_id, status="running")
-            return LightRAGDomainRepairResult(
-                id=domain_id,
-                domain_id=domain_id,
-                status="running",
-                service_name=f"lightrag_{domain_id}",
-                storage_backend="postgres",
-                postgres_database=f"lightrag_{domain_id}",
-                postgres_user=f"lightrag_{domain_id}",
-                postgres_role_exists=True,
-                postgres_database_exists=True,
-                extensions={"vector": {"name": "vector", "status": "ok", "message": None}},
-                host_base_url="http://127.0.0.1:9622",
-                container_base_url=f"http://lightrag_{domain_id}:9621",
-                runtime_base_url=f"http://lightrag_{domain_id}:9621",
-                docker_operation="succeeded",
-                health={"ok": True, "reason_code": None, "status_code": 200},
-                is_healthy=True,
-                message=None,
-            )
-
-        def regenerate(self, domain_id: str) -> None:
-            domains[domain_id] = domain_payload(domain_id, status="configured")
-
         def remove(self, domain_id: str, *, permanent: bool = False) -> LightRAGDomainRemoveResponse:
             domains.pop(domain_id, None)
             return LightRAGDomainRemoveResponse(
@@ -2555,37 +2637,104 @@ def test_lightrag_domain_admin_api_lifecycle_routes_remain_available() -> None:
             admin_headers = _login(client, "admin@example.com")
 
             create = client.post(
-                "/admin/lightrag/domains",
+                "/admin/lightrag-domains",
                 headers=admin_headers,
-                json={"domain_id": "fatigue", "display_name": "Fatigue Manuals", "start": True},
+                json={"domain_id": "fatigue", "display_name": "Fatigue Manuals"},
             )
-            up = client.post("/admin/lightrag/domains/fatigue/up", headers=admin_headers)
-            down = client.post("/admin/lightrag/domains/fatigue/down", headers=admin_headers)
-            recreate = client.post("/admin/lightrag/domains/fatigue/recreate", headers=admin_headers)
-            repair = client.post("/admin/lightrag/domains/fatigue/repair", headers=admin_headers)
-            remove = client.delete("/admin/lightrag/domains/fatigue", headers=admin_headers)
+            with SessionLocal() as session:
+                domain_row = LightRAGDomainRepository(session).get("fatigue")
+                assert domain_row is not None
+                assert domain_row.state == "configured"
+            create_with_removed_field = client.post(
+                "/admin/lightrag-domains",
+                headers=admin_headers,
+                json={"domain_id": "legacy", "start": True},
+            )
+            up = client.post("/admin/lightrag-domains/fatigue/start", headers=admin_headers)
+            with SessionLocal() as session:
+                domain_row = LightRAGDomainRepository(session).get("fatigue")
+                assert domain_row is not None
+                assert domain_row.state == "running"
+            down = client.post("/admin/lightrag-domains/fatigue/stop", headers=admin_headers)
+            with SessionLocal() as session:
+                domain_row = LightRAGDomainRepository(session).get("fatigue")
+                assert domain_row is not None
+                assert domain_row.state == "stopped"
+            recreate = client.post("/admin/lightrag-domains/fatigue/recreate", headers=admin_headers)
+            repair = client.post("/admin/lightrag-domains/fatigue/repair", headers=admin_headers)
+            regenerate = client.post("/admin/lightrag-domains/fatigue/regenerate", headers=admin_headers)
+            purge_preview = client.post(
+                "/admin/lightrag-domains/fatigue/purge-preview",
+                headers=admin_headers,
+            )
+            purge = client.delete(
+                "/admin/lightrag-domains/fatigue/purge?confirm_domain_id=fatigue",
+                headers=admin_headers,
+            )
+            remove = client.delete("/admin/lightrag-domains/fatigue", headers=admin_headers)
+            create_first_class = client.post(
+                "/admin/lightrag-domains",
+                headers=admin_headers,
+                json={"domain_id": "fatigue2", "display_name": "Fatigue Manuals 2"},
+            )
+            start_first_class = client.post("/admin/lightrag-domains/fatigue2/start", headers=admin_headers)
+            stop_first_class = client.post("/admin/lightrag-domains/fatigue2/stop", headers=admin_headers)
+            remove_first_class = client.delete("/admin/lightrag-domains/fatigue2", headers=admin_headers)
+            with SessionLocal() as session:
+                domain_row = LightRAGDomainRepository(session).get("fatigue")
+                assert domain_row is not None
+                assert domain_row.state == "deleted"
+                assert domain_row.health_status == "unhealthy"
 
         assert create.status_code == 200
         assert create.json()["id"] == "fatigue"
-        assert create.json()["status"] == "running"
+        assert create.json()["status"] == "configured"
+        assert create_with_removed_field.status_code == 422
         assert up.status_code == 200
         assert up.json()["operation"] == "up"
         assert down.status_code == 200
         assert down.json()["operation"] == "down"
-        assert recreate.status_code == 200
-        assert recreate.json()["operation"] == "recreate"
-        assert repair.status_code == 200
-        assert repair.json()["runtime_base_url"] == "http://lightrag_fatigue:9621"
-        assert repair.json()["health"]["ok"] is True
-        assert repair.json()["storage_backend"] == "postgres"
-        assert repair.json()["postgres_database"] == "lightrag_fatigue"
-        assert repair.json()["postgres_user"] == "lightrag_fatigue"
-        assert repair.json()["postgres_role_exists"] is True
-        assert repair.json()["extensions"]["vector"]["status"] == "ok"
+        assert recreate.status_code == 404
+        assert repair.status_code == 404
+        assert regenerate.status_code == 404
+        assert purge_preview.status_code == 404
+        assert purge.status_code == 404
         assert remove.status_code == 200
         assert remove.json()["archived"] is True
+        assert create_first_class.status_code == 200
+        assert create_first_class.json()["id"] == "fatigue2"
+        assert start_first_class.status_code == 200
+        assert start_first_class.json()["operation"] == "up"
+        assert stop_first_class.status_code == 200
+        assert stop_first_class.json()["operation"] == "down"
+        assert remove_first_class.status_code == 200
+        assert remove_first_class.json()["archived"] is True
     finally:
         app.dependency_overrides.pop(lightrag_admin.get_domain_service, None)
+
+
+def test_legacy_lightrag_domain_routes_return_404() -> None:
+    with TestClient(app) as client:
+        _seed_users()
+        admin_headers = _login(client, "admin@example.com")
+
+        list_legacy = client.get("/admin/lightrag/domains", headers=admin_headers)
+        create_legacy = client.post(
+            "/admin/lightrag/domains",
+            headers=admin_headers,
+            json={"domain_id": "legacy"},
+        )
+        detail_legacy = client.get("/admin/lightrag/domains/legacy", headers=admin_headers)
+        up_legacy = client.post("/admin/lightrag/domains/legacy/up", headers=admin_headers)
+        down_legacy = client.post("/admin/lightrag/domains/legacy/down", headers=admin_headers)
+        delete_legacy = client.delete("/admin/lightrag/domains/legacy", headers=admin_headers)
+
+    assert list_legacy.status_code == 404
+    assert create_legacy.status_code == 404
+    assert detail_legacy.status_code == 404
+    assert up_legacy.status_code == 404
+    assert down_legacy.status_code == 404
+    assert delete_legacy.status_code == 404
 
 
 def test_operation_or_404_maps_failed_operation_to_502() -> None:
@@ -2652,12 +2801,12 @@ def test_lightrag_admin_and_user_domain_responses_do_not_leak_provider_secrets(
         admin_headers = _login(client, "admin@example.com")
         user_headers = _login(client, "user@example.com")
         create = client.post(
-            "/admin/lightrag/domains",
+            "/admin/lightrag-domains",
             headers=admin_headers,
             json={"domain_id": "fatigue"},
         )
-        admin_list = client.get("/admin/lightrag/domains", headers=admin_headers)
-        admin_detail = client.get("/admin/lightrag/domains/fatigue", headers=admin_headers)
+        admin_list = client.get("/admin/lightrag-domains", headers=admin_headers)
+        admin_detail = client.get("/admin/lightrag-domains/fatigue", headers=admin_headers)
         user_list = client.get("/lightrag/domains", headers=user_headers)
 
     assert create.status_code == 200
@@ -2701,18 +2850,10 @@ def test_lightrag_domain_user_safe_list_hides_paths_and_container_details(
     assert domain == {
         "id": "fatigue",
         "display_name": "Fatigue Manuals",
-        "host_port": 9621,
+        "host_port": 9622,
         "is_healthy": None,
         "is_default": True,
         "status": "configured",
-        "retrieval_defaults": {
-            "top_k": 10,
-            "chunk_top_k": 10,
-            "chunk_rerank_top_k": 10,
-            "max_token_for_text_unit": 4000,
-            "max_token_for_global_context": 4000,
-            "max_token_for_local_context": 4000,
-        },
     }
     assert "paths" not in domain
     assert "container_name" not in domain
@@ -2793,7 +2934,7 @@ def test_archived_domain_blocks_admin_upload_and_retrieval() -> None:
     assert retrieve.json()["detail"] == "LightRAG domain 'fatigue' is not available"
 
 
-def test_lightrag_domain_purge_preview_counts_all_domain_documents(
+def test_lightrag_domain_purge_preview_route_is_removed(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -2894,20 +3035,10 @@ def test_lightrag_domain_purge_preview_counts_all_domain_documents(
             headers=admin_headers,
         )
 
-    assert preview.status_code == 200
-    body = preview.json()
-    assert body["domain_id"] == preview_domain_id
-    assert body["documents"] == 4
-    assert body["original_uploads"] == 4
-    assert body["assets"] == 1
-    assert body["chunks"] == 1
-    assert body["pages"] == 1
-    assert body["sections"] == 1
-    assert body["blocks"] == 1
-    assert body["estimated_bytes"] > 0
+    assert preview.status_code == 404
 
 
-def test_lightrag_domain_purge_rejects_confirm_domain_id_mismatch(
+def test_lightrag_domain_purge_route_is_removed_with_confirm_mismatch(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -2923,11 +3054,10 @@ def test_lightrag_domain_purge_rejects_confirm_domain_id_mismatch(
             headers=admin_headers,
         )
 
-    assert response.status_code == 400
-    assert response.json()["detail"] == "confirm_domain_id must match domain_id"
+    assert response.status_code == 404
 
 
-def test_lightrag_domain_purge_requires_permanent_delete_opt_in(
+def test_lightrag_domain_purge_route_is_removed_without_permanent_delete_opt_in(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -2943,11 +3073,10 @@ def test_lightrag_domain_purge_requires_permanent_delete_opt_in(
             headers=admin_headers,
         )
 
-    assert response.status_code == 400
-    assert response.json()["detail"] == "Permanent LightRAG domain delete is disabled"
+    assert response.status_code == 404
 
 
-def test_lightrag_domain_purge_hard_deletes_domain_documents_and_artifacts(
+def test_lightrag_domain_purge_route_is_removed_and_non_destructive(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -3036,30 +3165,22 @@ def test_lightrag_domain_purge_hard_deletes_domain_documents_and_artifacts(
             headers=admin_headers,
         )
 
-    assert response.status_code == 200
-    body = response.json()
-    assert body["domain_id"] == purge_domain_id
-    assert body["state"] == "purged"
-    assert body["purged_documents"] == 1
-    assert body["purged_original_uploads"] == 1
-    assert body["purged_artifact_roots"] == 1
-    assert body["canceled_jobs"] == 1
-    assert body["deleted_domain_root"] is True
+    assert response.status_code == 404
 
     with SessionLocal() as session:
         documents = DocumentRepository(session)
         jobs = JobRepository(session)
         fatigue_after = documents.get(fatigue_doc_id)
         default_after = documents.get(default_doc_id)
-        assert fatigue_after is None
+        assert fatigue_after is not None
         assert default_after is not None
-        assert jobs.get(fatigue_job_id).document_id is None
+        assert jobs.get(fatigue_job_id).document_id == fatigue_doc_id
         assert jobs.get(default_job_id).document_id == default_doc_id
 
-    assert not fatigue_path.exists()
+    assert fatigue_path.exists()
     assert default_path.exists()
-    assert not artifact_root.exists()
-    assert not (tmp_path / f"lightrag/domains/{purge_domain_id}").exists()
+    assert artifact_root.exists()
+    assert (tmp_path / f"lightrag/domains/{purge_domain_id}").exists()
     assert (tmp_path / "lightrag/domains/default").exists()
 
 
@@ -3105,7 +3226,7 @@ def test_archive_domain_is_non_destructive_and_blocks_user_document_reads(
         _seed_users()
         admin_headers = _login(client, "admin@example.com")
         user_headers = _login(client, "user@example.com")
-        archive = client.delete("/admin/lightrag/domains/archivecase", headers=admin_headers)
+        archive = client.delete("/admin/lightrag-domains/archivecase", headers=admin_headers)
         user_detail = client.get(f"/documents/{document_id}", headers=user_headers)
 
     assert archive.status_code == 200
@@ -3578,6 +3699,8 @@ def test_worker_marks_failed_document_ingest_job_when_document_is_deleted() -> N
 
     assert refreshed.status == "failed"
     assert "Structure-aware ingestion failed" in refreshed.error_message
+    assert refreshed.started_at is not None
+    assert refreshed.finished_at is not None
 
 
 def test_admin_can_retry_document_ingest_job(
@@ -3589,6 +3712,11 @@ def test_admin_can_retry_document_ingest_job(
     upload_path.write_text("Retryable document body.", encoding="utf-8")
     monkeypatch.setattr(RedisIngestLock, "acquire", lambda self: True)
     monkeypatch.setattr(RedisIngestLock, "release", lambda self: None)
+    monkeypatch.setattr(
+        LightRAGIngestionService,
+        "_lock_domain_embedding",
+        lambda self, **kwargs: None,
+    )
 
     def fake_ingest_source_chunks(
         self: LightRAGRemoteAdapter,
@@ -3624,6 +3752,10 @@ def test_admin_can_retry_document_ingest_job(
     body = response.json()
     assert body["kind"] == "document_ingest"
     assert body["status"] == "succeeded"
+    with SessionLocal() as session:
+        refreshed = JobRepository(session).get(job_id)
+    assert refreshed.started_at is not None
+    assert refreshed.finished_at is not None
 
 
 def test_admin_retry_rejects_non_document_ingest_job() -> None:

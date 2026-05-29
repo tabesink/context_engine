@@ -1,0 +1,73 @@
+diff --git a/client/src/types/chat.ts b/client/src/types/chat.ts
+index 2222222..3333333 100644
+--- a/client/src/types/chat.ts
++++ b/client/src/types/chat.ts
+@@ -1,5 +1,22 @@
++export type VisualAsset = {
++  asset_id: string;
++  document_id: string;
++  asset_type: string;
++  title?: string | null;
++  caption?: string | null;
++  page_number?: number | null;
++  url?: string | null;
++  thumbnail_url?: string | null;
++  mime_type?: string | null;
++  metadata?: Record<string, unknown>;
++};
++
+ export type ContextPanelItem = {
+   id: string;
+   kind: "text" | "table" | "figure";
+@@
+   reference_id?: string | null;
+   score?: number | null;
++  workspace_node_id?: string | null;
++  assets?: VisualAsset[];
+   handles: Record<string, unknown>;
+ };
++
++export type WorkspaceSourceContext = {
++  node_id: string;
++  kind: "domain" | "document" | "section" | "page" | "chunk" | "asset";
++  title: string;
++  domain_id: string;
++  breadcrumb: { id?: string | null; kind: string; title: string }[];
++  document?: {
++    document_id: string;
++    title: string;
++    filename?: string | null;
++    content_type?: string | null;
++    status?: string | null;
++    source_path?: string | null;
++  } | null;
++  section_id?: string | null;
++  page_number?: number | null;
++  page_start?: number | null;
++  page_end?: number | null;
++  chunk_id?: string | null;
++  asset_id?: string | null;
++  summary?: string | null;
++  text?: string | null;
++  assets: VisualAsset[];
++  metadata: Record<string, unknown>;
++};
+diff --git a/client/src/api/source-context.ts b/client/src/api/source-context.ts
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/client/src/api/source-context.ts
+@@ -0,0 +1,14 @@
++import { apiRequest } from "@/lib/api/client";
++import type { WorkspaceSourceContext } from "@/types/chat";
++
++
++export function fetchWorkspaceSourceContext(
++  domainId: string,
++  nodeId: string,
++): Promise<WorkspaceSourceContext> {
++  const params = new URLSearchParams({ node_id: nodeId });
++  return apiRequest(
++    `/lightrag/domains/${encodeURIComponent(domainId)}/workspace-context?${params.toString()}`,
++  );
++}

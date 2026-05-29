@@ -40,7 +40,7 @@ export function SettingsDialog() {
     <DialogPrimitive.Root open={isOpen} onOpenChange={setSettingsDialogOpen}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-white/70 backdrop-blur-[1px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 dark:bg-black/45" />
-        <DialogPrimitive.Content className="fixed left-1/2 top-1/2 z-50 h-[min(720px,calc(100vh-96px))] w-[min(780px,calc(100vw-48px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--background)] p-0 shadow-sm outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0">
+        <DialogPrimitive.Content className="fixed left-1/2 top-1/2 z-50 h-[min(720px,calc(100vh-96px))] w-[min(980px,calc(100vw-48px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--background)] p-0 shadow-sm outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0">
           <DialogPrimitive.Title className="sr-only">Settings</DialogPrimitive.Title>
           <div className="grid h-full min-h-0 grid-cols-[180px_1fr]">
             <aside className="border-r border-[var(--border)] bg-[var(--background)] px-3 py-4">

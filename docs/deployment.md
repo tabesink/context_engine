@@ -36,7 +36,7 @@ Important settings:
 - `LIGHTRAG_DOMAIN_REGISTRY`: required LightRAG domain registry path. Every upload, retrieve, graph, and workspace-tree request must target a domain registered in this file.
 - `LIGHTRAG_TIMEOUT_SECONDS`: HTTP timeout for LightRAG calls.
 - `QUERY_LOG_STORE_TEXT` and `QUERY_LOG_RETENTION_DAYS`: query log text persistence and retention controls.
-- `LIGHTRAG_DEPLOY_ENABLED`: gates **mutating** LightRAG domain deployment APIs (`/admin/lightrag/domains...`). The read-only `GET /lightrag/domains` listing remains available to authenticated users so clients can choose `lightrag_domain_id` when manifests exist. Use `.env.lightrag-deploy.example` only when Context Engine manages LightRAG containers.
+- `LIGHTRAG_DEPLOY_ENABLED`: gates **mutating** LightRAG domain deployment APIs (`/admin/lightrag-domains...`). The read-only `GET /lightrag/domains` listing remains available to authenticated users so clients can choose `lightrag_domain_id` when manifests exist. Use `.env.lightrag-deploy.example` only when Context Engine manages LightRAG containers.
 - LightRAG provider settings (`LIGHTRAG_LLM_*`, `LIGHTRAG_EMBEDDING_*`) live in `.env.lightrag-provider.example` because they are written into generated LightRAG domain env files, not needed for fixed external LightRAG retrieval.
 
 In `app/core/config.py`, LightRAG runtime resolution uses only the domain registry. `lightrag_deploy_enabled` remains `false` by default so domain lifecycle control stays opt-in.
@@ -139,7 +139,9 @@ Deployment control is off by default:
 LIGHTRAG_DEPLOY_ENABLED=false
 ```
 
-When enabled, admins can manage domains through `/admin/lightrag/domains...`. Generated state lives under:
+When enabled, admins can manage domains through `/admin/lightrag-domains...`. Generated state lives under:
+
+Legacy `/admin/lightrag/domains...` endpoints are removed and now return `404`.
 
 ```text
 .data/lightrag/

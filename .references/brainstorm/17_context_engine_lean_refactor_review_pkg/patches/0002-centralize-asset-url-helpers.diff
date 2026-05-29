@@ -1,0 +1,86 @@
+diff --git a/app/services/asset_urls.py b/app/services/asset_urls.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/app/services/asset_urls.py
+@@ -0,0 +1,11 @@
++from urllib.parse import quote
++
++
++def document_asset_url(document_id: str, asset_id: str) -> str:
++    return f"/documents/{quote(document_id, safe='')}/assets/{quote(asset_id, safe='')}"
++
++
++def document_asset_thumbnail_url(document_id: str, asset_id: str) -> str:
++    return f"{document_asset_url(document_id, asset_id)}/thumbnail"
+diff --git a/app/services/retrieval_asset_resolver.py b/app/services/retrieval_asset_resolver.py
+index 2222222..3333333 100644
+--- a/app/services/retrieval_asset_resolver.py
++++ b/app/services/retrieval_asset_resolver.py
+@@ -1,6 +1,7 @@
+ from app.domain.models import Evidence
+ from app.schemas.retrieval import AssetResponse
++from app.services.asset_urls import document_asset_thumbnail_url, document_asset_url
+ from app.storage.repositories.document_processing import DocumentProcessingRepository
+@@
+-            thumbnail_url = None
+-            if include_thumbnails and asset.thumbnail_path:
+-                thumbnail_url = f"/documents/{asset.document_id}/assets/{asset.asset_id}/thumbnail"
++            thumbnail_url = (
++                document_asset_thumbnail_url(asset.document_id, asset.asset_id)
++                if include_thumbnails and asset.thumbnail_path
++                else None
++            )
+             responses.append(
+                 AssetResponse(
+@@
+-                    url=f"/documents/{asset.document_id}/assets/{asset.asset_id}",
++                    url=document_asset_url(asset.document_id, asset.asset_id),
+                     thumbnail_url=thumbnail_url,
+                 )
+diff --git a/app/services/workspace_context_service.py b/app/services/workspace_context_service.py
+index 4444444..5555555 100644
+--- a/app/services/workspace_context_service.py
++++ b/app/services/workspace_context_service.py
+@@ -1,6 +1,7 @@
+ from dataclasses import dataclass
+ from fastapi import HTTPException, status
+ 
++from app.services.asset_urls import document_asset_thumbnail_url, document_asset_url
+ from app.core.errors import not_found
+@@
+-        thumbnail_url = None
+-        if asset.thumbnail_path:
+-            thumbnail_url = f"/documents/{asset.document_id}/assets/{asset.asset_id}/thumbnail"
++        thumbnail_url = (
++            document_asset_thumbnail_url(asset.document_id, asset.asset_id)
++            if asset.thumbnail_path
++            else None
++        )
+@@
+-            url=f"/documents/{asset.document_id}/assets/{asset.asset_id}",
++            url=document_asset_url(asset.document_id, asset.asset_id),
+             thumbnail_url=thumbnail_url,
+diff --git a/app/services/workspace_tree_service.py b/app/services/workspace_tree_service.py
+index 6666666..7777777 100644
+--- a/app/services/workspace_tree_service.py
++++ b/app/services/workspace_tree_service.py
+@@ -1,5 +1,6 @@
+ from app.document_processing.models import DocumentAsset, DocumentPage, DocumentSection, SourceChunk
+ from app.schemas.workspace_tree import WorkspaceTreeNode, WorkspaceTreeResponse
++from app.services.asset_urls import document_asset_thumbnail_url, document_asset_url
+@@
+-        thumbnail_url = None
+-        if asset.thumbnail_path:
+-            thumbnail_url = f"/documents/{document_id}/assets/{asset.asset_id}/thumbnail"
++        thumbnail_url = (
++            document_asset_thumbnail_url(document_id, asset.asset_id)
++            if asset.thumbnail_path
++            else None
++        )
+@@
+-                "url": f"/documents/{document_id}/assets/{asset.asset_id}",
++                "url": document_asset_url(document_id, asset.asset_id),
+                 "caption": asset.caption,
+                 "mime_type": asset.mime_type,
+             },

@@ -1,43 +1,35 @@
 "use client";
 
 import * as React from "react";
-import { RefreshCw } from "lucide-react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
+import { ChevronRight, Eye, EyeOff } from "lucide-react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { aiSettingsApi } from "@/lib/api/ai-settings";
 import { APIError } from "@/lib/api/client";
 import { selectIsAdmin, useAuthStore } from "@/stores/auth-store";
-import type { AIModelProfile, AISettingsResponse } from "@/types/ai-settings";
+import type { AISettingsResponse, ProviderKind } from "@/types/ai-settings";
 
-const panelClassName = "rounded-xl border border-[var(--border)] bg-[var(--background)] p-4";
-const inputClassName = "h-9 rounded-full border-[var(--border)] bg-[var(--background)] shadow-none";
-const selectTriggerClassName = "h-9 rounded-full border-[var(--border)] bg-[var(--background)] shadow-none";
-const pillButtonClassName = "rounded-full shadow-none";
+const panelClassName = "rounded-lg border border-neutral-200 bg-white p-4 shadow-none";
+const tileClassName =
+  "grid min-h-28 grid-rows-[1fr_auto] gap-4 rounded-lg border border-neutral-200 bg-white p-4 shadow-none transition-colors hover:bg-neutral-50 hover:border-neutral-300";
+const iconButtonClassName =
+  "h-8 w-8 rounded-md border border-transparent text-neutral-500 hover:border-neutral-200 hover:bg-neutral-50 hover:text-neutral-800";
+const metaClassName = "text-[12px] font-mono text-neutral-500";
+const statusClassName = "inline-flex items-center gap-1.5 text-xs font-medium text-neutral-700";
+const inputClassName =
+  "h-8 rounded-none border-0 border-b border-neutral-300 bg-neutral-50 px-2 text-sm text-neutral-900 shadow-none placeholder:text-neutral-400 focus-visible:border-neutral-500 focus-visible:ring-0";
 const providerSecrets = [
   {
-    provider: "openai" as const,
+    provider: "openai" as ProviderKind,
     secretName: "OPENAI_API_KEY",
     label: "OpenAI",
-    helper: "Used by OpenAI LLM and embedding profiles.",
   },
   {
-    provider: "bedrock_openai" as const,
+    provider: "bedrock_openai" as ProviderKind,
     secretName: "AWS_BEARER_TOKEN_BEDROCK",
     label: "AWS Bedrock",
-    helper: "Required for Bedrock OpenAI-compatible LLM profiles.",
   },
 ];
 
@@ -50,30 +42,62 @@ function getErrorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
-function profileLabel(profile: AIModelProfile): string {
-  const dims = profile.dimensions ? ` · ${profile.dimensions} dims` : "";
-  return `${providerLabel(profile.provider)} · ${profile.model}${dims}`;
-}
-
-function providerLabel(provider: AIModelProfile["provider"]): string {
-  if (provider === "bedrock_openai") return "bedrock";
-  return provider;
-}
-
 function countLabel(count: number, singular: string, plural: string): string {
   return `${count} ${count === 1 ? singular : plural}`;
 }
 
-function secretBadge(status: "present" | "missing"): { label: string; variant: "secondary" | "destructive" } {
-  return status === "present"
-    ? { label: "Connected", variant: "secondary" }
-    : { label: "Missing key", variant: "destructive" };
+function providerStatusLabel(provider: ProviderKind, secretStatus: "present" | "missing"): string {
+  if (provider === "ollama") return "Local";
+  if (secretStatus === "present") return "Ready";
+  return "Missing key";
 }
 
-function profileStatusBadge(profile: AIModelProfile): { label: string; variant: "secondary" | "destructive" | "muted" } {
-  if (!profile.is_enabled) return { label: "Disabled", variant: "muted" };
-  if (profile.api_key_status === "missing") return { label: "Key missing", variant: "destructive" };
-  return { label: "Ready", variant: "secondary" };
+function providerStatusDotClass(provider: ProviderKind, secretStatus: "present" | "missing"): string {
+  if (provider === "ollama") return "bg-emerald-500";
+  if (secretStatus === "present") return "bg-emerald-500";
+  return "bg-red-500";
+}
+
+function ProviderLogo({ provider, size = 40 }: { provider: ProviderKind; size?: number }) {
+  if (provider === "bedrock_openai") {
+    return (
+      <Image
+        src="/aws_logo_transparent.png"
+        alt="AWS logo"
+        width={size}
+        height={size}
+        unoptimized
+        className="object-contain"
+        style={{ height: size, width: size }}
+      />
+    );
+  }
+
+  if (provider === "ollama") {
+    return (
+      <Image
+        src="/ollama_logo_transparent.png"
+        alt="Ollama logo"
+        width={size}
+        height={size}
+        unoptimized
+        className="object-contain"
+        style={{ height: size, width: size }}
+      />
+    );
+  }
+
+  return (
+    <Image
+      src="/openai_logo.svg"
+      alt="OpenAI logo"
+      width={size}
+      height={size}
+      unoptimized
+      className="object-contain"
+      style={{ height: size, width: size }}
+    />
+  );
 }
 
 export function AIModelSettingsPanel() {
@@ -81,12 +105,9 @@ export function AIModelSettingsPanel() {
   const [settings, setSettings] = React.useState<AISettingsResponse | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
-  const [saveBusy, setSaveBusy] = React.useState(false);
-  const [llmDefault, setLlmDefault] = React.useState<string>("");
-  const [embeddingDefault, setEmbeddingDefault] = React.useState<string>("");
   const [secretInputs, setSecretInputs] = React.useState<Record<string, string>>({});
   const [secretBusyByName, setSecretBusyByName] = React.useState<Record<string, boolean>>({});
-  const [clearSecretName, setClearSecretName] = React.useState<string | null>(null);
+  const [secretVisibleByName, setSecretVisibleByName] = React.useState<Record<string, boolean>>({});
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -94,8 +115,6 @@ export function AIModelSettingsPanel() {
     try {
       const next = await aiSettingsApi.get();
       setSettings(next);
-      setLlmDefault(next.defaults.llm_profile_id);
-      setEmbeddingDefault(next.defaults.embedding_profile_id);
     } catch (nextError) {
       setError(getErrorMessage(nextError, "Failed to load AI settings"));
     } finally {
@@ -111,26 +130,12 @@ export function AIModelSettingsPanel() {
     return () => window.clearTimeout(task);
   }, [isAdmin, load]);
 
-  const onSaveDefaults = async () => {
-    setSaveBusy(true);
-    setError(null);
-    try {
-      const next = await aiSettingsApi.updateDefaults({
-        default_llm_profile_id: llmDefault,
-        default_embedding_profile_id: embeddingDefault,
-      });
-      setSettings(next);
-      setLlmDefault(next.defaults.llm_profile_id);
-      setEmbeddingDefault(next.defaults.embedding_profile_id);
-    } catch (nextError) {
-      setError(getErrorMessage(nextError, "Failed to update defaults"));
-    } finally {
-      setSaveBusy(false);
-    }
-  };
-
   const setSecretInput = (secretName: string, value: string) => {
     setSecretInputs((current) => ({ ...current, [secretName]: value }));
+  };
+
+  const toggleSecretVisible = (secretName: string) => {
+    setSecretVisibleByName((current) => ({ ...current, [secretName]: !current[secretName] }));
   };
 
   const onSaveSecret = async (secretName: string) => {
@@ -149,25 +154,11 @@ export function AIModelSettingsPanel() {
     }
   };
 
-  const onClearSecret = async (secretName: string) => {
-    setSecretBusyByName((current) => ({ ...current, [secretName]: true }));
-    setError(null);
-    try {
-      const next = await aiSettingsApi.clearProviderSecret(secretName);
-      setSettings(next);
-      setSecretInput(secretName, "");
-    } catch (nextError) {
-      setError(getErrorMessage(nextError, `Failed to clear ${secretName}`));
-    } finally {
-      setSecretBusyByName((current) => ({ ...current, [secretName]: false }));
-    }
-  };
-
   if (!isAdmin) {
     return (
       <div className={panelClassName}>
-        <p className="text-sm font-medium text-[var(--foreground)]">Admin access required</p>
-        <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+        <p className="text-sm font-medium text-neutral-900">Admin access required</p>
+        <p className="mt-1 text-xs text-neutral-600">
           Sign in with an admin account to configure model providers.
         </p>
       </div>
@@ -175,323 +166,162 @@ export function AIModelSettingsPanel() {
   }
 
   const profiles = settings?.profiles ?? [];
-  const llmProfiles = profiles.filter((item) => item.kind === "llm" && item.is_enabled);
-  const embeddingProfiles = profiles.filter((item) => item.kind === "embedding" && item.is_enabled);
   const openAiProfileCount = profiles.filter((item) => item.provider === "openai" && item.is_enabled).length;
   const bedrockProfileCount = profiles.filter((item) => item.provider === "bedrock_openai" && item.is_enabled).length;
   const ollamaProfileCount = profiles.filter((item) => item.provider === "ollama" && item.is_enabled).length;
-  const defaultsDirty = settings
-    ? llmDefault !== settings.defaults.llm_profile_id || embeddingDefault !== settings.defaults.embedding_profile_id
-    : false;
-  const clearBusy = clearSecretName ? Boolean(secretBusyByName[clearSecretName]) : false;
-  const clearTarget = providerSecrets.find((item) => item.secretName === clearSecretName) ?? null;
-  const sortedEmbeddingProfiles = [...embeddingProfiles].sort((a, b) => {
-    if (a.is_default !== b.is_default) return Number(b.is_default) - Number(a.is_default);
-    return a.model.localeCompare(b.model);
-  });
-  const sortedLlmProfiles = [...llmProfiles].sort((a, b) => {
-    if (a.is_default !== b.is_default) return Number(b.is_default) - Number(a.is_default);
-    return a.model.localeCompare(b.model);
-  });
-
-  const onConfirmClearSecret = async () => {
-    if (!clearSecretName) return;
-    await onClearSecret(clearSecretName);
-    setClearSecretName(null);
-  };
+  const openAiSecretStatus = settings?.secret_status.OPENAI_API_KEY ?? "missing";
+  const bedrockSecretStatus = settings?.secret_status.AWS_BEARER_TOKEN_BEDROCK ?? "missing";
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-medium text-[var(--foreground)]">Providers</p>
-          <p className="mt-1 text-xs leading-4 text-[var(--muted-foreground)]">
-            Configure provider credentials and model profiles used by Context Engine.
-          </p>
+    <div className="space-y-6">
+      <section className="space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-neutral-900">Provider overview</p>
+            <p className="mt-1 text-xs leading-4 text-neutral-600">
+              Configure retrieval providers and monitor key status.
+            </p>
+          </div>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void load()}
-          disabled={loading}
-          className={`${pillButtonClassName} px-4`}
-        >
-          <RefreshCw className={`mr-2 size-3.5 ${loading ? "animate-spin" : ""}`} />
-          Refresh status
-        </Button>
-      </div>
 
-      <div className={panelClassName}>
-        <div className="mb-1 flex items-center justify-between gap-3">
-          <p className="text-sm font-medium text-[var(--foreground)]">Connection status</p>
-        </div>
-        <p className="mb-3 text-xs leading-4 text-[var(--muted-foreground)]">Provider health and enabled profile coverage.</p>
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center justify-between gap-2 py-1">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-medium text-[var(--foreground)]">OpenAI</p>
-              <Badge variant={secretBadge(settings?.secret_status.OPENAI_API_KEY ?? "missing").variant}>
-                {secretBadge(settings?.secret_status.OPENAI_API_KEY ?? "missing").label}
-              </Badge>
+        <div className="grid gap-3 md:grid-cols-3">
+          <Card className={tileClassName}>
+            <div className="grid grid-cols-[44px_minmax(0,1fr)_32px] items-start gap-3">
+              <div className="grid h-10 w-10 place-items-center">
+                <ProviderLogo provider="openai" />
+              </div>
+              <p className="truncate pt-1 text-sm font-medium text-neutral-900">OpenAI</p>
+              <Button type="button" variant="ghost" size="icon-sm" className={iconButtonClassName} aria-label="Open OpenAI details">
+                <ChevronRight className="size-4" />
+              </Button>
             </div>
-            <p className="text-xs text-[var(--muted-foreground)]">
-              {countLabel(openAiProfileCount, "profile", "profiles")}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-2 py-1">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-medium text-[var(--foreground)]">AWS Bedrock</p>
-              <Badge variant={secretBadge(settings?.secret_status.AWS_BEARER_TOKEN_BEDROCK ?? "missing").variant}>
-                {secretBadge(settings?.secret_status.AWS_BEARER_TOKEN_BEDROCK ?? "missing").label}
-              </Badge>
-            </div>
-            <p className="text-xs text-[var(--muted-foreground)]">
-              {countLabel(bedrockProfileCount, "profile", "profiles")}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-2 py-1">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-medium text-[var(--foreground)]">Ollama</p>
-              <Badge variant="muted">Local</Badge>
-            </div>
-            <p className="text-xs text-[var(--muted-foreground)]">
-              {countLabel(ollamaProfileCount, "profile", "profiles")} · No API key
-            </p>
-          </div>
-        </div>
-      </div>
 
-      <div className={panelClassName}>
-        <p className="mb-1 text-sm font-medium text-[var(--foreground)]">Credentials</p>
-        <p className="mb-3 text-xs leading-4 text-[var(--muted-foreground)]">
-          Keys are encrypted on the server and are never returned to the browser.
-        </p>
-        <div className="space-y-4">
+            <div className="flex items-end justify-between gap-2">
+              <p className={metaClassName}>{countLabel(openAiProfileCount, "profile", "profiles")}</p>
+              <p className={statusClassName}>
+                <span className={`h-1.5 w-1.5 rounded-full ${providerStatusDotClass("openai", openAiSecretStatus)}`} aria-hidden />
+                {providerStatusLabel("openai", openAiSecretStatus)}
+              </p>
+            </div>
+          </Card>
+
+          <Card className={tileClassName}>
+            <div className="grid grid-cols-[44px_minmax(0,1fr)_32px] items-start gap-3">
+              <div className="grid h-10 w-10 place-items-center">
+                <ProviderLogo provider="bedrock_openai" />
+              </div>
+              <p className="truncate pt-1 text-sm font-medium text-neutral-900">AWS Bedrock</p>
+              <Button type="button" variant="ghost" size="icon-sm" className={iconButtonClassName} aria-label="Open AWS Bedrock details">
+                <ChevronRight className="size-4" />
+              </Button>
+            </div>
+
+            <div className="flex items-end justify-between gap-2">
+              <p className={metaClassName}>{countLabel(bedrockProfileCount, "profile", "profiles")}</p>
+              <p className={statusClassName}>
+                <span className={`h-1.5 w-1.5 rounded-full ${providerStatusDotClass("bedrock_openai", bedrockSecretStatus)}`} aria-hidden />
+                {providerStatusLabel("bedrock_openai", bedrockSecretStatus)}
+              </p>
+            </div>
+          </Card>
+
+          <Card className={tileClassName}>
+            <div className="grid grid-cols-[44px_minmax(0,1fr)_32px] items-start gap-3">
+              <div className="grid h-10 w-10 place-items-center">
+                <ProviderLogo provider="ollama" />
+              </div>
+              <p className="truncate pt-1 text-sm font-medium text-neutral-900">Ollama</p>
+              <Button type="button" variant="ghost" size="icon-sm" className={iconButtonClassName} aria-label="Open Ollama details">
+                <ChevronRight className="size-4" />
+              </Button>
+            </div>
+
+            <div className="flex items-end justify-between gap-2">
+              <p className={metaClassName}>{countLabel(ollamaProfileCount, "profile", "profiles")} · no key required</p>
+              <p className={statusClassName}>
+                <span className={`h-1.5 w-1.5 rounded-full ${providerStatusDotClass("ollama", "present")}`} aria-hidden />
+                {providerStatusLabel("ollama", "present")}
+              </p>
+            </div>
+          </Card>
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-neutral-900">Credential management</p>
+            <p className="mt-1 text-xs leading-4 text-neutral-600">
+              Save write-only credentials for external providers.
+            </p>
+          </div>
+          <p className="mt-0.5 text-xs text-neutral-500">Encrypted server-side</p>
+        </div>
+
+        <div className="space-y-2.5">
           {providerSecrets.map((provider) => {
-            const status = settings?.secret_status[provider.secretName] ?? "missing";
             const busy = Boolean(secretBusyByName[provider.secretName]);
             const typedValue = secretInputs[provider.secretName] || "";
             const canSave = typedValue.trim().length > 0 && !busy;
-            const usedByCount = profiles.filter((item) => item.provider === provider.provider && item.is_enabled).length;
-            const badge = secretBadge(status);
+            const isVisible = Boolean(secretVisibleByName[provider.secretName]);
 
             return (
-              <div key={provider.secretName} className="space-y-2.5">
-                <div className="mb-2 flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-medium text-[var(--foreground)]">{provider.label}</p>
-                    <p className="text-xs text-[var(--muted-foreground)]">
-                      {provider.secretName} · used by {countLabel(usedByCount, "model profile", "model profiles")}
-                    </p>
+              <Card key={provider.secretName} className="grid gap-3 rounded-lg border-neutral-200 bg-white p-4 shadow-none md:grid-cols-[180px_minmax(0,1fr)_auto] md:items-center">
+                <div className="flex h-full items-center gap-2.5 self-center">
+                  <div className="grid h-8 w-8 place-items-center">
+                    <ProviderLogo provider={provider.provider} size={32} />
                   </div>
-                  <Badge variant={badge.variant}>{badge.label}</Badge>
+                  <p className="text-sm font-medium text-neutral-900">{provider.label}</p>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor={`provider-secret-${provider.secretName}`} className="text-xs font-medium text-[var(--foreground)]">
-                    Credential
-                  </Label>
-                  <div className="flex flex-col gap-2 sm:flex-row">
+
+                <div>
+                  <div className="relative">
                     <Input
                       id={`provider-secret-${provider.secretName}`}
-                      type="password"
+                      type={isVisible ? "text" : "password"}
                       value={typedValue}
                       onChange={(event) => setSecretInput(provider.secretName, event.target.value)}
-                      placeholder={status === "present" ? "Replace stored key" : "Enter credential"}
-                      className={inputClassName}
+                      placeholder="Enter API Key..."
+                      className={`${inputClassName} pr-9`}
                       autoComplete="off"
                     />
                     <Button
                       type="button"
-                      onClick={() => void onSaveSecret(provider.secretName)}
-                      disabled={!canSave}
-                      className={`${pillButtonClassName} px-5`}
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => toggleSecretVisible(provider.secretName)}
+                      className="absolute right-0 top-0 h-8 w-8 rounded-md border border-transparent text-neutral-500 hover:border-neutral-200 hover:bg-neutral-50 hover:text-neutral-800"
+                      aria-label={isVisible ? `Hide ${provider.label} credential` : `Show ${provider.label} credential`}
                     >
-                      {busy ? "Saving..." : "Save key"}
+                      {isVisible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                     </Button>
                   </div>
                 </div>
-                <p className="mt-2 text-xs leading-4 text-[var(--muted-foreground)]">{provider.helper}</p>
-                <div className="mt-3 flex items-center justify-end gap-2">
-                  {status === "present" ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setClearSecretName(provider.secretName)}
-                      disabled={busy}
-                      className={`${pillButtonClassName} px-4`}
-                    >
-                      Clear key
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
+
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => void onSaveSecret(provider.secretName)}
+                  disabled={!canSave}
+                  className="h-8 rounded-md border border-neutral-950 bg-neutral-950 px-3 text-white shadow-none hover:bg-neutral-800"
+                >
+                  {busy ? "Saving..." : "Save"}
+                </Button>
+              </Card>
             );
           })}
-          <div className="space-y-2.5">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="text-sm font-medium text-[var(--foreground)]">Ollama</p>
-              <Badge variant="muted">Local</Badge>
-            </div>
-            <p className="text-xs text-[var(--muted-foreground)]">
-              No API key required. Configure local Ollama model endpoints in model profiles.
-            </p>
-            <div className="mt-3 flex flex-wrap justify-end gap-2">
-              <Button type="button" variant="outline" size="sm" disabled className={pillButtonClassName}>
-                Add profile
-              </Button>
-              <Button type="button" variant="outline" size="sm" disabled className={pillButtonClassName}>
-                Test connection
-              </Button>
-            </div>
-          </div>
         </div>
-      </div>
+      </section>
 
-      <div className={panelClassName}>
-        <p className="mb-3 text-sm font-medium text-[var(--foreground)]">Model defaults</p>
-        {loading ? (
-          <p className="text-sm text-[var(--muted-foreground)]">Loading AI settings...</p>
-        ) : (
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="default-llm" className="text-xs font-medium text-[var(--foreground)]">
-                Default LLM
-              </Label>
-              <Select value={llmDefault} onValueChange={setLlmDefault}>
-                <SelectTrigger id="default-llm" className={selectTriggerClassName}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl border-[var(--border)] shadow-none">
-                  {llmProfiles.map((profile) => (
-                    <SelectItem key={profile.id} value={profile.id}>
-                      {profileLabel(profile)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="default-embedding" className="text-xs font-medium text-[var(--foreground)]">
-                Default embedding model
-              </Label>
-              <Select value={embeddingDefault} onValueChange={setEmbeddingDefault}>
-                <SelectTrigger id="default-embedding" className={selectTriggerClassName}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl border-[var(--border)] shadow-none">
-                  {embeddingProfiles.map((profile) => (
-                    <SelectItem key={profile.id} value={profile.id}>
-                      {profileLabel(profile)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <p className="text-xs leading-4 text-[var(--muted-foreground)]">
-              Embedding default changes apply only to new knowledge graph domains.
-            </p>
-            <div className="flex justify-end">
-              <Button
-                onClick={() => void onSaveDefaults()}
-                disabled={saveBusy || loading || !defaultsDirty}
-                className={pillButtonClassName}
-              >
-                {saveBusy ? "Saving..." : "Save defaults"}
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
+      {loading ? (
+        <p className="text-xs text-neutral-500">Loading provider settings...</p>
+      ) : null}
 
-      <div className={panelClassName}>
-        <p className="mb-2 text-sm font-medium text-[var(--foreground)]">Model profiles</p>
-        {settings ? (
-          <div className="space-y-4">
-            <div>
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
-                Embedding profiles
-              </p>
-              <div className="space-y-2">
-                {sortedEmbeddingProfiles.length > 0 ? (
-                  sortedEmbeddingProfiles.map((profile) => {
-                    const status = profileStatusBadge(profile);
-                    return (
-                      <div
-                        key={profile.id}
-                        className="flex flex-wrap items-center justify-between gap-2 py-1.5"
-                      >
-                        <p className="text-sm font-medium text-[var(--foreground)]">{profileLabel(profile)}</p>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={status.variant}>{status.label}</Badge>
-                          {profile.is_default ? <Badge variant="outline">Default</Badge> : null}
-                        </div>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <p className="text-xs text-[var(--muted-foreground)]">No enabled embedding profiles.</p>
-                )}
-              </div>
-            </div>
-            <div>
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">LLM profiles</p>
-              <div className="space-y-2">
-                {sortedLlmProfiles.length > 0 ? (
-                  sortedLlmProfiles.map((profile) => {
-                    const status = profileStatusBadge(profile);
-                    return (
-                      <div
-                        key={profile.id}
-                        className="flex flex-wrap items-center justify-between gap-2 py-1.5"
-                      >
-                        <p className="text-sm font-medium text-[var(--foreground)]">{profileLabel(profile)}</p>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={status.variant}>{status.label}</Badge>
-                          {profile.is_default ? <Badge variant="outline">Default</Badge> : null}
-                        </div>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <p className="text-xs text-[var(--muted-foreground)]">No enabled LLM profiles.</p>
-                )}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <p className="text-xs text-[var(--muted-foreground)]">Loading profiles...</p>
-        )}
-      </div>
-
-      <AlertDialog open={clearSecretName !== null} onOpenChange={(open) => setClearSecretName(open ? clearSecretName : null)}>
-        <AlertDialogContent className="rounded-xl border-[var(--border)] shadow-none">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="font-medium">Clear provider key</AlertDialogTitle>
-            <AlertDialogDescription>
-              {clearTarget ? `Remove the stored key for ${clearTarget.label}. This action cannot be undone.` : ""}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={clearBusy} className={pillButtonClassName}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(event) => {
-                event.preventDefault();
-                void onConfirmClearSecret();
-              }}
-              disabled={clearBusy}
-              variant="destructive"
-              className={pillButtonClassName}
-            >
-              {clearBusy ? "Clearing..." : "Clear key"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {error ? (
+        <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

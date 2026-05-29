@@ -135,12 +135,12 @@ def render_domain_env(
     ]
     lines.extend(
         [
-            f"TOP_K={domain.retrieval_defaults.top_k}",
-            f"CHUNK_TOP_K={domain.retrieval_defaults.chunk_top_k}",
-            f"CHUNK_RERANK_TOP_K={domain.retrieval_defaults.chunk_rerank_top_k}",
-            f"MAX_TOKEN_TEXT_CHUNK={domain.retrieval_defaults.max_token_for_text_unit}",
-            f"MAX_TOKEN_RELATION_DESC={domain.retrieval_defaults.max_token_for_global_context}",
-            f"MAX_TOKEN_ENTITY_DESC={domain.retrieval_defaults.max_token_for_local_context}",
+            f"TOP_K={settings.default_top_k if settings else 10}",
+            f"CHUNK_TOP_K={settings.default_chunk_top_k if settings else 10}",
+            f"CHUNK_RERANK_TOP_K={settings.default_chunk_rerank_top_k if settings else 10}",
+            f"MAX_TOKEN_TEXT_CHUNK={settings.default_max_token_for_text_unit if settings else 4000}",
+            f"MAX_TOKEN_RELATION_DESC={settings.default_max_token_for_global_context if settings else 4000}",
+            f"MAX_TOKEN_ENTITY_DESC={settings.default_max_token_for_local_context if settings else 4000}",
         ]
     )
     if settings and settings.storage_backend == "postgres":

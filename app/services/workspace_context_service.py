@@ -17,6 +17,7 @@ from app.schemas.workspace_context import (
     WorkspaceContextNodeKind,
     WorkspaceSourceContext,
 )
+from app.services.asset_urls import document_asset_thumbnail_url, document_asset_url
 from app.services.document_access_policy import DocumentAccessPolicy
 from app.services.lightrag_domain_registry import LightRAGDomainRegistry
 from app.storage.repositories.document_processing import DocumentProcessingRepository
@@ -448,9 +449,11 @@ class WorkspaceContextService:
 
     def _asset_payload(self, asset: DocumentAsset) -> WorkspaceContextAsset:
         title = asset.caption or f"{asset.asset_type.replace('_', ' ').title()} {asset.asset_id}"
-        thumbnail_url = None
-        if asset.thumbnail_path:
-            thumbnail_url = f"/documents/{asset.document_id}/assets/{asset.asset_id}/thumbnail"
+        thumbnail_url = (
+            document_asset_thumbnail_url(asset.document_id, asset.asset_id)
+            if asset.thumbnail_path
+            else None
+        )
         return WorkspaceContextAsset(
             asset_id=asset.asset_id,
             document_id=asset.document_id,
@@ -459,7 +462,7 @@ class WorkspaceContextService:
             caption=asset.caption,
             page_number=asset.page_number,
             section_id=asset.section_id,
-            url=f"/documents/{asset.document_id}/assets/{asset.asset_id}",
+            url=document_asset_url(asset.document_id, asset.asset_id),
             thumbnail_url=thumbnail_url,
             mime_type=asset.mime_type,
             metadata={

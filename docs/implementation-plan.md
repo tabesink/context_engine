@@ -164,24 +164,26 @@ Implemented:
 
 - `LIGHTRAG_DEPLOY_*` settings and root `.env.example` documentation.
 - Provider passthrough settings for generated LightRAG runtime env files:
-  - Root config keys: `LIGHTRAG_LLM_*`, `LIGHTRAG_KEYWORD_LLM_MODEL`, `LIGHTRAG_QUERY_LLM_MODEL`, `LIGHTRAG_VLM_LLM_MODEL`, `LIGHTRAG_EMBEDDING_*`, and `LIGHTRAG_OPENAI_LLM_*`.
-  - Generated domain keys: `LLM_BINDING*`, `EMBEDDING_BINDING*`, and `OPENAI_LLM_*`.
+  - Root config keys: `LIGHTRAG_LLM_*`, `LIGHTRAG_KEYWORD_LLM_MODEL`, `LIGHTRAG_QUERY_LLM_MODEL`, `LIGHTRAG_VLM_LLM_MODEL`, `LIGHTRAG_EMBEDDING_*`, `LIGHTRAG_DEFAULT_*`, and `LIGHTRAG_OPENAI_LLM_*`.
+  - Generated domain keys: `LLM_BINDING*`, `EMBEDDING_BINDING*`, retrieval defaults, and `OPENAI_LLM_*`.
 - `app/lightrag_deploy/` control-plane module for domain models, path resolution, manifest read/write, deterministic `domain.env` generation, compose generation, Docker Compose runner boundary, and lifecycle service.
 - Per-domain LightRAG PostgreSQL database/workspace metadata and generated domain env values for `PGKVStorage`, `PGDocStatusStorage`, `PGGraphStorage`, and `PGVectorStorage`.
-- Admin API routes under `/admin/lightrag/domains` implemented in `app/api/routes/lightrag_admin.py`.
+- Admin API routes under `/admin/lightrag-domains` implemented in `app/api/routes/lightrag_domains.py`.
 - User-facing `GET /lightrag/domains` (safe field subset) on the same router module.
 - Domain-aware LightRAG upload/query request plumbing through `lightrag_domain_id`.
 - Terminal UI service wrapper and compact admin domain list screen.
 
 Current behavior:
 
-- Admin create/up/down/recreate/regenerate/remove endpoints require `LIGHTRAG_DEPLOY_ENABLED=true` (HTTP `400` when disabled).
+- Admin create/start/stop/delete endpoints under `/admin/lightrag-domains` require `LIGHTRAG_DEPLOY_ENABLED=true` (HTTP `400` when disabled).
+- Create configures the domain without starting Docker. Start refreshes `domain.env` and generated Compose before booting.
 - `GET /lightrag/domains` returns a safe field subset for any authenticated user whenever the manifest can be read (used to populate `lightrag_domain_id` selections).
 - Domains are stored under `.data/lightrag/domains/<domain>/`.
 - Each LightRAG domain uses a LightRAG-owned PostgreSQL database such as `lightrag_manuals`; manifests record non-secret metadata only.
+- Retrieval defaults are deployment settings written into `domain.env`; new manifests no longer store them.
 - Provider API keys are intentionally scoped to per-domain `domain.env` only; compose and manifest artifacts remain secret-free.
 - The generated compose file is `.data/lightrag/docker-compose.lightrag-domains.yml`.
-- Domain removal archives by default; permanent delete requires both explicit request and config opt-in.
+- Domain deletion archives generated domain files and preserves local document rows, uploads, jobs, parsed structure, chunks, and assets.
 - Default tests use fake runners and temp directories, not live Docker or live LightRAG.
 - Bedrock OpenAI-compatible deployments are supported by keeping `LIGHTRAG_LLM_BINDING=openai` and targeting a Bedrock OpenAI-compatible host URL (`.../openai/v1`) instead of switching to a native Bedrock binding.
 

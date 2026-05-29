@@ -6,19 +6,12 @@ export type CreateKnowledgeGraphDomainPayload = {
   display_name?: string;
   host_port?: number;
   embedding_profile_id?: string;
-  start?: boolean;
-  top_k?: number;
-  chunk_top_k?: number;
-  chunk_rerank_top_k?: number;
-  max_token_for_text_unit?: number;
-  max_token_for_global_context?: number;
-  max_token_for_local_context?: number;
 };
 
 export type KnowledgeGraphDomain = LightRagDomain & {
   id: string;
   display_name: string;
-  host_port: number;
+  host_port?: number;
   embedding?: {
     profile_id: string;
     model: string;
@@ -38,46 +31,40 @@ type AdminDomain = {
     model: string;
     dimensions?: number | null;
   } | null;
-  retrieval_defaults?: LightRagDomain["retrieval_defaults"];
+};
+
+type FirstClassAdminDomain = {
+  id: string;
+  display_name: string;
+  state?: string;
+  health_status?: string | null;
+  metadata?: Record<string, unknown> | null;
 };
 
 export const knowledgeGraphAdminApi = {
   async list() {
-    const payload = await apiRequest<{ domains: AdminDomain[] }>("/admin/lightrag/domains");
-    return payload.domains.map(toKnowledgeGraphDomain);
+    const payload = await apiRequest<{ domains: FirstClassAdminDomain[] }>("/admin/lightrag-domains");
+    return payload.domains.map(toKnowledgeGraphDomainFromFirstClass);
   },
   async create(request: CreateKnowledgeGraphDomainPayload) {
-    const domain = await apiRequest<AdminDomain>("/admin/lightrag/domains", {
+    const domain = await apiRequest<AdminDomain>("/admin/lightrag-domains", {
       method: "POST",
       body: JSON.stringify(request),
     });
     return toKnowledgeGraphDomain(domain);
   },
   up(domainId: string) {
-    return apiRequest(`/admin/lightrag/domains/${encodeURIComponent(domainId)}/up`, { method: "POST" });
+    return apiRequest(`/admin/lightrag-domains/${encodeURIComponent(domainId)}/start`, {
+      method: "POST",
+    });
   },
   down(domainId: string) {
-    return apiRequest(`/admin/lightrag/domains/${encodeURIComponent(domainId)}/down`, { method: "POST" });
-  },
-  recreate(domainId: string) {
-    return apiRequest(`/admin/lightrag/domains/${encodeURIComponent(domainId)}/recreate`, {
-      method: "POST",
-    });
-  },
-  repair(domainId: string) {
-    return apiRequest(`/admin/lightrag/domains/${encodeURIComponent(domainId)}/repair`, {
-      method: "POST",
-    });
-  },
-  regenerate(domainId: string) {
-    return apiRequest(`/admin/lightrag/domains/${encodeURIComponent(domainId)}/regenerate`, {
+    return apiRequest(`/admin/lightrag-domains/${encodeURIComponent(domainId)}/stop`, {
       method: "POST",
     });
   },
   remove(domainId: string) {
-    return apiRequest(`/admin/lightrag/domains/${encodeURIComponent(domainId)}`, {
-      method: "DELETE",
-    });
+    return apiRequest(`/admin/lightrag-domains/${encodeURIComponent(domainId)}`, { method: "DELETE" });
   },
 };
 
@@ -93,7 +80,6 @@ function toKnowledgeGraphDomain(domain: AdminDomain): KnowledgeGraphDomain {
     status: domain.status,
     is_healthy: domain.is_healthy,
     is_default: domain.is_default,
-    retrieval_defaults: domain.retrieval_defaults,
     host_port: domain.host_port,
     embedding: domain.embedding
       ? {
@@ -102,5 +88,31 @@ function toKnowledgeGraphDomain(domain: AdminDomain): KnowledgeGraphDomain {
           dimensions: domain.embedding.dimensions ?? null,
         }
       : null,
+  };
+}
+
+function toKnowledgeGraphDomainFromFirstClass(domain: FirstClassAdminDomain): KnowledgeGraphDomain {
+  const metadata = domain.metadata ?? {};
+  const hostPort =
+    typeof metadata.host_port === "number"
+      ? metadata.host_port
+      : typeof metadata.host_port === "string"
+        ? Number.parseInt(metadata.host_port, 10)
+        : undefined;
+  const status = domain.state === "failed" ? "error" : domain.state;
+  const isHealthy = domain.health_status === "healthy" ? true : domain.health_status === "unhealthy" ? false : undefined;
+  return {
+    id: domain.id,
+    display_name: domain.display_name || domain.id,
+    domain_id: domain.id,
+    workspace: domain.display_name || domain.id,
+    port: hostPort ?? 0,
+    service: domain.id,
+    base_url: "",
+    status,
+    is_healthy: isHealthy,
+    is_default: false,
+    host_port: hostPort,
+    embedding: null,
   };
 }

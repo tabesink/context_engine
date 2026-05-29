@@ -3,11 +3,12 @@
 - Do not edit files under `docs/brainstorm/` unless the user explicitly asks for brainstorm documentation changes.
 - Treat `docs/brainstorm/` as historical planning material; keep implementation, tests, live docs, and root guidance elsewhere.
 - CLI is no longer supported or tracked. Do not modify CLI-related code, documentation, or tests unless the user explicitly asks for a CLI exception.
+- Before coding or reviewing UI, read `DESIGN.md` and `design/context_engine_agent_ui_guidelines.md`; follow the Context Engine workbench direction: white canvas, compact developer typography, `rounded-md` controls, neutral borders, and semantic micro-status instead of pill-heavy or saturated UI.
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **context_engine** (14003 symbols, 26665 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **context_engine** (14792 symbols, 28193 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

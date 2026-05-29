@@ -98,7 +98,7 @@ user -> /lightrag/domains/{domain_id}/graphs or /lightrag/domains/{domain_id}/gr
 Domain deployment and user listing:
 
 ```text
-admin -> /admin/lightrag/domains ... -> LightRAGDomainService -> .data/lightrag + Docker Compose runner
+admin -> /admin/lightrag-domains ... -> LightRAGDomainService -> .data/lightrag + Docker Compose runner
 user -> GET /lightrag/domains -> safe domain list for query/UI selection (same router module as admin domain APIs)
 ```
 
