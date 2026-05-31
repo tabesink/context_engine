@@ -73,7 +73,7 @@ export function ChatComposer({
 
   const openUpload = useCallback(() => {
     if (!isAdmin) return;
-    openSettingsDialog("knowledge-graph");
+    openSettingsDialog("documents");
     setRetrievalOpen(false);
     setMenuOpen(false);
   }, [isAdmin]);

@@ -1168,6 +1168,115 @@ def test_admin_ingestion_status_available_while_document_is_indexing() -> None:
     assert "track_id" not in body["lightrag"]
 
 
+def test_admin_processing_status_composes_document_operation_and_diagnostics() -> None:
+    create_db_and_tables()
+    with SessionLocal() as session:
+        document = DocumentRepository(session).create(
+            owner_id=None,
+            lightrag_domain_id="default",
+            filename="indexing.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/indexing.txt",
+            metadata={
+                "lightrag": {
+                    "domain_id": "default",
+                    "track_id": "track-indexing",
+                    "status": "indexing",
+                    "message": "Remote is indexing",
+                    "last_status_check_at": "2026-05-29T12:00:00Z",
+                }
+            },
+            status=DocumentStatus.INDEXING,
+        )
+        operation = JobRepository(session).create(
+            kind="document_ingest",
+            document_id=document.id,
+            metadata={
+                "stage": "indexing_lightrag",
+                "message": "Indexing in LightRAG",
+            },
+        )
+        document_id = document.id
+        operation_id = operation.id
+
+    with TestClient(app) as client:
+        _seed_users()
+        admin_headers = _login(client, "admin@example.com")
+        response = client.get(
+            f"/admin/documents/{document_id}/processing-status",
+            headers=admin_headers,
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["document"]["document_id"] == document_id
+    assert body["document"]["filename"] == "indexing.txt"
+    assert body["document"]["status"] == "indexing"
+    assert body["document"]["operation_id"] == operation_id
+    assert body["document"]["operation_status"] == "queued"
+    assert body["document"]["stage"] == "indexing_lightrag"
+    assert body["document"]["message"] == "Indexing in LightRAG"
+    assert body["document"]["can_retry"] is False
+    assert body["domain"]["domain_id"] == "default"
+    assert body["domain"]["is_busy"] is True
+    assert body["diagnostics"]["last_remote_status"] == "indexing"
+    assert body["diagnostics"]["last_remote_check_at"] == "2026-05-29T12:00:00Z"
+    assert "track_id" not in str(body)
+
+
+def test_admin_domain_processing_status_lists_documents_without_jobs_endpoint() -> None:
+    create_db_and_tables()
+    with SessionLocal() as session:
+        indexing_document = DocumentRepository(session).create(
+            owner_id=None,
+            lightrag_domain_id="fatigue",
+            filename="indexing.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/indexing.txt",
+            metadata={"lightrag": {"domain_id": "fatigue", "status": "indexing"}},
+            status=DocumentStatus.INDEXING,
+        )
+        ready_document = DocumentRepository(session).create(
+            owner_id=None,
+            lightrag_domain_id="fatigue",
+            filename="ready.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/ready.txt",
+            metadata={"lightrag": {"domain_id": "fatigue", "status": "ready"}},
+            status=DocumentStatus.READY,
+        )
+        JobRepository(session).create(
+            kind="document_ingest",
+            document_id=indexing_document.id,
+            metadata={"stage": "waiting_remote", "message": "Waiting for LightRAG"},
+        )
+        JobRepository(session).create(kind="document_ingest", document_id=ready_document.id)
+
+    with TestClient(app) as client:
+        _seed_users()
+        admin_headers = _login(client, "admin@example.com")
+        documents_response = client.get(
+            "/admin/lightrag/domains/fatigue/documents/processing-status",
+            headers=admin_headers,
+        )
+        summary_response = client.get(
+            "/admin/lightrag/domains/fatigue/processing-status",
+            headers=admin_headers,
+        )
+
+    assert documents_response.status_code == 200
+    body = documents_response.json()
+    assert body["domain"]["domain_id"] == "fatigue"
+    assert body["domain"]["is_busy"] is True
+    assert [row["filename"] for row in body["documents"]] == ["ready.txt", "indexing.txt"]
+    indexing_row = next(row for row in body["documents"] if row["filename"] == "indexing.txt")
+    assert indexing_row["stage"] == "waiting_remote"
+    assert indexing_row["message"] == "Waiting for LightRAG"
+
+    assert summary_response.status_code == 200
+    assert summary_response.json()["is_busy"] is True
+
+
 def test_source_section_route_hides_missing_and_non_ready_documents() -> None:
     create_db_and_tables()
     with SessionLocal() as session:
@@ -1541,6 +1650,15 @@ def test_admin_upload_queues_lightrag_ingestion_when_enabled(
     assert response.status_code == 200
     body = response.json()
     assert body["job_id"] is not None
+    assert body["operation_id"] == body["job_id"]
+    assert body["operation"] == {
+        "id": body["job_id"],
+        "type": "document_ingest",
+        "status": "queued",
+        "stage": "queued",
+        "message": "Queued for processing",
+    }
+    assert body["status_url"] == f"/documents/{body['document']['id']}/processing-status"
     assert body["document"]["status"] == "indexing"
     assert body["document"]["metadata"]["semantic_engine"] == "lightrag"
     assert body["document"]["metadata"]["lightrag"]["domain_id"] == "default"
@@ -1550,6 +1668,9 @@ def test_admin_upload_queues_lightrag_ingestion_when_enabled(
         assert job is not None
         assert job.kind == "document_ingest"
         assert job.document_id == body["document"]["id"]
+        assert job.stage == "queued"
+        assert job.message == "Queued for processing"
+        assert job.requested_by_user_id is not None
 
 
 def test_admin_upload_requires_lightrag_domain_id(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1728,6 +1849,63 @@ def test_lightrag_ingestion_job_uploads_polls_and_marks_document_ready(tmp_path:
     assert refreshed.meta["lightrag"]["status"] == "ready"
 
 
+def test_worker_marks_operation_waiting_remote_when_lightrag_is_still_indexing(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    create_db_and_tables()
+    upload_path = tmp_path / "manual.txt"
+    upload_path.write_text("Safety steps", encoding="utf-8")
+    monkeypatch.setattr(RedisIngestLock, "acquire", lambda self: True)
+    monkeypatch.setattr(RedisIngestLock, "release", lambda self: None)
+
+    def fake_ingest_source_chunks(
+        self: LightRAGRemoteAdapter,
+        *,
+        domain: str,
+        chunks: list[SourceChunk],
+    ) -> dict:
+        del self
+        assert domain == "default"
+        assert chunks
+        return {"document_id": "remote-doc", "track_id": "track-1", "status": "indexing"}
+
+    def fake_document_status(self: LightRAGRemoteAdapter, track_id: str) -> dict:
+        del self
+        assert track_id == "track-1"
+        return {"document_id": "remote-doc", "track_id": track_id, "status": "indexing"}
+
+    monkeypatch.setattr(LightRAGRemoteAdapter, "ingest_source_chunks", fake_ingest_source_chunks)
+    monkeypatch.setattr(LightRAGRemoteAdapter, "document_status", fake_document_status)
+
+    with SessionLocal() as session:
+        document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="manual.txt",
+            content_type="text/plain",
+            storage_path=str(upload_path),
+            metadata={"lightrag": {"domain_id": "default", "status": "queued"}},
+            status=DocumentStatus.INDEXING,
+        )
+        job = JobRepository(session).create(kind="document_ingest", document_id=document.id)
+        document_id = document.id
+        job_id = job.id
+
+    run_document_ingest_job(job_id)
+
+    with SessionLocal() as session:
+        refreshed_document = DocumentRepository(session).get(document_id)
+        refreshed_job = JobRepository(session).get(job_id)
+
+    assert refreshed_document is not None
+    assert refreshed_document.status == "indexing"
+    assert refreshed_job is not None
+    assert refreshed_job.status == "running"
+    assert refreshed_job.stage == "waiting_remote"
+    assert refreshed_job.message == "Waiting for LightRAG to finish indexing"
+    assert refreshed_job.finished_at is None
+
+
 def test_admin_refresh_lightrag_status_marks_document_ready(monkeypatch: pytest.MonkeyPatch) -> None:
     create_db_and_tables()
     get_settings.cache_clear()
@@ -1764,6 +1942,62 @@ def test_admin_refresh_lightrag_status_marks_document_ready(monkeypatch: pytest.
     body = response.json()
     assert body["status"] == "ready"
     assert body["metadata"]["lightrag"]["document_id"] == "remote-doc"
+
+
+def test_admin_refresh_lightrag_status_reconciles_latest_operation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_db_and_tables()
+    get_settings.cache_clear()
+
+    def fake_document_status(self: LightRAGRemoteAdapter, track_id: str) -> dict:
+        del self
+        assert track_id == "track-1"
+        return {"document_id": "remote-doc", "track_id": track_id, "status": "ready"}
+
+    monkeypatch.setattr(LightRAGRemoteAdapter, "document_status", fake_document_status)
+    with SessionLocal() as session:
+        document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="manual.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/manual.txt",
+            metadata={
+                "semantic_engine": "lightrag",
+                "lightrag": {"domain_id": "default", "track_id": "track-1", "status": "indexing"},
+            },
+            status=DocumentStatus.INDEXING,
+        )
+        operation = JobRepository(session).create(
+            kind="document_ingest",
+            document_id=document.id,
+            stage="waiting_remote",
+            message="Waiting for LightRAG to finish indexing",
+        )
+        JobRepository(session).mark_operation_running(
+            operation,
+            stage="waiting_remote",
+            message="Waiting for LightRAG to finish indexing",
+        )
+        document_id = document.id
+        operation_id = operation.id
+
+    with TestClient(app) as client:
+        _seed_users()
+        admin_headers = _login(client, "admin@example.com")
+        response = client.post(
+            f"/admin/documents/{document_id}/refresh-status",
+            headers=admin_headers,
+        )
+
+    assert response.status_code == 200
+    with SessionLocal() as session:
+        refreshed = JobRepository(session).get(operation_id)
+    assert refreshed is not None
+    assert refreshed.status == "succeeded"
+    assert refreshed.stage == "complete"
+    assert refreshed.message == "Ready"
+    assert refreshed.finished_at is not None
 
 
 def test_admin_refresh_lightrag_status_reports_missing_provider_secret_cleanly(
@@ -1848,6 +2082,42 @@ def test_poller_refreshes_pending_lightrag_statuses(monkeypatch: pytest.MonkeyPa
     assert refreshed is not None
     assert refreshed.status == "ready"
     assert refreshed.meta["lightrag"]["status"] == "ready"
+
+
+def test_poller_uses_document_state_not_metadata_status_for_pending_refresh(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_db_and_tables()
+    get_settings.cache_clear()
+
+    def fake_document_status(self: LightRAGRemoteAdapter, track_id: str) -> dict:
+        del self
+        assert track_id == "track-1"
+        return {"document_id": "remote-doc", "track_id": track_id, "status": "ready"}
+
+    monkeypatch.setattr(LightRAGRemoteAdapter, "document_status", fake_document_status)
+    with SessionLocal() as session:
+        document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="manual.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/manual.txt",
+            metadata={
+                "semantic_engine": "lightrag",
+                "lightrag": {"domain_id": "default", "track_id": "track-1"},
+            },
+            status=DocumentStatus.INDEXING,
+        )
+        document_id = document.id
+
+    poll_lightrag_statuses()
+
+    with SessionLocal() as session:
+        refreshed = DocumentRepository(session).get(document_id)
+
+    assert refreshed is not None
+    assert refreshed.status == "ready"
+    assert refreshed.meta["lightrag"]["last_remote_status"] == "ready"
 
 
 def test_poller_continues_and_marks_missing_domain_document_failed(
@@ -3756,6 +4026,103 @@ def test_admin_can_retry_document_ingest_job(
         refreshed = JobRepository(session).get(job_id)
     assert refreshed.started_at is not None
     assert refreshed.finished_at is not None
+
+
+def test_admin_can_retry_document_ingestion_by_document_id(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    upload_path = tmp_path / "manual.txt"
+    upload_path.write_text("Retryable document body.", encoding="utf-8")
+    monkeypatch.setenv("INDEX_JOBS_INLINE", "false")
+    get_settings.cache_clear()
+
+    class FakeQueue:
+        def enqueue(self, function: object, job_id: str):
+            del function
+
+            class FakeQueuedJob:
+                id = f"rq-{job_id}"
+
+            return FakeQueuedJob()
+
+    monkeypatch.setattr(JobService, "_queue", lambda self: FakeQueue())
+    create_db_and_tables()
+    with SessionLocal() as session:
+        document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="manual.txt",
+            content_type="text/plain",
+            storage_path=str(upload_path),
+            metadata={"lightrag": {"domain_id": "default", "last_remote_status": "failed"}},
+            status=DocumentStatus.FAILED,
+        )
+        failed_operation = JobRepository(session).create(
+            kind="document_ingest",
+            document_id=document.id,
+            stage="failed",
+            message="Failed",
+        )
+        JobRepository(session).mark_operation_failed(
+            failed_operation,
+            error_message="failed once",
+            stage="failed",
+            message="failed once",
+        )
+        document_id = document.id
+        failed_operation_id = failed_operation.id
+
+    with TestClient(app) as client:
+        _seed_users()
+        admin_headers = _login(client, "admin@example.com")
+        response = client.post(
+            f"/admin/documents/{document_id}/retry-ingestion",
+            headers=admin_headers,
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["document"]["id"] == document_id
+    assert body["document"]["status"] == "indexing"
+    assert body["operation_id"] == body["job_id"]
+    assert body["operation"]["status"] == "queued"
+    assert body["operation"]["stage"] == "queued"
+    assert body["operation"]["message"] == "Queued for retry"
+    assert body["status_url"] == f"/documents/{document_id}/processing-status"
+
+    with SessionLocal() as session:
+        old_operation = JobRepository(session).get(failed_operation_id)
+        new_operation = JobRepository(session).get(body["operation_id"])
+    assert old_operation is not None
+    assert old_operation.status == "failed"
+    assert new_operation is not None
+    assert new_operation.id != failed_operation_id
+    assert new_operation.document_id == document_id
+
+
+def test_admin_document_retry_rejects_non_failed_document() -> None:
+    create_db_and_tables()
+    with SessionLocal() as session:
+        document = DocumentRepository(session).create(
+            owner_id=None,
+            filename="ready.txt",
+            content_type="text/plain",
+            storage_path=".data/uploads/ready.txt",
+            metadata={"lightrag": {"domain_id": "default"}},
+            status=DocumentStatus.READY,
+        )
+        document_id = document.id
+
+    with TestClient(app) as client:
+        _seed_users()
+        admin_headers = _login(client, "admin@example.com")
+        response = client.post(
+            f"/admin/documents/{document_id}/retry-ingestion",
+            headers=admin_headers,
+        )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Document is not retryable"
 
 
 def test_admin_retry_rejects_non_document_ingest_job() -> None:

@@ -16,9 +16,55 @@ class DocumentResponse(BaseModel):
     error_message: str | None = None
 
 
+class UploadOperationResponse(BaseModel):
+    id: str
+    type: str
+    status: str
+    stage: str | None = None
+    message: str | None = None
+
+
 class UploadResponse(BaseModel):
     document: DocumentResponse
     job_id: str | None = None
+    operation_id: str | None = None
+    operation: UploadOperationResponse | None = None
+    status_url: str | None = None
+
+
+class ProcessingDocumentStatus(BaseModel):
+    document_id: str
+    filename: str
+    status: DocumentStatus
+    stage: str | None = None
+    message: str | None = None
+    can_retry: bool
+    operation_id: str | None = None
+    operation_status: str | None = None
+    updated_at: datetime
+
+
+class ProcessingDomainStatus(BaseModel):
+    domain_id: str | None = None
+    state: str | None = None
+    is_busy: bool
+    is_stale: bool = False
+
+
+class ProcessingDiagnostics(BaseModel):
+    last_remote_status: str | None = None
+    last_remote_check_at: str | None = None
+
+
+class ProcessingStatusResponse(BaseModel):
+    document: ProcessingDocumentStatus
+    domain: ProcessingDomainStatus
+    diagnostics: ProcessingDiagnostics = Field(default_factory=ProcessingDiagnostics)
+
+
+class DomainDocumentsProcessingStatusResponse(BaseModel):
+    domain: ProcessingDomainStatus
+    documents: list[ProcessingDocumentStatus]
 
 
 class PageResponse(BaseModel):

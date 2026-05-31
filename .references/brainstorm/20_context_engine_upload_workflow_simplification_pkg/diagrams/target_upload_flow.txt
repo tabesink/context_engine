@@ -1,0 +1,37 @@
+TARGET UPLOAD FLOW
+==================
+
+Admin upload
+  │
+  ▼
+POST /admin/documents/upload
+  │
+  ├─ creates document
+  │    status = uploaded
+  │
+  └─ creates operation
+       type = document_ingest
+       resource_type = document
+       resource_id = document.id
+       status = queued
+       stage = queued
+  │
+  ▼
+Worker executes operation
+  ├─ running / parsing
+  ├─ running / extracting_assets
+  ├─ running / indexing_lightrag
+  │
+  ├─ complete locally/remotely
+  │    └─ operation succeeded, document ready
+  │
+  └─ async remote pending
+       └─ running / waiting_remote
+             │
+             ▼
+          RemoteStatusReconciler
+             ├─ remote ready -> succeeded/ready
+             └─ remote failed -> failed/failed
+
+UI polls only:
+  processing-status

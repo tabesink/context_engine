@@ -23,6 +23,8 @@ class OperationResponse(BaseModel):
     resource_type: str | None = None
     resource_id: str | None = None
     requested_by_user_id: str | None = None
+    stage: str | None = None
+    message: str | None = None
     progress_current: int | None = None
     progress_total: int | None = None
     error_message: str | None = None

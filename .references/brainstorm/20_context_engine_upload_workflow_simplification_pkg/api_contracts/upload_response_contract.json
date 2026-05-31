@@ -1,0 +1,16 @@
+{
+  "document": {
+    "id": "doc_123",
+    "filename": "manual.pdf",
+    "status": "uploaded",
+    "domain_id": "fatigue"
+  },
+  "operation": {
+    "id": "op_456",
+    "type": "document_ingest",
+    "status": "queued",
+    "stage": "queued",
+    "message": "Queued for processing"
+  },
+  "status_url": "/documents/doc_123/processing-status"
+}

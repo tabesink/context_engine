@@ -1,0 +1,38 @@
+CURRENT UPLOAD FLOW
+===================
+
+Admin upload
+  │
+  ▼
+POST /admin/documents/upload
+  │
+  ▼
+DocumentService.upload
+  ├─ save file
+  ├─ documents.status = indexing
+  ├─ metadata.lightrag.status = queued
+  └─ create jobs row
+       kind = document_ingest
+       status = queued
+       document_id = document.id
+  │
+  ▼
+Worker
+  ├─ job.status = running
+  ├─ parse / save structure / push to LightRAG
+  └─ job.status = succeeded or failed
+  │
+  ▼
+Status poller
+  └─ refresh pending LightRAG statuses
+
+UI may look at:
+  documents.status
+  jobs.status
+  ingestion-status
+  processing-status
+  metadata.lightrag.status
+  remote LightRAG state
+
+Problem:
+  Too many status surfaces.

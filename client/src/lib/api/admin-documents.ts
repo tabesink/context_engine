@@ -14,6 +14,15 @@ export type AdminDocument = {
 export type AdminDocumentUploadResponse = {
   document: AdminDocument;
   job_id?: string | null;
+  operation_id?: string | null;
+  operation?: {
+    id: string;
+    type: string;
+    status: string;
+    stage?: string | null;
+    message?: string | null;
+  } | null;
+  status_url?: string | null;
 };
 
 export type AdminAuditLog = {
@@ -22,6 +31,32 @@ export type AdminAuditLog = {
   target_id: string;
   metadata: Record<string, unknown>;
   created_at: string;
+};
+
+export type ProcessingDocumentStatus = {
+  document_id: string;
+  filename: string;
+  status: AdminDocument["status"];
+  stage?: string | null;
+  message?: string | null;
+  can_retry: boolean;
+  operation_id?: string | null;
+  operation_status?: string | null;
+  updated_at: string;
+};
+
+export type ProcessingStatusResponse = {
+  document: ProcessingDocumentStatus;
+  domain: {
+    domain_id?: string | null;
+    state?: string | null;
+    is_busy: boolean;
+    is_stale: boolean;
+  };
+  diagnostics: {
+    last_remote_status?: string | null;
+    last_remote_check_at?: string | null;
+  };
 };
 
 export const adminDocumentsApi = {
@@ -55,6 +90,17 @@ export const adminDocumentsApi = {
       throw new APIError(extractDetail(payload) || `${response.status} ${response.statusText}`, response.status, payload);
     }
     return payload as AdminDocumentUploadResponse;
+  },
+  processingStatus(documentId: string) {
+    return apiRequest<ProcessingStatusResponse>(
+      `/admin/documents/${encodeURIComponent(documentId)}/processing-status`,
+    );
+  },
+  retryIngestion(documentId: string) {
+    return apiRequest<AdminDocumentUploadResponse>(
+      `/admin/documents/${encodeURIComponent(documentId)}/retry-ingestion`,
+      { method: "POST" },
+    );
   },
 };
 

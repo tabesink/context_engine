@@ -260,12 +260,14 @@ def test_alembic_head_adds_operation_compatible_job_columns_with_backfill(
     assert "progress_total" in columns
     assert "started_at" in columns
     assert "finished_at" in columns
+    assert "stage" in columns
+    assert "message" in columns
 
     with engine.connect() as connection:
         backfilled_rows = connection.execute(
             sa.text(
                 """
-                SELECT id, resource_type, resource_id
+                SELECT id, resource_type, resource_id, stage, message
                 FROM jobs
                 ORDER BY id ASC
                 """
@@ -273,8 +275,8 @@ def test_alembic_head_adds_operation_compatible_job_columns_with_backfill(
         ).all()
 
     assert backfilled_rows == [
-        ("job-doc", "document", "doc-1"),
-        ("job-sys", "system", None),
+        ("job-doc", "document", "doc-1", "queued", "Queued for processing"),
+        ("job-sys", "system", None, "queued", "Queued for processing"),
     ]
 
 

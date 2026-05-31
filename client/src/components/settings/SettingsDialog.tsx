@@ -2,10 +2,11 @@
 
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import * as React from "react";
-import { Bot, Settings, UserRound, Workflow, X } from "lucide-react";
+import { Bot, FileText, Settings, UserRound, Workflow, X } from "lucide-react";
 import { AIModelSettingsPanel } from "@/components/settings/panels/AIModelSettingsPanel";
 import { Button } from "@/components/ui/button";
 import { AccountSettingsPanel } from "@/components/settings/panels/AccountSettingsPanel";
+import { DocumentsSettingsPanel } from "@/components/settings/panels/DocumentsSettingsPanel";
 import { GeneralSettingsPanel } from "@/components/settings/panels/GeneralSettingsPanel";
 import { KnowledgeGraphSettingsPanel } from "@/components/settings/panels/KnowledgeGraphSettingsPanel";
 import { selectIsAdmin, useAuthStore } from "@/stores/auth-store";
@@ -21,6 +22,7 @@ import type { ComponentType } from "react";
 const ROUTES: Array<{ id: SettingsRoute; label: string; icon: ComponentType<{ className?: string }> }> = [
   { id: "general", label: "General", icon: Settings },
   { id: "account", label: "Account", icon: UserRound },
+  { id: "documents", label: "Documents", icon: FileText },
   { id: "knowledge-graph", label: "Knowledge Graph", icon: Workflow },
   { id: "provider", label: "Providers", icon: Bot },
 ];
@@ -34,7 +36,7 @@ export function SettingsDialog() {
     [isAdmin],
   );
   const activeRouteLabel = allowedRoutes.find((item) => item.id === route)?.label ?? "General";
-  const useFlatHeader = route === "knowledge-graph" || route === "provider";
+  const useFlatHeader = route === "documents" || route === "knowledge-graph" || route === "provider";
 
   return (
     <DialogPrimitive.Root open={isOpen} onOpenChange={setSettingsDialogOpen}>
@@ -87,6 +89,7 @@ export function SettingsDialog() {
               </header>
               {route === "general" ? <GeneralSettingsPanel /> : null}
               {route === "account" ? <AccountSettingsPanel embedded /> : null}
+              {route === "documents" ? <DocumentsSettingsPanel /> : null}
               {route === "knowledge-graph" ? <KnowledgeGraphSettingsPanel /> : null}
               {route === "provider" ? <AIModelSettingsPanel /> : null}
             </section>

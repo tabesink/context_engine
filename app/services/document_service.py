@@ -25,6 +25,7 @@ from app.services.lightrag_domain_registry import (
 )
 from app.services.file_storage import FileStorage
 from app.services.job_service import JobService
+from app.services.document_ingestion_status_service import DocumentIngestionStatusService
 from app.services.lightrag_reachability_service import (
     LightRAGReachabilityReport,
     LightRAGReachabilityService,
@@ -102,7 +103,10 @@ class DocumentService:
             status=DocumentStatus.INDEXING,
         )
         jobs = JobService(self.session)
-        job_id = jobs.enqueue_document_ingest(document_id=document.id)
+        job_id = jobs.enqueue_document_ingest(
+            document_id=document.id,
+            requested_by_user_id=actor_id,
+        )
         self.documents.audit(
             actor_id=actor_id,
             event="document.uploaded",
@@ -223,8 +227,9 @@ class DocumentService:
             "document_id": status_payload.get("document_id") or lightrag.get("document_id"),
             "track_id": status_payload.get("track_id") or track_id,
             "status": status,
+            "last_remote_status": status,
             "message": normalized_message,
-            "last_status_check_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            "last_remote_check_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         }
         if missing_provider_secrets:
             updated_lightrag["failure_reason"] = "missing_provider_secrets"
@@ -233,15 +238,16 @@ class DocumentService:
             document,
             document.meta | {"lightrag": updated_lightrag},
         )
-        if status == "ready":
-            return self.documents.update_status(document, DocumentStatus.READY)
-        if status == "failed":
-            return self.documents.update_status(
-                document,
-                DocumentStatus.FAILED,
-                error_message=updated_lightrag.get("message"),
-            )
-        return document
+        DocumentIngestionStatusService(self.session).reconcile_remote_status(
+            document_id=document.id,
+            remote_status=status,
+            error_message=updated_lightrag.get("message"),
+        )
+        self.session.expire_all()
+        refreshed = self.documents.get(document.id)
+        if not refreshed:
+            raise not_found("Document not found")
+        return refreshed
 
     def refresh_pending_lightrag_statuses(self) -> list[DocumentRow]:
         refreshed: list[DocumentRow] = []
@@ -282,8 +288,9 @@ class DocumentService:
         normalized_message, missing_provider_secrets = self._normalize_lightrag_failure_message(message)
         updated_lightrag = lightrag | {
             "status": "failed",
+            "last_remote_status": "failed",
             "message": normalized_message,
-            "last_status_check_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            "last_remote_check_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         }
         if missing_provider_secrets:
             updated_lightrag["failure_reason"] = "missing_provider_secrets"

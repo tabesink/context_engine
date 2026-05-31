@@ -112,7 +112,6 @@ class DocumentRepository:
             if (
                 document.status == DocumentStatus.INDEXING.value
                 and lightrag.get("track_id")
-                and lightrag.get("status") == "indexing"
             ):
                 pending.append(document)
         return pending

@@ -84,7 +84,7 @@ class LightRAGIngestionService:
         self.deploy_settings = LightRAGDeploySettings.from_app_settings(get_settings())
         self.domain_manifest = domain_manifest or DomainManifestStore(self.deploy_settings.manifest_path)
 
-    def ingest_document(self, document_id: str) -> None:
+    def ingest_document(self, document_id: str) -> str:
         document = self.documents.get(document_id)
         if not document:
             raise ValueError(f"Document {document_id} not found")
@@ -100,7 +100,12 @@ class LightRAGIngestionService:
         try:
             adapter = self.adapter_factory(str(domain_id))
             remote = self._ingest_source_chunks(document=document, adapter=adapter, domain_id=str(domain_id))
-            self._apply_remote_status(document=document, lightrag=lightrag, remote=remote, adapter=adapter)
+            return self._apply_remote_status(
+                document=document,
+                lightrag=lightrag,
+                remote=remote,
+                adapter=adapter,
+            )
         except Exception as exc:
             self._mark_failed(document=document, lightrag=lightrag, message=str(exc))
             raise
@@ -146,8 +151,9 @@ class LightRAGIngestionService:
         normalized_message, missing_provider_secrets = self._normalize_lightrag_failure_message(message)
         updated_lightrag = lightrag | {
             "status": "failed",
+            "last_remote_status": "failed",
             "message": normalized_message,
-            "last_status_check_at": self.now().isoformat().replace("+00:00", "Z"),
+            "last_remote_check_at": self.now().isoformat().replace("+00:00", "Z"),
         }
         if missing_provider_secrets:
             updated_lightrag["failure_reason"] = "missing_provider_secrets"
@@ -175,7 +181,7 @@ class LightRAGIngestionService:
         lightrag: dict,
         remote: dict,
         adapter: LightRAGRemoteAdapter,
-    ) -> None:
+    ) -> str:
         raw_status = remote.get("status")
         if raw_status is None:
             raise ValueError("LightRAG ingestion response missing status.")
@@ -193,8 +199,9 @@ class LightRAGIngestionService:
             "document_id": remote.get("document_id"),
             "track_id": remote.get("track_id", track_id),
             "status": status,
+            "last_remote_status": status,
             "message": normalized_message,
-            "last_status_check_at": self.now().isoformat().replace("+00:00", "Z"),
+            "last_remote_check_at": self.now().isoformat().replace("+00:00", "Z"),
         }
         if missing_provider_secrets:
             updated_lightrag["failure_reason"] = "missing_provider_secrets"
@@ -209,14 +216,17 @@ class LightRAGIngestionService:
                 domain_id=str(lightrag.get("domain_id") or ""),
                 document_id=document.id,
             )
+            return status
         elif status == "failed":
             self.documents.update_status(
                 document,
                 DocumentStatus.FAILED,
                 error_message=updated_lightrag.get("message"),
             )
+            return status
         elif status != "indexing":
             raise ValueError(f"Unknown LightRAG status: {status!r}")
+        return status
 
     def _lock_domain_embedding(self, *, domain_id: str, document_id: str) -> None:
         if not domain_id:

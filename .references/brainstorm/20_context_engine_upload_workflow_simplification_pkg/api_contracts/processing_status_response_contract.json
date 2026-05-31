@@ -1,0 +1,23 @@
+{
+  "document": {
+    "document_id": "doc_123",
+    "filename": "manual.pdf",
+    "status": "indexing",
+    "stage": "indexing_lightrag",
+    "message": "Indexing in LightRAG",
+    "can_retry": false,
+    "operation_id": "op_456",
+    "operation_status": "running",
+    "updated_at": "2026-05-29T12:00:00Z"
+  },
+  "domain": {
+    "domain_id": "fatigue",
+    "state": "running",
+    "is_busy": true,
+    "is_stale": false
+  },
+  "diagnostics": {
+    "last_remote_status": "processing",
+    "last_remote_check_at": "2026-05-29T12:00:00Z"
+  }
+}

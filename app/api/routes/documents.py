@@ -6,6 +6,7 @@ from app.api.deps import get_current_user
 from app.core.errors import not_found
 from app.document_processing.quality import StructureQualityScorer
 from app.schemas.documents import (
+    ProcessingStatusResponse,
     DocumentResponse,
     PageResponse,
     SectionDetailResponse,
@@ -15,6 +16,7 @@ from app.schemas.documents import (
 )
 from app.services.document_access_policy import DocumentAccessPolicy
 from app.services.document_asset_service import DocumentAssetService
+from app.services.processing_status_service import ProcessingStatusService
 from app.storage.db import get_session
 from app.storage.repositories.documents import DocumentRepository
 from app.storage.repositories.document_processing import DocumentProcessingRepository
@@ -133,6 +135,7 @@ def get_ingestion_status(
     user: UserRow = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> dict:
+    # Deprecated compatibility surface. New UI should poll processing-status.
     document = DocumentAccessPolicy(DocumentRepository(session)).get_readable_document_or_404(
         user=user,
         document_id=document_id,
@@ -142,6 +145,19 @@ def get_ingestion_status(
         source_file=document.storage_path,
     )
     return ingestion_status_response(document, structure)
+
+
+@router.get("/{document_id}/processing-status")
+def get_processing_status(
+    document_id: str,
+    user: UserRow = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> ProcessingStatusResponse:
+    document = DocumentAccessPolicy(DocumentRepository(session)).get_readable_document_or_404(
+        user=user,
+        document_id=document_id,
+    )
+    return ProcessingStatusService(session).for_document(document)
 
 
 @router.get("/{document_id}/structure-quality")

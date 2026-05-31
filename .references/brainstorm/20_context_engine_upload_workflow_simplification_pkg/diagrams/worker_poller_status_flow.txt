@@ -1,0 +1,30 @@
+WORKER / POLLER STATUS FLOW
+===========================
+
+Upload route
+  └─ status.mark_queued(document_id, operation_id)
+
+Worker
+  ├─ status.mark_running(..., stage="parsing")
+  ├─ status.mark_running(..., stage="extracting_assets")
+  ├─ status.mark_running(..., stage="indexing_lightrag")
+  │
+  ├─ if complete:
+  │    └─ status.mark_succeeded(...)
+  │
+  ├─ if remote pending:
+  │    └─ status.mark_waiting_remote(...)
+  │
+  └─ if error:
+       └─ status.mark_failed(...)
+
+Poller / Reconciler
+  ├─ reads waiting_remote/indexing work
+  ├─ checks LightRAG remote status
+  ├─ maps remote -> app state
+  │
+  ├─ ready:
+  │    └─ status.mark_succeeded(...)
+  │
+  └─ failed:
+       └─ status.mark_failed(...)

@@ -19,6 +19,8 @@ def operation_response(job) -> OperationResponse:
         resource_type=job.resource_type,
         resource_id=job.resource_id,
         requested_by_user_id=job.requested_by_user_id,
+        stage=job.stage,
+        message=job.message,
         progress_current=job.progress_current,
         progress_total=job.progress_total,
         error_message=job.error_message,

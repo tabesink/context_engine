@@ -22,6 +22,8 @@ class JobRepository:
         resource_type: OperationResourceType | str | None = None,
         resource_id: str | None = None,
         requested_by_user_id: str | None = None,
+        stage: str | None = None,
+        message: str | None = None,
         progress_current: int | None = None,
         progress_total: int | None = None,
         started_at: datetime | None = None,
@@ -37,6 +39,8 @@ class JobRepository:
             resource_type=str(resolved_resource_type),
             resource_id=resolved_resource_id,
             requested_by_user_id=requested_by_user_id,
+            stage=stage,
+            message=message,
             progress_current=progress_current,
             progress_total=progress_total,
             started_at=started_at,
@@ -57,6 +61,8 @@ class JobRepository:
         requested_by_user_id: str | None = None,
         metadata: dict | None = None,
         document_id: str | None = None,
+        stage: str | None = None,
+        message: str | None = None,
         progress_current: int | None = None,
         progress_total: int | None = None,
     ) -> JobRow:
@@ -67,6 +73,8 @@ class JobRepository:
             resource_type=resource_type,
             resource_id=resource_id,
             requested_by_user_id=requested_by_user_id,
+            stage=stage,
+            message=message,
             progress_current=progress_current,
             progress_total=progress_total,
         )
@@ -117,6 +125,8 @@ class JobRepository:
         *,
         error_message: str | None = None,
         metadata: dict | None = None,
+        stage: str | None = None,
+        message: str | None = None,
         progress_current: int | None = None,
         progress_total: int | None = None,
         started_at: datetime | None = None,
@@ -127,6 +137,10 @@ class JobRepository:
         job.error_message = error_message
         if metadata is not None:
             job.meta = metadata
+        if stage is not None:
+            job.stage = stage
+        if message is not None:
+            job.message = message
         if progress_current is not None:
             job.progress_current = progress_current
         if progress_total is not None:
@@ -145,6 +159,8 @@ class JobRepository:
         job: JobRow,
         *,
         metadata: dict | None = None,
+        stage: str | None = None,
+        message: str | None = None,
         progress_current: int | None = None,
         progress_total: int | None = None,
         started_at: datetime | None = None,
@@ -153,6 +169,8 @@ class JobRepository:
             job,
             OperationStatus.RUNNING,
             metadata=metadata,
+            stage=stage,
+            message=message,
             progress_current=progress_current,
             progress_total=progress_total,
             started_at=started_at or utc_now(),
@@ -164,6 +182,8 @@ class JobRepository:
         job: JobRow,
         *,
         metadata: dict | None = None,
+        stage: str | None = None,
+        message: str | None = None,
         progress_current: int | None = None,
         progress_total: int | None = None,
         finished_at: datetime | None = None,
@@ -172,6 +192,8 @@ class JobRepository:
             job,
             OperationStatus.SUCCEEDED,
             metadata=metadata,
+            stage=stage,
+            message=message,
             progress_current=progress_current,
             progress_total=progress_total,
             finished_at=finished_at or utc_now(),
@@ -184,6 +206,8 @@ class JobRepository:
         *,
         error_message: str | None = None,
         metadata: dict | None = None,
+        stage: str | None = None,
+        message: str | None = None,
         finished_at: datetime | None = None,
     ) -> JobRow:
         return self.set_status(
@@ -191,6 +215,8 @@ class JobRepository:
             OperationStatus.FAILED,
             error_message=error_message,
             metadata=metadata,
+            stage=stage,
+            message=message,
             finished_at=finished_at or utc_now(),
         )
 

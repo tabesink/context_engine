@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 
-export type SettingsRoute = "general" | "account" | "knowledge-graph" | "provider";
+export type SettingsRoute = "general" | "account" | "documents" | "knowledge-graph" | "provider";
 
 type SettingsDialogState = {
   isOpen: boolean;

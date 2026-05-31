@@ -1,4 +1,5 @@
 from app.domain.models import JobStatus
+from app.services.document_ingestion_status_service import DocumentIngestionStatusService
 from app.services.lightrag_ingestion_service import DomainIngestBusy, LightRAGIngestionService
 from app.services.document_service import DocumentService
 from app.storage.db import SessionLocal
@@ -12,15 +13,32 @@ def run_document_ingest_job(job_id: str) -> None:
         if not job or not job.document_id:
             return
 
-        jobs.mark_operation_running(job)
+        status = DocumentIngestionStatusService(session)
+        status.mark_running(
+            document_id=job.document_id,
+            operation_id=job.id,
+            stage="parsing",
+            message="Parsing document",
+        )
         try:
-            LightRAGIngestionService(session).ingest_document(job.document_id)
-            jobs.mark_operation_succeeded(job)
+            remote_status = LightRAGIngestionService(session).ingest_document(job.document_id)
+            if remote_status == "indexing":
+                status.mark_waiting_remote(
+                    document_id=job.document_id,
+                    operation_id=job.id,
+                    message="Waiting for LightRAG to finish indexing",
+                )
+            else:
+                status.mark_succeeded(document_id=job.document_id, operation_id=job.id)
         except DomainIngestBusy as exc:
-            jobs.set_status(job, JobStatus.QUEUED, error_message=str(exc))
+            jobs.set_status(job, JobStatus.QUEUED, stage="queued", message=str(exc), error_message=str(exc))
             raise
         except Exception as exc:
-            jobs.mark_operation_failed(job, error_message=str(exc))
+            status.mark_failed(
+                document_id=job.document_id,
+                operation_id=job.id,
+                error_message=str(exc),
+            )
             raise
 
 

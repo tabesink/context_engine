@@ -33,12 +33,20 @@ class JobService:
         self.run_inline = get_settings().index_jobs_inline if run_inline is None else run_inline
         self.queue = queue
 
-    def enqueue_document_ingest(self, *, document_id: str) -> str:
+    def enqueue_document_ingest(
+        self,
+        *,
+        document_id: str,
+        requested_by_user_id: str | None = None,
+    ) -> str:
         job = self.jobs.create(
             kind=DOCUMENT_INGEST_JOB_KIND,
             document_id=document_id,
             resource_type=OperationResourceType.DOCUMENT,
             resource_id=document_id,
+            requested_by_user_id=requested_by_user_id,
+            stage="queued",
+            message="Queued for processing",
         )
         if self.run_inline:
             self.run_document_ingest_job(job.id)
