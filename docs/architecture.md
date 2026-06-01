@@ -1,6 +1,6 @@
 # Backend Architecture
 
-The app is a backend-only multi-user Context Engine. It exposes one FastAPI API, one auth model, one document registry, one job system, one LightRAG deployment control plane, and a common `Evidence` contract across LightRAG semantic retrieval and local document navigation.
+The app is a backend-only multi-user Context Engine. It exposes one FastAPI API, one auth model, one document registry, one operations-backed async system, one LightRAG deployment control plane, and a common `Evidence` contract across LightRAG semantic retrieval and local document navigation.
 
 ## System Shape
 
@@ -8,7 +8,7 @@ The app is a backend-only multi-user Context Engine. It exposes one FastAPI API,
 HTTP client or `context-engine` TUI
   -> FastAPI route
   -> application service
-  -> repository / retrieval strategy / job queue / remote adapter
+  -> repository / retrieval strategy / operation queue / remote adapter
   -> storage or retrieval engine
   -> response schema
 ```
@@ -71,14 +71,14 @@ LightRAG runtime configured
   POST /admin/documents/upload
     -> require_admin
     -> DocumentService stores a local mirror record and file
-    -> JobService enqueues document_ingest
+    -> JobService creates the internal operation row and enqueues document_ingest
     -> validate LightRAG domain manifest and requested domain
-    -> response includes document_id, lightrag job_id, and queued lightrag metadata
+    -> response includes document_id, operation_id, and processing-status URL
 ```
 
 Admin uploads require a readable LightRAG domain manifest. Structure-aware ingestion must produce source chunks before LightRAG ingest proceeds; parse/build failures mark the document failed instead of raw-uploading to LightRAG.
 
-Remote LightRAG ingestion is started by a worker job, serialized per domain with a Redis lock, and tracked through mirrored metadata such as `lightrag.track_id`.
+Remote LightRAG ingestion is started by a worker operation, serialized per domain with a Redis lock, and tracked through mirrored metadata such as `lightrag.track_id`.
 
 When Docling is available for PDF parsing, ingestion normalizes label variants (for example `section-header`), falls back across provenance entries for page-number resolution, and maps detached caption blocks to nearby image/table assets when per-item caption APIs are empty.
 
@@ -96,7 +96,7 @@ Admin API or TUI
 
 Deployment routes are disabled by default with `LIGHTRAG_DEPLOY_ENABLED=false`. When enabled, admins can create, list, show, start, stop, and delete managed domains. Create writes configuration only; Start refreshes runtime artifacts, provisions storage, starts Docker, and probes health. Delete archives the generated domain files and preserves uploaded documents and parsed structure. Any authenticated user may call `GET /lightrag/domains` for a safe subset of domain metadata used to pick `lightrag_domain_id` on uploads and queries (admin mutating routes still require deploy mode on).
 
-Each managed domain lives under `.data/lightrag/domains/<domain>/`, gets one generated `domain.env`, and uses a LightRAG-owned PostgreSQL database such as `lightrag_manuals`. Retrieval defaults are deployment settings written into `domain.env`, not domain manifest fields or create-form inputs.
+Each managed domain lives under `.data/lightrag/domains/<domain>/`, gets one generated `domain.env`, and uses a LightRAG-owned PostgreSQL database such as `lightrag_manuals`. Provider profiles and secrets are admin-managed in the database with environment fallback; generated `domain.env` files are deployment snapshots, not the editable source of truth.
 
 The generated `domain.env` now includes provider runtime wiring (when configured) for:
 
@@ -129,6 +129,8 @@ Local development uses explicit service-backed storage:
 - Context Engine stores LightRAG document IDs, track IDs, status, and canonical local structure metadata; it does not store semantic chunks or embeddings.
 
 Docker Compose uses PostgreSQL, Redis, API, worker, and generated LightRAG domain services on a shared named network. Option 3 requires a validated PostgreSQL image/build with both `vector` and Apache `AGE` extensions.
+
+Database table ownership and destructive migration policy live in `docs/DATABASE_OWNERSHIP.md`. Forward migrations should stay additive unless a compatibility phase has completed and the migration carries guardrail metadata.
 
 ## Security
 

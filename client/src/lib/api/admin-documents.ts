@@ -13,7 +13,6 @@ export type AdminDocument = {
 
 export type AdminDocumentUploadResponse = {
   document: AdminDocument;
-  job_id?: string | null;
   operation_id?: string | null;
   operation?: {
     id: string;

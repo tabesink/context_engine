@@ -8,6 +8,9 @@ import { APIError } from "@/lib/api/client";
 import { useAuthStore } from "@/stores/auth-store";
 
 function errorMessage(error: unknown) {
+  if (error instanceof TypeError && error.message === "Failed to fetch") {
+    return "Cannot reach the API. Wait for the backend to finish starting, then try again.";
+  }
   if (error instanceof APIError) {
     const body = error.body as { detail?: unknown } | null;
     if (typeof body?.detail === "string") return body.detail;

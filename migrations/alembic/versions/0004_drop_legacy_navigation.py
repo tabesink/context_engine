@@ -15,6 +15,14 @@ down_revision: str | None = "0003_document_pages"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
+DESTRUCTIVE_MIGRATION_GUARDRAIL = {
+    "tables": ["parsed_documents", "navigation_indexes", "toc_refinement_reports"],
+    "classification": "deprecated legacy navigation tables",
+    "rationale": "Canonical document-processing tables replace parsed_documents, navigation_indexes, and toc_refinement_reports.",
+    "preceding_compatibility_phase": "0002_document_processing and 0003_document_pages introduced replacement rich-structure tables before removal.",
+    "rollback": "Use downgrade() to recreate table shapes, then restore data from backup if row data is required.",
+}
+
 
 def upgrade() -> None:
     bind = op.get_bind()

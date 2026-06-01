@@ -80,6 +80,8 @@ alembic upgrade head
 
 The baseline revision records the schema that existed before document-structure and asset tables were introduced.
 
+Forward migrations should be additive by default. Any `upgrade()` that drops tables or columns must follow the ownership and compatibility guardrails in `docs/DATABASE_OWNERSHIP.md` and include explicit destructive-migration metadata in the revision file.
+
 ## Published Ports And `.env.example`
 
 Compose maps **host** ports from your `.env` (`PUBLISH_POSTGRES_PORT`, `PUBLISH_REDIS_PORT`, `API_PORT`). The checked-in `.env.example` publishes PostgreSQL and Redis on alternate localhost ports while keeping the API on `8010`. Set `DATABASE_URL` and `REDIS_URL` to those same localhost ports when you run tooling on the host; services **inside** the Compose network use hostnames `postgres` and `redis` with container ports `5432` and `6379`.
@@ -126,7 +128,7 @@ LIGHTRAG_DOMAIN_REGISTRY=.data/lightrag/domains.json
 - `hybrid` may add local navigation evidence when available.
 - `navigation` query mode remains local page/tree retrieval.
 - Admin uploads enqueue `document_ingest`; the worker builds canonical structure/source chunks, ingests chunks to LightRAG, polls status, and updates `documents.metadata.lightrag`.
-- Admin/WebUI status flow should poll `GET /jobs/{job_id}` and `GET /admin/documents/{document_id}/ingestion-status` until document status reaches a terminal state.
+- Admin/WebUI status flow should poll `GET /operations/{operation_id}` and `GET /admin/documents/{document_id}/processing-status` until document status reaches a terminal state.
 - Structure-processing failures fail ingestion explicitly (no raw LightRAG upload fallback).
 - Unknown upstream LightRAG statuses surface as integration errors instead of silently normalizing to `indexing`.
 - `/lightrag/domains/{domain_id}/graphs` and `/lightrag/domains/{domain_id}/graph/labels...` proxy to LightRAG.

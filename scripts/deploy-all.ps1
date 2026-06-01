@@ -28,7 +28,7 @@ $ErrorActionPreference = 'Stop'
 
 function Show-Usage {
     @"
-Usage: scripts/deploy-all.ps1 [-Dev] [-NoDocker] [-RefreshDeps]
+Usage: scripts/deploy-all.ps1 [-LocalApi] [-Dev] [-NoDocker] [-RefreshDeps]
 
 Starts:
   - backend via docker compose (postgres, redis, migrate, api, worker, status-poller)
@@ -38,7 +38,7 @@ Optional local API mode:
   -LocalApi      Run backend via scripts/deploy-server.ps1
   -Dev           (LocalApi only) pass through to deploy-server.ps1
   -NoDocker      (LocalApi only) pass through to deploy-server.ps1
-  -RefreshDeps   (LocalApi only) pass through to deploy-server.ps1
+  -RefreshDeps   Reinstall client npm deps; with -LocalApi, also pass through to deploy-server.ps1
 
 Examples:
   .\scripts\deploy-all.ps1
@@ -55,13 +55,22 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
 $serverScript = Join-Path $PSScriptRoot 'deploy-server.ps1'
 $clientDir = Join-Path $repoRoot 'client'
 $envFile = Join-Path $repoRoot '.env'
+$envExampleFile = Join-Path $repoRoot '.env.example'
 
 if ($LocalApi -and -not (Test-Path $serverScript)) {
     throw "Missing server script: $serverScript"
 }
 
-if (-not $LocalApi -and ($Dev -or $NoDocker -or $RefreshDeps)) {
-    throw 'Use -LocalApi when passing -Dev, -NoDocker, or -RefreshDeps.'
+if (-not $LocalApi -and ($Dev -or $NoDocker)) {
+    throw 'Use -LocalApi when passing -Dev or -NoDocker.'
+}
+
+if (-not (Test-Path $envFile)) {
+    if (-not (Test-Path $envExampleFile)) {
+        throw "Missing env template: $envExampleFile"
+    }
+    Copy-Item $envExampleFile $envFile
+    Write-Host "Created .env from .env.example - edit if needed."
 }
 
 if (-not (Test-Path (Join-Path $clientDir 'package.json'))) {
@@ -86,6 +95,121 @@ function Get-NpmExecutable {
 }
 
 $npmExecutable = Get-NpmExecutable
+
+function Invoke-Npm {
+    param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [string[]]$Arguments,
+        [Parameter(Mandatory = $true)]
+        [string]$WorkingDirectory
+    )
+
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $npmExecutable
+    $psi.Arguments = ($Arguments -join ' ')
+    $psi.WorkingDirectory = $WorkingDirectory
+    $psi.UseShellExecute = $false
+    $process = [System.Diagnostics.Process]::Start($psi)
+    $process.WaitForExit()
+    if ($process.ExitCode -ne 0) {
+        throw "npm $($Arguments -join ' ') failed with exit code $($process.ExitCode)."
+    }
+}
+
+function Ensure-ClientDependencies {
+    param(
+        [string]$WorkingDirectory,
+        [switch]$Force
+    )
+
+    $nodeModulesDir = Join-Path $WorkingDirectory 'node_modules'
+    if ($Force -or -not (Test-Path $nodeModulesDir)) {
+        Write-Host 'Installing client npm dependencies...'
+        Invoke-Npm -Arguments @('install') -WorkingDirectory $WorkingDirectory
+    }
+}
+
+function Wait-ForApi {
+    param(
+        [string]$BaseUrl,
+        [int]$TimeoutSeconds = 300
+    )
+
+    $healthUrl = "$BaseUrl/health"
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    Write-Host "Waiting for API at $healthUrl ..."
+
+    while ((Get-Date) -lt $deadline) {
+        try {
+            $response = Invoke-WebRequest -Uri $healthUrl -UseBasicParsing -TimeoutSec 5
+            if ($response.StatusCode -eq 200) {
+                Write-Host 'API is ready.'
+                return
+            }
+        }
+        catch {
+            # API not ready yet.
+        }
+        Start-Sleep -Seconds 2
+    }
+
+    throw "API did not become ready at $healthUrl within ${TimeoutSeconds}s."
+}
+
+function Invoke-ComposeBuild {
+    param(
+        [string]$WorkingDirectory
+    )
+
+    Write-Host 'Building docker compose images...'
+    $process = Start-Process -FilePath 'docker' `
+        -ArgumentList @('compose', 'build') `
+        -WorkingDirectory $WorkingDirectory `
+        -Wait `
+        -PassThru `
+        -NoNewWindow
+    if ($process.ExitCode -ne 0) {
+        throw "docker compose build failed with exit code $($process.ExitCode)."
+    }
+}
+
+function Stop-StaleComposeApi {
+    param(
+        [string]$WorkingDirectory
+    )
+
+    $null = Start-Process -FilePath 'docker' `
+        -ArgumentList @('compose', 'stop', 'api') `
+        -WorkingDirectory $WorkingDirectory `
+        -Wait `
+        -PassThru `
+        -NoNewWindow
+}
+
+function Invoke-SeedAdmin {
+    param(
+        [string]$WorkingDirectory,
+        [int]$MaxAttempts = 30
+    )
+
+    Write-Host 'Seeding admin user...'
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        $process = Start-Process -FilePath 'docker' `
+            -ArgumentList @('compose', 'run', '--rm', '--no-deps', 'api', 'python', '-m', 'scripts.seed_admin') `
+            -WorkingDirectory $WorkingDirectory `
+            -Wait `
+            -PassThru `
+            -NoNewWindow
+        if ($process.ExitCode -eq 0) {
+            return
+        }
+        if ($attempt -lt $MaxAttempts) {
+            Start-Sleep -Seconds 2
+        }
+    }
+
+    throw "seed_admin failed after $MaxAttempts attempts."
+}
 
 function Get-EnvValue([string]$Key, [string]$Path) {
     if (-not (Test-Path $Path)) { return $null }
@@ -183,11 +307,21 @@ try {
     }
     else {
         Write-Host 'Starting backend via docker compose (api + worker + status-poller)...'
+        Invoke-ComposeBuild -WorkingDirectory $repoRoot
+        Stop-StaleComposeApi -WorkingDirectory $repoRoot
         $composeProcess = Start-Process -FilePath 'docker' `
-            -ArgumentList @('compose', 'up', '--build') `
+            -ArgumentList @('compose', 'up', '--force-recreate') `
             -WorkingDirectory $repoRoot `
             -PassThru `
             -NoNewWindow
+    }
+
+    Ensure-ClientDependencies -WorkingDirectory $clientDir -Force:$RefreshDeps
+
+    Wait-ForApi -BaseUrl "http://${apiHost}:${apiPort}"
+
+    if ($composeProcess) {
+        Invoke-SeedAdmin -WorkingDirectory $repoRoot
     }
 
     Write-Host 'Starting client...'

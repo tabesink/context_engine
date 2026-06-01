@@ -45,8 +45,8 @@ class JobService:
             resource_type=OperationResourceType.DOCUMENT,
             resource_id=document_id,
             requested_by_user_id=requested_by_user_id,
-            stage="queued",
-            message="Queued for processing",
+            stage="register_upload",
+            message="Registered upload for processing",
         )
         if self.run_inline:
             self.run_document_ingest_job(job.id)

@@ -119,7 +119,7 @@ export default function GraphViewer() {
         {enableNodeDrag ? <GraphDragEvents /> : null}
         <FocusOnNode node={autoFocusedNode} move={moveToSelectedNode} />
 
-        <div className="absolute top-2 left-2 z-20">
+        <div className="absolute top-2 right-2 z-20">
           <div className="bg-background/60 flex flex-col rounded-xl border-2 backdrop-blur-lg">
             <Button
               variant="ghost"
@@ -140,7 +140,7 @@ export default function GraphViewer() {
         </div>
 
         {showPropertyPanel ? (
-          <div className="absolute top-2 right-2 z-10">
+          <div className="absolute top-2 left-2 z-10">
             <PropertiesView />
           </div>
         ) : null}

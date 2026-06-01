@@ -18,15 +18,15 @@ class JobResponse(BaseModel):
 
 class OperationResponse(BaseModel):
     id: str
-    operation_type: str
+    type: str
     status: OperationStatus
+    stage: str | None = None
+    progress: int | None = None
     resource_type: str | None = None
     resource_id: str | None = None
-    requested_by_user_id: str | None = None
-    stage: str | None = None
+    resource_label: str | None = None
+    actor_user_id: str | None = None
     message: str | None = None
-    progress_current: int | None = None
-    progress_total: int | None = None
     error_message: str | None = None
     metadata: dict = Field(default_factory=dict)
     created_at: datetime

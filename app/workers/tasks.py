@@ -17,8 +17,8 @@ def run_document_ingest_job(job_id: str) -> None:
         status.mark_running(
             document_id=job.document_id,
             operation_id=job.id,
-            stage="parsing",
-            message="Parsing document",
+            stage="parse_local_structure",
+            message="Parsing local document structure",
         )
         try:
             remote_status = LightRAGIngestionService(session).ingest_document(job.document_id)
@@ -31,7 +31,13 @@ def run_document_ingest_job(job_id: str) -> None:
             else:
                 status.mark_succeeded(document_id=job.document_id, operation_id=job.id)
         except DomainIngestBusy as exc:
-            jobs.set_status(job, JobStatus.QUEUED, stage="queued", message=str(exc), error_message=str(exc))
+            jobs.set_status(
+                job,
+                JobStatus.QUEUED,
+                stage="register_upload",
+                message=str(exc),
+                error_message=str(exc),
+            )
             raise
         except Exception as exc:
             status.mark_failed(

@@ -15,9 +15,11 @@ from app.services.lightrag_domain_registry import LightRAGDomainRegistry
 from app.services.model_profile_resolver import ModelProfileResolver
 from app.services.secret_crypto import SecretCryptoService
 from app.core.config import get_settings
+from app.domain.models import OperationResourceType
 from app.storage.db import get_session
 from app.storage.repositories.ai_model_settings import AIModelSettingsRepository
 from app.storage.repositories.ai_provider_secrets import AIProviderSecretRepository
+from app.storage.repositories.jobs import JobRepository
 from app.storage.repositories.lightrag_domains import LightRAGDomainRepository
 from app.storage.repositories.logs import LogRepository
 from app.storage.repositories.lightrag_domain_lifecycle import LightRAGDomainLifecycleRepository
@@ -55,10 +57,21 @@ def create_domain(
     service: LightRAGDomainService = Depends(get_domain_service),
 ) -> LightRAGDomain:
     _ensure_deploy_enabled(service)
+    operation = _start_domain_operation(
+        session,
+        operation_type="domain_create",
+        domain_id=request.domain_id,
+        admin=admin,
+        resource_label=request.display_name or request.domain_id,
+    )
     try:
         domain = service.create_domain(request)
     except ValueError as exc:
+        _fail_domain_operation(session, operation, str(exc))
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        _fail_domain_operation(session, operation, str(exc))
+        raise
     LightRAGDomainRepository(session).upsert(
         domain_id=domain.id,
         display_name=domain.display_name,
@@ -67,6 +80,7 @@ def create_domain(
         metadata={"host_port": domain.host_port, "service_name": domain.service_name},
     )
     _audit(session, admin, "lightrag.domain.created", domain)
+    _succeed_domain_operation(session, operation, f"Domain '{domain.id}' created")
     return domain
 
 
@@ -87,7 +101,17 @@ def up_domain(
     service: LightRAGDomainService = Depends(get_domain_service),
 ) -> LightRAGDomainOperationResult:
     _ensure_deploy_enabled(service)
-    result = _operation_or_404(service.up, domain_id)
+    operation = _start_domain_operation(
+        session,
+        operation_type="domain_start",
+        domain_id=domain_id,
+        admin=admin,
+    )
+    try:
+        result = _operation_or_404(service.up, domain_id)
+    except Exception as exc:
+        _fail_domain_operation(session, operation, _operation_error_message(exc))
+        raise
     domain = service.get_domain(domain_id)
     LightRAGDomainRepository(session).upsert(
         domain_id=domain.id,
@@ -98,6 +122,7 @@ def up_domain(
         metadata={"host_port": domain.host_port, "service_name": domain.service_name},
     )
     _audit(session, admin, "lightrag.domain.started", domain)
+    _succeed_domain_operation(session, operation, f"Domain '{domain.id}' started")
     return result
 
 
@@ -108,7 +133,17 @@ def down_domain(
     service: LightRAGDomainService = Depends(get_domain_service),
 ) -> LightRAGDomainOperationResult:
     _ensure_deploy_enabled(service)
-    result = _operation_or_404(service.down, domain_id)
+    operation = _start_domain_operation(
+        session,
+        operation_type="domain_stop",
+        domain_id=domain_id,
+        admin=admin,
+    )
+    try:
+        result = _operation_or_404(service.down, domain_id)
+    except Exception as exc:
+        _fail_domain_operation(session, operation, _operation_error_message(exc))
+        raise
     domain = service.get_domain(domain_id)
     LightRAGDomainRepository(session).upsert(
         domain_id=domain.id,
@@ -119,6 +154,7 @@ def down_domain(
         metadata={"host_port": domain.host_port, "service_name": domain.service_name},
     )
     _audit(session, admin, "lightrag.domain.stopped", domain)
+    _succeed_domain_operation(session, operation, f"Domain '{domain.id}' stopped")
     return result
 
 
@@ -129,6 +165,12 @@ def remove_domain(
     service: LightRAGDomainService = Depends(get_domain_service),
 ) -> LightRAGDomainRemoveResponse:
     _ensure_deploy_enabled(service)
+    operation = _start_domain_operation(
+        session,
+        operation_type="domain_delete",
+        domain_id=domain_id,
+        admin=admin,
+    )
     lifecycle = LightRAGDomainLifecycleRepository(session)
     domains = LightRAGDomainRepository(session)
     lifecycle.set_state(
@@ -139,9 +181,13 @@ def remove_domain(
     try:
         result = service.remove(domain_id)
     except DomainNotFoundError as exc:
+        _fail_domain_operation(session, operation, str(exc))
         lifecycle.set_state(domain_id=domain_id, state="failed", error_message=str(exc))
         domains.upsert(domain_id=domain_id, state="failed", error_message=str(exc))
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        _fail_domain_operation(session, operation, str(exc))
+        raise
     lifecycle.set_state(
         domain_id=domain_id,
         state="archived",
@@ -159,6 +205,7 @@ def remove_domain(
         target_id=result.id,
         metadata={"domain_id": result.id, "archive_path": result.archive_path},
     )
+    _succeed_domain_operation(session, operation, f"Domain '{result.id}' deleted")
     return result
 
 
@@ -213,6 +260,49 @@ def _operation_or_404(operation, domain_id: str) -> LightRAGDomainOperationResul
             },
         )
     return result
+
+
+def _start_domain_operation(
+    session: Session,
+    *,
+    operation_type: str,
+    domain_id: str,
+    admin: UserRow,
+    resource_label: str | None = None,
+):
+    operation = JobRepository(session).create_operation(
+        operation_type=operation_type,
+        resource_type=OperationResourceType.DOMAIN,
+        resource_id=domain_id,
+        requested_by_user_id=admin.id,
+        metadata={"resource_label": resource_label or domain_id},
+        stage="register_upload",
+        message=f"Queued {operation_type.replace('_', ' ')}",
+    )
+    return JobRepository(session).mark_operation_running(
+        operation,
+        stage="push_to_lightrag",
+        message=f"Running {operation_type.replace('_', ' ')}",
+    )
+
+
+def _succeed_domain_operation(session: Session, operation, message: str) -> None:
+    JobRepository(session).mark_operation_succeeded(operation, stage="complete", message=message)
+
+
+def _fail_domain_operation(session: Session, operation, message: str) -> None:
+    JobRepository(session).mark_operation_failed(
+        operation,
+        error_message=message,
+        stage="failed",
+        message=message,
+    )
+
+
+def _operation_error_message(exc: Exception) -> str:
+    if isinstance(exc, HTTPException):
+        return str(exc.detail)
+    return str(exc)
 
 
 def _audit(session: Session, admin: UserRow, event: str, domain: LightRAGDomain) -> None:

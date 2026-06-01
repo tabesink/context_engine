@@ -26,7 +26,6 @@ class UploadOperationResponse(BaseModel):
 
 class UploadResponse(BaseModel):
     document: DocumentResponse
-    job_id: str | None = None
     operation_id: str | None = None
     operation: UploadOperationResponse | None = None
     status_url: str | None = None

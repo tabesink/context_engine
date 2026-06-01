@@ -39,7 +39,7 @@ from app.lightrag_deploy.settings import LightRAGDeploySettings  # noqa: E402
 from app.main import app  # noqa: E402
 from app.services.lightrag_ingestion_service import LightRAGIngestionService, RedisIngestLock  # noqa: E402
 from app.services.job_service import JobService  # noqa: E402
-from app.storage.db import SessionLocal, create_db_and_tables  # noqa: E402
+from app.storage.db import Base, SessionLocal, create_db_and_tables  # noqa: E402
 from app.storage.repositories.document_processing import DocumentProcessingRepository  # noqa: E402
 from app.storage.repositories.jobs import JobRepository  # noqa: E402
 from app.storage.repositories.lightrag_domain_lifecycle import (  # noqa: E402
@@ -49,7 +49,6 @@ from app.storage.repositories.lightrag_domains import LightRAGDomainRepository  
 from app.storage.repositories.documents import DocumentRepository  # noqa: E402
 from app.storage.repositories.logs import LogRepository  # noqa: E402
 from app.storage.repositories.users import UserRepository  # noqa: E402
-from app.storage.tables import LightRAGDomainLifecycleRow  # noqa: E402
 from app.workers.tasks import poll_lightrag_statuses, run_document_ingest_job  # noqa: E402
 
 
@@ -59,33 +58,79 @@ def _settings_cache(
 ) -> None:
     manifest_root = tmp_path_factory.mktemp("lightrag-manifest")
     manifest_path = manifest_root / "domains.json"
-    manifest_path.write_text(
-        (
-            '{"domains":['
-            '{"id":"default","display_name":"Default","host_base_url":"http://127.0.0.1:9622","container_base_url":"http://lightrag_default:9621","status":"ready","is_default":true},'
-            '{"id":"fatigue","display_name":"Fatigue","host_base_url":"http://127.0.0.1:9623","container_base_url":"http://lightrag_fatigue:9621","status":"ready"}'
-            "]}"
-        ),
-        encoding="utf-8",
-    )
+    manifest_path.write_text(json.dumps({"domains": _test_lightrag_domains()}), encoding="utf-8")
     monkeypatch.setenv("LIGHTRAG_DOMAIN_REGISTRY", str(manifest_path))
     get_settings.cache_clear()
     create_db_and_tables()
     with SessionLocal() as session:
-        session.query(LightRAGDomainLifecycleRow).delete()
+        for table in reversed(Base.metadata.sorted_tables):
+            session.execute(table.delete())
         session.commit()
     yield
     get_settings.cache_clear()
+
+
+def _test_lightrag_domains() -> list[dict[str, object]]:
+    timestamp = "2026-05-29T12:00:00Z"
+
+    def domain(
+        domain_id: str,
+        display_name: str,
+        host_port: int,
+        *,
+        is_default: bool = False,
+    ) -> dict[str, object]:
+        service_name = f"lightrag_{domain_id}"
+        host_base_url = f"http://127.0.0.1:{host_port}"
+        container_base_url = f"http://{service_name}:9621"
+        return {
+            "id": domain_id,
+            "display_name": display_name,
+            "host": "127.0.0.1",
+            "host_port": host_port,
+            "container_port": 9621,
+            "base_url": host_base_url,
+            "host_base_url": host_base_url,
+            "container_base_url": container_base_url,
+            "container_name": f"context_engine_lightrag_{domain_id}",
+            "service_name": service_name,
+            "status": "ready",
+            "paths": {
+                "root": f".data/lightrag/domains/{domain_id}",
+                "env_file": f".data/lightrag/domains/{domain_id}/domain.env",
+                "inputs": f".data/lightrag/domains/{domain_id}/inputs",
+                "rag_storage": f".data/lightrag/domains/{domain_id}/rag_storage",
+                "artifacts": f".data/lightrag/domains/{domain_id}/artifacts",
+                "logs": f".data/lightrag/domains/{domain_id}/logs",
+            },
+            "is_default": is_default,
+            "is_healthy": True,
+            "created_at": timestamp,
+            "updated_at": timestamp,
+        }
+
+    return [
+        domain("default", "Default", 9622, is_default=True),
+        domain("fatigue", "Fatigue", 9623),
+    ]
 
 
 def _seed_users() -> None:
     create_db_and_tables()
     with SessionLocal() as session:
         users = UserRepository(session)
-        if not users.get_by_email("admin@example.com"):
-            users.create(email="admin@example.com", password="secret", role=UserRole.ADMIN)
-        if not users.get_by_email("user@example.com"):
-            users.create(email="user@example.com", password="secret", role=UserRole.USER)
+        for email, role in (
+            ("admin@example.com", UserRole.ADMIN),
+            ("user@example.com", UserRole.USER),
+        ):
+            user = users.get_by_email(email)
+            if not user:
+                users.create(email=email, password="secret", role=role)
+                continue
+            user.role = role.value
+            user.is_active = True
+            session.add(user)
+        session.commit()
 
 
 def _login(client: TestClient, username: str) -> dict[str, str]:
@@ -519,12 +564,12 @@ def test_admin_list_endpoints_are_paginated() -> None:
     with TestClient(app) as client:
         admin_headers = _login(client, "admin@example.com")
         assert len(client.get("/admin/documents?limit=2", headers=admin_headers).json()) == 2
-        assert len(client.get("/jobs?limit=2", headers=admin_headers).json()) == 2
+        assert len(client.get("/operations?limit=2", headers=admin_headers).json()) == 2
         assert len(client.get("/admin/audit-logs?limit=1", headers=admin_headers).json()) == 1
         assert len(client.get("/admin/query-logs?limit=1", headers=admin_headers).json()) == 1
 
 
-def test_admin_can_list_operations_compatible_with_jobs_table() -> None:
+def test_admin_can_list_operations_with_product_contract() -> None:
     create_db_and_tables()
     with SessionLocal() as session:
         users = UserRepository(session)
@@ -547,21 +592,29 @@ def test_admin_can_list_operations_compatible_with_jobs_table() -> None:
             progress_current=1,
             progress_total=4,
         )
+        admin_id = admin.id
+        document_id = document.id
 
     with TestClient(app) as client:
         _seed_users()
         admin_headers = _login(client, "admin@example.com")
-        response = client.get("/operations?resource_type=document&status=queued", headers=admin_headers)
+        response = client.get(
+            f"/operations?resource_type=document&resource_id={document_id}&status=queued",
+            headers=admin_headers,
+        )
 
     assert response.status_code == 200
     payload = response.json()
     assert len(payload) == 1
-    assert payload[0]["operation_type"] == "document_ingest"
+    assert payload[0]["type"] == "document_ingest"
     assert payload[0]["resource_type"] == "document"
+    assert payload[0]["resource_label"] == "operations-doc.txt"
+    assert payload[0]["actor_user_id"] == admin_id
     assert payload[0]["status"] == "queued"
+    assert payload[0]["progress"] == 25
 
 
-def test_admin_can_fetch_operation_by_id_without_breaking_jobs_response() -> None:
+def test_admin_can_fetch_operation_by_id() -> None:
     create_db_and_tables()
     with SessionLocal() as session:
         users = UserRepository(session)
@@ -588,19 +641,13 @@ def test_admin_can_fetch_operation_by_id_without_breaking_jobs_response() -> Non
         _seed_users()
         admin_headers = _login(client, "admin@example.com")
         operation_response = client.get(f"/operations/{operation_id}", headers=admin_headers)
-        jobs_response = client.get(f"/jobs/{operation_id}", headers=admin_headers)
 
     assert operation_response.status_code == 200
     operation_body = operation_response.json()
     assert operation_body["id"] == operation_id
-    assert operation_body["operation_type"] == "document_ingest"
+    assert operation_body["type"] == "document_ingest"
     assert operation_body["resource_id"] is not None
-
-    assert jobs_response.status_code == 200
-    jobs_body = jobs_response.json()
-    assert jobs_body["id"] == operation_id
-    assert jobs_body["kind"] == "document_ingest"
-    assert jobs_body["document_id"] == operation_body["resource_id"]
+    assert operation_body["resource_label"] == "operations-detail.txt"
 
 
 def test_retrieve_requires_authentication() -> None:
@@ -1192,7 +1239,7 @@ def test_admin_processing_status_composes_document_operation_and_diagnostics() -
             kind="document_ingest",
             document_id=document.id,
             metadata={
-                "stage": "indexing_lightrag",
+                "stage": "poll_remote_indexing",
                 "message": "Indexing in LightRAG",
             },
         )
@@ -1214,7 +1261,7 @@ def test_admin_processing_status_composes_document_operation_and_diagnostics() -
     assert body["document"]["status"] == "indexing"
     assert body["document"]["operation_id"] == operation_id
     assert body["document"]["operation_status"] == "queued"
-    assert body["document"]["stage"] == "indexing_lightrag"
+    assert body["document"]["stage"] == "poll_remote_indexing"
     assert body["document"]["message"] == "Indexing in LightRAG"
     assert body["document"]["can_retry"] is False
     assert body["domain"]["domain_id"] == "default"
@@ -1248,7 +1295,7 @@ def test_admin_domain_processing_status_lists_documents_without_jobs_endpoint() 
         JobRepository(session).create(
             kind="document_ingest",
             document_id=indexing_document.id,
-            metadata={"stage": "waiting_remote", "message": "Waiting for LightRAG"},
+            metadata={"stage": "poll_remote_indexing", "message": "Waiting for LightRAG"},
         )
         JobRepository(session).create(kind="document_ingest", document_id=ready_document.id)
 
@@ -1270,7 +1317,7 @@ def test_admin_domain_processing_status_lists_documents_without_jobs_endpoint() 
     assert body["domain"]["is_busy"] is True
     assert [row["filename"] for row in body["documents"]] == ["ready.txt", "indexing.txt"]
     indexing_row = next(row for row in body["documents"] if row["filename"] == "indexing.txt")
-    assert indexing_row["stage"] == "waiting_remote"
+    assert indexing_row["stage"] == "poll_remote_indexing"
     assert indexing_row["message"] == "Waiting for LightRAG"
 
     assert summary_response.status_code == 200
@@ -1649,14 +1696,14 @@ def test_admin_upload_queues_lightrag_ingestion_when_enabled(
 
     assert response.status_code == 200
     body = response.json()
-    assert body["job_id"] is not None
-    assert body["operation_id"] == body["job_id"]
+    assert "job_id" not in body
+    assert body["operation_id"] is not None
     assert body["operation"] == {
-        "id": body["job_id"],
+        "id": body["operation_id"],
         "type": "document_ingest",
         "status": "queued",
-        "stage": "queued",
-        "message": "Queued for processing",
+        "stage": "register_upload",
+        "message": "Registered upload for processing",
     }
     assert body["status_url"] == f"/documents/{body['document']['id']}/processing-status"
     assert body["document"]["status"] == "indexing"
@@ -1664,12 +1711,12 @@ def test_admin_upload_queues_lightrag_ingestion_when_enabled(
     assert body["document"]["metadata"]["lightrag"]["domain_id"] == "default"
     assert body["document"]["metadata"]["lightrag"]["status"] == "queued"
     with SessionLocal() as session:
-        job = JobRepository(session).get(body["job_id"])
+        job = JobRepository(session).get(body["operation_id"])
         assert job is not None
         assert job.kind == "document_ingest"
         assert job.document_id == body["document"]["id"]
-        assert job.stage == "queued"
-        assert job.message == "Queued for processing"
+        assert job.stage == "register_upload"
+        assert job.message == "Registered upload for processing"
         assert job.requested_by_user_id is not None
 
 
@@ -1718,7 +1765,12 @@ def test_admin_upload_to_selected_lightrag_domain_records_domain_metadata(
 
             return FakeQueuedJob()
 
+    def fake_health_get(url, **kwargs):
+        del url, kwargs
+        return httpx.Response(200)
+
     monkeypatch.setattr(JobService, "_queue", lambda self: FakeQueue())
+    monkeypatch.setattr("app.services.lightrag_reachability_service.httpx.get", fake_health_get)
 
     with TestClient(app) as client:
         _seed_users()
@@ -1901,7 +1953,7 @@ def test_worker_marks_operation_waiting_remote_when_lightrag_is_still_indexing(
     assert refreshed_document.status == "indexing"
     assert refreshed_job is not None
     assert refreshed_job.status == "running"
-    assert refreshed_job.stage == "waiting_remote"
+    assert refreshed_job.stage == "poll_remote_indexing"
     assert refreshed_job.message == "Waiting for LightRAG to finish indexing"
     assert refreshed_job.finished_at is None
 
@@ -1971,12 +2023,12 @@ def test_admin_refresh_lightrag_status_reconciles_latest_operation(
         operation = JobRepository(session).create(
             kind="document_ingest",
             document_id=document.id,
-            stage="waiting_remote",
+            stage="poll_remote_indexing",
             message="Waiting for LightRAG to finish indexing",
         )
         JobRepository(session).mark_operation_running(
             operation,
-            stage="waiting_remote",
+            stage="poll_remote_indexing",
             message="Waiting for LightRAG to finish indexing",
         )
         document_id = document.id
@@ -2955,6 +3007,15 @@ def test_lightrag_domain_admin_api_lifecycle_routes_remain_available() -> None:
                 assert domain_row is not None
                 assert domain_row.state == "deleted"
                 assert domain_row.health_status == "unhealthy"
+                operations = JobRepository(session).list_operations(resource_type="domain", limit=20)
+                operation_types = {operation.kind for operation in operations}
+                assert {
+                    "domain_create",
+                    "domain_start",
+                    "domain_stop",
+                    "domain_delete",
+                }.issubset(operation_types)
+                assert all(operation.status == "succeeded" for operation in operations)
 
         assert create.status_code == 200
         assert create.json()["id"] == "fatigue"
@@ -4016,11 +4077,11 @@ def test_admin_can_retry_document_ingest_job(
     with TestClient(app) as client:
         _seed_users()
         admin_headers = _login(client, "admin@example.com")
-        response = client.post(f"/jobs/{job_id}/retry", headers=admin_headers)
+        response = client.post(f"/operations/{job_id}/retry", headers=admin_headers)
 
     assert response.status_code == 200
     body = response.json()
-    assert body["kind"] == "document_ingest"
+    assert body["type"] == "document_ingest"
     assert body["status"] == "succeeded"
     with SessionLocal() as session:
         refreshed = JobRepository(session).get(job_id)
@@ -4084,9 +4145,9 @@ def test_admin_can_retry_document_ingestion_by_document_id(
     body = response.json()
     assert body["document"]["id"] == document_id
     assert body["document"]["status"] == "indexing"
-    assert body["operation_id"] == body["job_id"]
+    assert "job_id" not in body
     assert body["operation"]["status"] == "queued"
-    assert body["operation"]["stage"] == "queued"
+    assert body["operation"]["stage"] == "register_upload"
     assert body["operation"]["message"] == "Queued for retry"
     assert body["status_url"] == f"/documents/{document_id}/processing-status"
 
@@ -4134,8 +4195,8 @@ def test_admin_retry_rejects_non_document_ingest_job() -> None:
     with TestClient(app) as client:
         _seed_users()
         admin_headers = _login(client, "admin@example.com")
-        response = client.post(f"/jobs/{job_id}/retry", headers=admin_headers)
+        response = client.post(f"/operations/{job_id}/retry", headers=admin_headers)
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "Only document_ingest jobs can be retried"
+    assert response.json()["detail"] == "Only document_ingest operations can be retried"
 

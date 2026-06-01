@@ -10,7 +10,6 @@ from app.api.routes import (
     auth,
     documents,
     health,
-    jobs,
     lightrag,
     lightrag_admin,
     lightrag_domains,
@@ -51,7 +50,6 @@ def create_app() -> FastAPI:
     app.include_router(lightrag_domains.router)
     app.include_router(users.router)
     app.include_router(workspace_tree.router)
-    app.include_router(jobs.router)
     app.include_router(operations.router)
     return app
 

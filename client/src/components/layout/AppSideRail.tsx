@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, Settings } from "lucide-react";
+import { Activity, LogOut, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { openSettingsDialog, useSettingsDialogStore } from "@/stores/settings-dialog-store";
@@ -84,6 +84,14 @@ export function AppSideRail() {
             <circle cx="18" cy="18" r="3" />
             <ellipse cx="12" cy="5" rx="9" ry="3" />
           </svg>
+        </Link>
+
+        <Link
+          href="/operations"
+          aria-label="Operations"
+          className={railButtonClassName(pathname.startsWith("/operations"))}
+        >
+          <Activity className="size-4.5" aria-hidden />
         </Link>
 
         <button

@@ -14,7 +14,7 @@ This file records what the current codebase implements. For the intended build s
 - Retrieval with `semantic`, `navigation`, `hybrid`, and `auto` modes; `RetrievalRoutingPolicy` selects local navigation versus LightRAG-backed retrieval; `LightRAGRetrievalStrategy` combines LightRAG evidence with rich local navigation evidence for hybrid mode.
 - Evidence-only retrieval via `POST /retrieve`.
 - Admin-only debug details when `include_debug=true`.
-- Job table, job status endpoints, Redis `rq` enqueue path, and worker-owned job lifecycle.
+- Jobs table as internal operation storage, `/operations` visibility endpoints, Redis `rq` enqueue path, worker-owned operation lifecycle, and a frontend `/operations` admin activity view.
 - Audit/query log repositories and admin log endpoints.
 - Seed admin, backup, and retrieval evaluation scripts.
 - Legacy terminal UI/CLI code remains in-repo but is deprecated and unsupported for active workflows.
@@ -49,9 +49,9 @@ Runtime behavior:
 - `navigation` retrieval remains local and is powered by `RichNavigationEngine`.
 - Admin upload stores a local mirror record/file and enqueues `document_ingest`.
 - Uploads require a LightRAG domain manifest so requested domains are explicit and validated.
-- Upload responses include the LightRAG ingestion job id; LightRAG status is tracked under `documents.metadata.lightrag`.
+- Upload responses include the operation id and processing-status URL; LightRAG diagnostics are tracked under `documents.metadata.lightrag`.
 - Upload metadata now records domain embedding identity (`embedding_profile_id`, `embedding_fingerprint`) when snapshot data is available.
-- Domain-scoped graph routes under `GET /lightrag/domains/{domain_id}/graphs` and `GET /lightrag/domains/{domain_id}/graph/labels...` proxy to the remote LightRAG service.
+- Domain-scoped graph routes under `GET /lightrag/domains/{domain_id}/graphs` and `GET /lightrag/domains/{domain_id}/graph/labels...` proxy to the remote LightRAG service, and frontend graph calls use the shared API client/error contract.
 - LightRAG timeouts/connect failures become `503`; auth/upstream/invalid-response failures become `502`.
 - Frontend chat now submits retrieval through `POST /retrieve`, maps `RetrieveResponse` into context-panel items via adapter code, and loads workspace tree content from `GET /lightrag/domains/{domain_id}/workspace-tree`.
 

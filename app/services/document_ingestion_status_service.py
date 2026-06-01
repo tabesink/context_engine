@@ -23,7 +23,7 @@ class DocumentIngestionStatusService:
         self.jobs.set_status(
             operation,
             JobStatus.QUEUED,
-            stage="queued",
+            stage="register_upload",
             message=message,
             error_message=None,
         )
@@ -37,7 +37,7 @@ class DocumentIngestionStatusService:
         self.mark_running(
             document_id=document_id,
             operation_id=operation_id,
-            stage="waiting_remote",
+            stage="poll_remote_indexing",
             message=message,
         )
 
@@ -88,7 +88,7 @@ class DocumentIngestionStatusService:
             if operation is not None:
                 self.jobs.mark_operation_running(
                     operation,
-                    stage="waiting_remote",
+                    stage="poll_remote_indexing",
                     message="Waiting for LightRAG to finish indexing",
                 )
 

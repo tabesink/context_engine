@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ExternalLink, Image as ImageIcon, Table2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { getAccessToken, resolveApiBase } from "@/lib/api/client";
+import { fetchAuthenticatedAssetBlob, resolveAssetUrl } from "@/lib/api/assets";
 import { cn } from "@/lib/utils";
 import type { ContextPanelItem, WorkspaceContextAsset } from "@/types/chat";
 
@@ -264,15 +264,9 @@ function AuthenticatedAssetImage({ src, alt, className }: { src?: string | null;
 
     async function loadImage() {
       try {
-        const token = getAccessToken();
-        const response = await fetch(resolvedSrc!, {
+        const blob = await fetchAuthenticatedAssetBlob(resolvedSrc!, {
           signal: controller.signal,
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         });
-        if (!response.ok) {
-          throw new Error(`Asset image request failed: ${response.status}`);
-        }
-        const blob = await response.blob();
         nextObjectUrl = URL.createObjectURL(blob);
         setResult({ src: resolvedSrc!, objectUrl: nextObjectUrl, error: false });
       } catch {
@@ -340,14 +334,6 @@ function defaultAssetTitle(kind: AssetCardKind, assetType?: string | null) {
   if (kind === "figure") return "Source figure";
   if (kind === "table") return "Source table";
   return assetType ? `Source ${assetType}` : "Source asset";
-}
-
-function resolveAssetUrl(url?: string | null) {
-  if (!url) return null;
-  if (/^(https?:|blob:|data:)/i.test(url)) return url;
-  const base = resolveApiBase().replace(/\/$/, "");
-  const path = url.startsWith("/") ? url : `/${url}`;
-  return `${base}${path}`;
 }
 
 export function parseMarkdownTable(value?: string | null): string[][] {

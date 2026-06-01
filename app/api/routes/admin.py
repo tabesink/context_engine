@@ -45,7 +45,6 @@ def upload_document(
     operation = JobRepository(session).get(job_id) if job_id else None
     return UploadResponse(
         document=document_response(document),
-        job_id=job_id,
         operation_id=operation.id if operation is not None else job_id,
         operation=upload_operation_response(operation) if operation is not None else None,
         status_url=f"/documents/{document.id}/processing-status",
@@ -135,8 +134,8 @@ def reingest(
     admin: UserRow = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> dict[str, str]:
-    job_id = DocumentService(session).reingest(actor_id=admin.id, document_id=document_id)
-    return {"job_id": job_id}
+    operation_id = DocumentService(session).reingest(actor_id=admin.id, document_id=document_id)
+    return {"operation_id": operation_id}
 
 
 @router.post("/documents/{document_id}/retry-ingestion")
@@ -152,7 +151,6 @@ def retry_document_ingestion(
     operation = JobRepository(session).get(job_id)
     return UploadResponse(
         document=document_response(document),
-        job_id=job_id,
         operation_id=operation.id if operation is not None else job_id,
         operation=upload_operation_response(operation) if operation is not None else None,
         status_url=f"/documents/{document.id}/processing-status",

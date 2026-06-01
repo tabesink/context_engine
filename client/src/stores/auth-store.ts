@@ -60,9 +60,9 @@ async function bootstrap() {
 
 async function login(username: string, password: string) {
   setState({ status: "loading" });
-  const token = await authApi.login({ username, password });
-  setAccessToken(token.access_token);
   try {
+    const token = await authApi.login({ username, password });
+    setAccessToken(token.access_token);
     const user = await authApi.me();
     setState({ user, status: "authenticated" });
   } catch (error) {

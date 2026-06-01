@@ -1,3 +1,4 @@
+import ast
 from pathlib import Path
 
 import sqlalchemy as sa
@@ -7,6 +8,47 @@ from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, inspect
 
 from app.core.config import get_settings
+from app.storage.db import Base
+
+
+def test_database_ownership_doc_classifies_current_tables() -> None:
+    ownership_doc = Path("docs/DATABASE_OWNERSHIP.md").read_text(encoding="utf-8")
+    missing_tables = sorted(
+        table.name for table in Base.metadata.sorted_tables if f"`{table.name}`" not in ownership_doc
+    )
+
+    assert missing_tables == []
+
+
+def test_forward_destructive_migrations_carry_guardrail_metadata() -> None:
+    required_fields = {
+        "tables",
+        "classification",
+        "rationale",
+        "preceding_compatibility_phase",
+        "rollback",
+    }
+    migration_paths = sorted(Path("migrations/alembic/versions").glob("*.py"))
+
+    for path in migration_paths:
+        source = path.read_text(encoding="utf-8")
+        upgrade_source = source.split("def upgrade", 1)[1].split("def downgrade", 1)[0]
+        if "drop_table(" not in upgrade_source and "drop_column(" not in upgrade_source:
+            continue
+
+        module = ast.parse(source)
+        guardrail = None
+        for statement in module.body:
+            if isinstance(statement, ast.Assign):
+                for target in statement.targets:
+                    if isinstance(target, ast.Name) and target.id == "DESTRUCTIVE_MIGRATION_GUARDRAIL":
+                        guardrail = ast.literal_eval(statement.value)
+
+        assert guardrail is not None, f"{path} drops schema objects in upgrade() without guardrail metadata"
+        assert required_fields <= set(guardrail), f"{path} guardrail metadata is missing required fields"
+        assert guardrail["tables"], f"{path} must list affected tables"
+        assert guardrail["preceding_compatibility_phase"], f"{path} must name the compatibility phase"
+        assert guardrail["rollback"], f"{path} must document rollback or restore path"
 
 
 def test_alembic_revision_ids_fit_default_version_table() -> None:

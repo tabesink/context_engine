@@ -63,7 +63,6 @@ Thumbs.db
 *.log
 tmp/
 temp/
-scripts/
 
 # Understand-anything / other generated analysis output
 .understand-anything/

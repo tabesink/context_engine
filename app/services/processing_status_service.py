@@ -101,13 +101,13 @@ class ProcessingStatusService:
             if operation.status == "failed":
                 return "failed"
             if operation.status == "queued":
-                return "queued"
+                return "register_upload"
         if document.status == DocumentStatus.READY.value:
             return "complete"
         if document.status == DocumentStatus.FAILED.value:
             return "failed"
         if document.status == DocumentStatus.INDEXING.value:
-            return "indexing_lightrag"
+            return "poll_remote_indexing"
         return None
 
     def _message(self, document: DocumentRow, operation: JobRow | None) -> str | None:

@@ -1,4 +1,4 @@
-import { resolveApiBase } from "@/lib/api/client";
+import { apiRequest } from "@/lib/api/client";
 import { popularLabelsDefaultLimit, searchLabelsDefaultLimit } from "@/lib/constants";
 import { getSelectedLightRagDomainId } from "@/stores/lightrag-domain-store";
 
@@ -126,34 +126,5 @@ export async function updateRelation(
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const domainId = getSelectedLightRagDomainId();
-  const token = typeof window === "undefined" ? null : window.localStorage.getItem("context_engine_access_token");
-  const response = await fetch(`${resolveApiBase()}/lightrag/domains/${encodeURIComponent(domainId)}${path}`, {
-    ...init,
-    credentials: "omit",
-    headers: {
-      Accept: "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(init.body ? { "Content-Type": "application/json" } : {}),
-      ...init.headers,
-    },
-  });
-
-  if (!response.ok) {
-    const detail = await readErrorDetail(response);
-    throw new Error(`${response.status} ${response.statusText}${detail ? `: ${detail}` : ""}`);
-  }
-
-  return (await response.json()) as T;
-}
-
-async function readErrorDetail(response: Response) {
-  try {
-    const data = (await response.json()) as unknown;
-    if (typeof data === "object" && data !== null && "detail" in data && typeof data.detail === "string") {
-      return data.detail;
-    }
-  } catch {
-    return "";
-  }
-  return "";
+  return apiRequest<T>(`/lightrag/domains/${encodeURIComponent(domainId)}${path}`, init);
 }
